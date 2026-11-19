@@ -24,8 +24,8 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 6 | Escolher a origem na devolução ao cliente | 1h | fatia de tela (E236 0,8 h) | 1h | D (236) 1, B1541 | `MateriaisClienteAlmoxarifado.js` (janela); a rota já aceita `localizacao_origem_id` pelo motor (só preferida: a Etapa 240 a fez estrita) | 0,6 h (horas.js 18/11, grupo Origem devolucao cliente) | 45 min | `81c9ed15`, `077ca21f`, `fb01d574`, `db9096cb` |
 | 7 | Seletor de lote mostra reservado e livre | 1h | fatia de tela + leitura | 1h | C542 | `lotService.listarLotesDoMaterial:593` (`saldo` = físico do lote); seletores da devolução ao cliente e de Movimentações | 0,5 h (horas.js 18/11, grupo C542 com "Etapa 241" — dois commits da tela e da Fase 5 não citavam a C542 no assunto) | 30 min | `6e3a496a`, `0cc2141d`, `0989e7e3`, `5719afb7` |
 | 8 | Aviso de material de cliente reservado para OS | 45 min | fatia de tela (E237 1,1 h com fixture; esta sem campo novo de servidor se a posição já trouxer a reserva) | 45 min | C541 (Etapa 242, `2026-11-18-almoxarifado-etapa242-aviso-reservado-para-os.md`) | molde do aviso `#dev-loc-bloqueada` da Etapa 237 | 0,9 h (horas.js 18/11, grupo C541) | 1h | `d4edb6bc`, `423613d7`, `3f42ece3`, `8e84fea8`, `03185e2f` |
-| 9 | Frase do lote das séries só quando o lote tem a peça | 45 min | fatia de tela | 45 min | C539, B1531 | frase de Movimentações lê só a série; o servidor deriva o lote só quando a linha cobre (`stockService.js:1379`) | — | — | — |
-| 10 | Lista de séries da saída avulsa recarrega após recusa | 45 min | fatia de tela | 45 min | C538 (molde: entrega, C537) | Movimentações → Saída/Perda | — | — | — |
+| 9 | Frase do lote das séries só quando o lote tem a peça | 45 min | fatia de tela | 45 min | C539, B1531 | frase de Movimentações lê só a série; o servidor deriva o lote só quando a linha cobre (`stockService.js:1379`) — **confirmado na Fase 0 da 246**; a lista de séries não trazia o saldo do lote (campo novo de leitura) | 0,35 h (rateio da Etapa 246: 0,7 h medida no horas.js, grupo E246="Etapa 246", pelos 45 min + 45 min estimados) | 30 min | `4bf9fe15`, `522ded97`, `509d6902`, `48580e4d` |
+| 10 | Lista de séries da saída avulsa recarrega após recusa | 45 min | fatia de tela | 45 min | C538 (molde: entrega, C537) | Movimentações → Saída/Perda — **confirmado na Fase 0 da 246** (só o Ajuste relia, `MovimentacoesAlmoxarifado.js` `catch` do envio) | 0,35 h (rateio da Etapa 246, como o item 9) | 30 min | `fcc7b076`, `509d6902`, `48580e4d` |
 | 11 | Reserva da liberação repartida por nota | 1h15 | motor/estorno | 1h15 | C524, B1467 | liberação de lote (Etapa 220) + conta do estorno da nota | — | — | — |
 | 12 | Estorno da nota sob a trava (C525 + C534) | 1h30 | trava/estorno | 1h30 | C525, C534, B1506 | a conta do estorno que solta reservas roda fora de `naTravaDoMaterial` | — | — | — |
 | 13 | Busca de entrega na tela Devoluções | 1h15 | tela + servidor (o C477 dizia ~1h30 na régua antiga) | 1h15 | C477, B1367 | `returnService.js:486-495` (páginas de 30, cursor `antes_de`) | — | — | — |
@@ -74,6 +74,12 @@ baixa peça com série (recusa da Etapa 45), mas que o caminho ensinado pela rec
 peça boa presa no bloqueio). O item virou o aviso antecipado com os três passos. 30 min acima do revisado: a revisão final achou o aviso
 falando para quem não faz os passos (Compras/Qualidade) e o campo de leitura valendo fora da NC pendente — corrigidos com teste; e o
 fechamento. Medido 1,2 h → 1h15.
+
+**Etapa 246 (itens 9 e 10, 18/11):** não revisados (a medição confirmou os dois defeitos). 30 min abaixo do estimado no total. O item 9 ganhou
+um campo de leitura na lista de séries e corrigiu também a janela Devolver de Materiais de Clientes (a mesma frase). A revisão final achou
+dois casos (a releitura que falha sem rede apagava a lista; com o lote escolhido na devolução ao cliente a frase sumia), corrigidos com
+teste. Medido 0,7 h para os dois (os commits do pacote citam "Etapa 246"; o grupo C539/C538 da linha de medição não casa com os assuntos)
+→ 30 min + 30 min.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 

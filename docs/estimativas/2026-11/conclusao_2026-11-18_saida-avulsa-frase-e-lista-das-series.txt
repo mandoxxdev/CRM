@@ -1,0 +1,7 @@
+*Concluído — Saída avulsa de peça com número de série: frase do lote e lista atualizada*
+_18/11/2026_
+
+9. Frase do lote das séries só quando o lote tem a peça — estimado 45 min · realizado 30 min
+10. Lista de séries da saída avulsa atualizada depois de uma recusa — estimado 45 min · realizado 30 min
+
+*Total: estimado 1h30 · realizado 1h*
