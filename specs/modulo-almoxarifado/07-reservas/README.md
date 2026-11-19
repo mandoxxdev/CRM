@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 247 (2026-11-18, `7305080c`, tela `493cfeba`, Fase 5 `0e163246`): liberar o lote que veio de mais de uma nota reparte a reserva por nota (C524, B1561–B1563)** — cada parte com a marca da sua nota; o estorno de cada nota passa; a tela Reservas diz o recebimento. Ver a seção "Etapa 247", no fim. Continua 🟢.
+
 > **+ Etapa 230 (2026-11-13, `59a5ae94`, Fase 5 `de2bd342`): a fila da OS aberta recebe só o que pode sair (C520, B1513–B1516)** — `distribuirParaOs` com `tetoFila` (o que a entrada trouxe fora de lote impedido) e o desconto do lote (sai o `semDescontoDoLote`); o resto vai para a reserva da OS; liberar o lote converte a reserva da OS da nota do lote para a fila da OS (`converterReservaDaOsNoLoteLiberado`); a fila da OS ganha o abono da aprovação (B1381); o estorno perde a exceção B1508. Ver a seção "Etapa 230", no fim. Continua 🟢.
 > **+ Etapa 229 (2026-11-13, `f6e9230b`, tela `046612a0`, Fase 5 `a989fb6e`): a inspeção e a NC olham o lote do item que liberaram (C519, B1509–B1512)** — o `ctx` da liberação ganha `lote_id`; sem OS aberta, com o lote do item impedido agora (lido sob a trava), nada é distribuído, o aviso não sai e a resposta da inspeção traz `lote_impedido`. Ver a seção "Etapa 229", no fim. Continua 🟢.
 
@@ -716,7 +718,7 @@ por material de sempre, agora também nos escritores do status do lote).
 - [x] **RN-220.04 / .06 (B1463)** — só reserva quem deixou o lote liberado (antes impedido, agora não, com controle de lote) — `7a428526`.
 - [x] **RN-220.05 (B1462)** — o teto é o livre do lote limitado pelo que pode sair do material; a reserva antiga conta (a/b/c) — `7a428526`.
 - [x] **RN-220.07 / .14 (B1467, Fase 2)** — a reserva leva o recebimento quando o lote veio de uma nota só; o estorno dessa nota a solta
-  (com duas notas, vai sem — **C524**) — `7a428526`.
+  (com duas notas, vai sem — **C524**) — `7a428526`. *(A parte "com duas notas, vai sem" **deixou de valer na Etapa 247** (`7305080c`): a reserva é repartida por nota.)*
 - [x] **RN-220.08 (B1464)** — o aviso *"O lote ⟨L⟩ do material que a sua requisição aguardava foi liberado e está no estoque."*, chave por
   liberação, com o recebimento — `7a428526`, `6c80f908`.
 - [x] **RN-220.09** — a fila (a urgente primeiro) — `7a428526`.
@@ -725,7 +727,7 @@ por material de sempre, agora também nos escritores do status do lote).
 - [x] **RN-220.12 (B1465)** — a tela diz quanto reservou — `a04b43e8`.
 - [x] **RN-220.13** — separar e entregar depois da liberação — `7a428526`.
 - [x] **RN-220.15 (B1468, Fase 5)** — corrigir a validade de um lote vencido para o futuro também reserva — `6c80f908`.
-- [ ] **Fora (declarado):** lote com peças de mais de uma nota (**C524**); o estorno no mesmo instante da liberação (**C525**, anterior); a
+- [ ] **Fora (declarado):** lote com peças de mais de uma nota (**C524** — *resolvido na Etapa 247*, `7305080c`); o estorno no mesmo instante da liberação (**C525**, anterior); a
   reserva manual conta o lote impedido (**C479** — *resolvido na Etapa 221*, `156adb41`).
 
 Testes: `liberarLoteReserva.api.test.js` (25); `chegadaLoteImpedido` RN-219.06 reescrita (dizia que liberar o lote não distribuía — o
@@ -824,3 +826,27 @@ trava do material que a nota, a inspeção/NC e os escritores do status do lote 
 
 Testes: `osAbertaLoteImpedido.api.test.js` (21); editados de propósito `chegadaLoteImpedido` RN-219.07, `liberacaoLoteImpedido` RN-229.06 e
 `estornoLoteImpedido` RN-228.11/.16. Continua 🟢.
+
+## Etapa 247 — liberar o lote que veio de mais de uma nota: a reserva repartida por nota (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa247-liberar-lote-de-mais-de-uma-nota.md`. **C524** resolvido.
+
+**Correção da spec (regra 5):** a seção da Etapa 220 dizia *"a reserva leva o recebimento quando o lote veio de uma nota só (com duas notas,
+vai sem — C524)"*, e o teste `[RN-220.14 b]` afirmava a reserva **sem** marca. Era a limitação declarada da B1467, não a regra: **deixou de
+valer** — a reserva é repartida por nota. E a lista das notas do lote vinha dos itens do recebimento, que não sabem do estorno: **estava errada**
+para o lote em que uma das notas já tinha sido estornada (a nota estornada contava e a reserva ia sem marca). O `[RN-230.18]` afirmava a reserva
+de R2 sem marca; agora ela tem a marca da nota B (continua provando que não veio da reserva da OS, que é da nota A).
+
+- [x] **RN-247.01 / .02 / .03** — a reserva repartida por nota (a que entrou por último primeiro), o estorno de cada nota passa e solta só a
+  parte dela, a fila menor que o lote — `7305080c`.
+- [x] **RN-247.04** — a nota estornada (estorno **concluído**) não conta; lote de uma nota viva: o aviso cita o recebimento — `7305080c`.
+- [x] **RN-247.05 / .05 b / .05 c** — a sobra (entrada avulsa) vai com a mais antiga; a 2ª liberação desconta o que já está reservado com a
+  marca — `7305080c`.
+- [x] **RN-247.09 / .10 / .10 b / .11 (Fase 2)** — a reserva da OS, a parte em inspeção, a entrada com reprovado (fora da parte), o estorno em
+  andamento (a nota continua viva) — `7305080c`.
+- [x] **RN-247.07** — `GET /reservas` com `recebimento_numero` e `recebimento_nota_fiscal`; a tela Reservas mostra *"Recebimento ⟨REC⟩ · NF
+  ⟨nota⟩"*; fixture `reservaDaNotaDoServidor.json` conferida pelo servidor — `7305080c` (servidor), `493cfeba` (tela).
+- [x] **RN-247.08** (integração) — separar e entregar consomem as duas reservas; e pelo serviço sob a trava — `7305080c`.
+- [x] **Fase 5** — a parte da nota por entrada (o reprovado trava a entrada, nao a nota) e a reserva marcada de outro lote da mesma nota ([RN-247.12], [RN-247.13]) — `0e163246`.
+- [ ] **Fora (declarado):** a parte já saída do lote fica a menos na nota mais antiga; a marca é da nota, não do lote; o estorno no mesmo
+  instante da liberação (**C525**, item 12) — **D (247)**.

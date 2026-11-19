@@ -94,16 +94,65 @@ recém-chegada é a que mais se estorna — erro de lançamento — e é a que p
 
 ## Tasks
 
-- [ ] **T1 (tronco)** testes RN-247.01..06 e .08 em `server/tests/api/liberarLoteDeDuasNotas.api.test.js` (vermelhos) + conserto em
+- [x] **T1 (tronco)** — `7305080c` (o `[RN-230.18]` também mudou: a reserva de R2 tem a marca de B; 14 cenários, controle positivo de 8 sabotagens — a "sem filtro de estorno" não derrubava nada até o RN-247.04 passar a estornar a nota **mais nova**) testes RN-247.01..06 e .08 em `server/tests/api/liberarLoteDeDuasNotas.api.test.js` (vermelhos) + conserto em
   `reservaChegadaService.js`; o `[RN-220.14 b]` (afirmava a reserva **sem** marca — C524) passa a afirmar a repartição. Controle positivo
   (sabotagem da ordem e da cota).
-- [ ] **T2 (galho, depois de T1 só por arquivo)** RN-247.07: `reservationService.listarReservas` + teste de rota/fixture + tela
+- [x] **T2** — servidor e fixture em `7305080c`, tela em `493cfeba` (feita em sequência: pequena; o revisor da Fase 2 confirmou que era independente) RN-247.07: `reservationService.listarReservas` + teste de rota/fixture + tela
   `ReservasAlmoxarifado.js` + teste Jest com a fixture.
-- [ ] **T3** integração: RN-247.08 (pela rota) e um cenário pelo serviço (`reservarLoteLiberadoSobTrava` direto, sob a trava).
-- [ ] **T4** Fase 5 (revisor adversarial com sonda) e correções com teste próprio.
-- [ ] **T5** fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T3** — `7305080c` ([RN-247.08] e [RN-247.08 b]) integração: RN-247.08 (pela rota) e um cenário pelo serviço (`reservarLoteLiberadoSobTrava` direto, sob a trava).
+- [x] **T4** — `0e163246`: 2 achados reproduzidos (o reprovado zerava a nota inteira, mas a trava é por entrada; a reserva marcada de outro lote da mesma nota tirava a parte deste lote), corrigidos com [RN-247.12] e [RN-247.13], vermelhos no código anterior. Fase 5 (revisor adversarial com sonda) e correções com teste próprio.
+- [x] **T5** fechamento (fechar-etapa sem 7½ e 8).
 
 ## Pontos de atenção
 
 - Trava: a liberação já roda sob a trava do material (`trava.travado`); `distribuirSemLock` não pega trava; nada novo de trava.
 - Item 12 (C525 + C534, o estorno sob a trava) mexe em `liberarParaEstorno` — não tocar aqui.
+
+## Divergências do plano
+
+- A cota do desenho original (entrada − convertido) estava errada: a Fase 2 a trocou por entrada − em inspeção − reservado com a marca; a Fase 5
+  a refinou (reprovado por **entrada**, não por nota; a reserva marcada conta primeiro contra o que a nota pôs fora do lote).
+- "Sob a trava o claim do estorno não está no meio" estava errado (Fase 2): a nota viva segue `estornoConcluidoSql`.
+- RN-247.06 dizia que a 230 "não muda": o `[RN-230.18]` mudou (a reserva de R2 com a marca de B, não sem marca).
+
+## Verificação (medida, serial, sobre o código final `0e163246`)
+
+- `npm run test:api`: **640/640 arquivos** (rodada depois de `0e163246`, sem edição de produção durante ela). O `permissoesNoServidor.api.test.js` [RN-06]
+  passou — não caiu, então não foi investigado.
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0 (sobre `493cfeba`; a Fase 5 só mudou a conta da
+  liberação, coberta pelo `test:api`).
+- Jest da tela (sobre `493cfeba`; a Fase 5 não tocou `client/`): **236 suítes, 3194 testes** (3191 da 246 + 3 novos); `CI=true react-scripts
+  build`: *Compiled successfully*.
+- Uma rodada anterior do `test:api` (640/640) teve a produção editada no meio (a correção da Fase 5) — não vale como medida; por isso a
+  rodada acima.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2: cota e régua de "viva"; Fase 5: reprovado por entrada e marca de outro lote).
+- Achados: Fase 2 — 7 (3 críticos, todos reais: 2 reproduzidos depois em teste; 1 premissa errada do plano); Fase 5 — 2 reais reproduzidos
+  com sonda, 0 ruído.
+- Paralelismo: nenhum galho em paralelo (etapa pequena); a Fase 2 e a Fase 5 rodaram junto com a escrita dos testes e com as suítes.
+- Defeito que escapou: (preencher na etapa seguinte). Da 246: nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+Item 12 da estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`, 1h30, trava/estorno):
+**o estorno da nota no mesmo instante da liberação do lote — a conta do estorno sob a trava** (**C525** + **C534**, **B1506**). Módulo
+Almoxarifado.
+
+- **O que é:** `reservaChegadaService.liberarParaEstorno` (a conta que solta a reserva da nota antes do estorno; chamada lazy por
+  `stockService.cancelarMovimentacao` antes do claim) lê o disponível, o lote impedido e as reservas **fora** da trava do material. Liberar
+  o lote (que reserva sob a trava, Etapa 220 — agora repartido por nota, 247) ou bloqueá-lo no mesmo instante faz o estorno soltar de menos
+  (recusa *"Não é possível estornar: o material está reservado para requisições (⟨REQ⟩) — libere as reservas antes de estornar"*, C525) ou de
+  mais (a requisição volta a esperar, C534). Conserto previsto: a conta (ler + soltar) sob `naTravaDoMaterial`.
+- **Medir antes de prometer (Fase 0, sonda executada com gancho):** reproduzir a C525 e a C534 com o gancho disparado **do contexto do teste**
+  (CLAUDE.md: o gesto concorrente disparado de dentro do gancho herda a seção e passa direto pela trava; molde
+  `exclusaoSerieQueVoltou.api.test.js` RN-15). Conferir onde o claim `cancelado = 1` é gravado (fora da trava, `stockService.js` ~3180) e onde
+  o ramo de entrada entra na seção (`naTravaDoMaterial`, ~3357): a conta pode ir para dentro da seção do ramo de entrada? `naTravaDoMaterial`
+  não aninha fora de `comLockDosMateriais`; a trava **não é reentrante**.
+- **Contrato que consome:** `POST /movimentacoes/:id/cancelar` (resposta e recusas inalteradas); `recriarAposEstornoRecusado` (recria o que
+  foi solto quando o estorno não acontece) — se a conta for para dentro da seção, o recriar também (ou não sai da seção sem desfazer).
+- **Pontos de atenção:** Fase 2 e Fase 5 obrigatórias; a régua "nota viva" de `devolucaoViva.js` (a 247 a usa na liberação — o claim
+  provisório); soltar sem distribuir não pega trava (B441) — a 12 muda isso só para a conta do estorno; não contradizer a repartição da 247
+  (o estorno solta a reserva com a marca da própria nota, só o que falta).
+- **O que já está pronto e não reabre:** a reserva da liberação repartida por nota (esta etapa) e a tela Reservas dizendo o recebimento.

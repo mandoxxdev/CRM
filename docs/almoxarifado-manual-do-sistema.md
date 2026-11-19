@@ -2877,9 +2877,14 @@ da OS não é tocada. Depois, o resto do livre do lote — já sem o que passou 
 conta acima; as peças que continuam na reserva da OS não vão para elas.
 
 **A reserva criada.** Na tela **Reservas**, no nome de quem liberou, com a observação *"Reserva na liberação do lote ⟨L⟩ — requisição ⟨REQ⟩"*.
-Quando todas as peças do lote vieram de **uma** nota, a reserva leva a marca dessa nota: estornar a entrada da nota depois solta a reserva
-como solta a da chegada (6.10). Lote abastecido por mais de uma nota: a reserva vai sem a marca, e o estorno de uma dessas notas pede que a
-reserva seja liberada à mão antes.
+A reserva leva a marca da nota de onde vieram as peças: estornar a entrada da nota depois solta a reserva como solta a da chegada
+(6.10). Lote abastecido por **mais de uma nota**: a reserva é repartida por nota — a nota que entrou por último primeiro, cada uma até a sua
+parte, e a mais antiga com o resto (inclusive o que entrou no lote sem nota, por uma Entrada avulsa). A parte de uma nota é o que entrou por
+ela no lote, menos o que dela ainda está em inspeção e menos o que já está reservado com a marca dela (a reserva da chegada, a da OS, a de uma
+liberação anterior do mesmo lote) além do que a nota pôs em outros lotes; a entrada que teve peça reprovada na inspeção fica fora da parte (essa entrada não se estorna; outra entrada da mesma nota no lote conta), e a entrada já
+estornada não conta. Assim o estorno de qualquer das notas solta a parte dela. Quando parte do lote já saiu, a nota mais antiga fica com
+menos que o que entrou por ela, e o estorno dela pode ser recusado com *"Não é possível estornar: o material está reservado para requisições
+(⟨REQ⟩) — libere as reservas antes de estornar"* — libere a reserva à mão (9.4) e estorne.
 
 **A tela diz quanto reservou.** Depois da mensagem de sucesso, quando a liberação reservou algo, aparece *"⟨q⟩ ⟨un⟩ reservado(s) para quem
 esperava este material (⟨n⟩ requisição(ões))."* O solicitante recebe o e-mail *"Material liberado para a sua requisição"* com a primeira
@@ -3036,6 +3041,10 @@ O ícone de setas troca o **destino** da reserva (projeto, OS, referência de OS
 (*"OS-042 — ACME INDUSTRIA LTDA"*; sem cliente, só o número). Os seletores de OS trazem as 300 ordens de serviço mais recentes; a reserva de
 uma OS mais antiga aparece na coluna como *"OS #⟨número interno⟩"*, e a de um cliente fora da lista, *"Cliente #⟨número interno⟩"*. Quando
 uma reserva tem mais de um destino, a coluna mostra o primeiro na ordem OS, referência de OS, projeto, cliente.
+
+**A nota da reserva.** A reserva feita pelo sistema a partir de uma nota — na chegada (9.3b), na liberação da inspeção ou da não
+conformidade (9.3c) e na liberação do lote (9.3c-bis) — mostra, abaixo do destino, *"Recebimento ⟨REC⟩ · NF ⟨número da nota⟩"* (sem número
+de nota, só *"Recebimento ⟨REC⟩"*). É a nota cujo estorno solta essa reserva. A reserva manual e a da aprovação não mostram essa linha.
 
 **Nenhum saldo é tocado — de propósito.** A quantidade continua no estoque e continua reservada; muda só para quem o hold aponta. Liberar e reservar de novo seria pior: abriria uma janela em que outra saída poderia levar o material no meio do caminho.
 
