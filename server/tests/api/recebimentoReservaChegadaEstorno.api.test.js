@@ -323,20 +323,36 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await cancelada(mov), 0);
   });
 
-  await test('[Fase 5] corrida: outro estorno ganha o claim enquanto este liberava -> 400 "Movimentação já cancelada" e a reserva liberada e recriada', async () => {
+  // Etapa 248 (C525, Fase 2 achado 1): este cenario dizia "outro estorno ganha o claim enquanto este liberava" e simulava o concorrente
+  // por um TRIGGER na reserva virando LIBERADA. Desde a 248 a liberacao roda DEPOIS do claim (dentro da secao da trava), entao essa ordem
+  // nao existe mais — o trigger nao mudava nada e o estorno concluia 200. O cenario agora e o que sobra: o outro estorno grava o claim
+  // ANTES deste (o UPDATE do claim deste encontra cancelado = 1) -> 400 e a reserva da chegada intacta (nada foi solto, nada a recriar).
+  await test('[Fase 5, revisto na 248] corrida: outro estorno grava o claim antes -> 400 "Movimentação já cancelada" e a reserva intacta', async () => {
     const m = await material();
     const p = await pedidoAvulso(m, 4);
     const R1 = await criar([[m, 4]]);
     await aprovar(R1);
     const { mov } = await receber(p, m, 4);
-    // Simula o concorrente: no instante em que a reserva vira LIBERADA, a movimentacao e marcada cancelada.
-    await dbRun(db, `CREATE TRIGGER e74f5_corrida AFTER UPDATE OF status ON reservas_material_almoxarifado
-      WHEN NEW.status = 'LIBERADA' BEGIN UPDATE movimentacoes_almoxarifado SET cancelado = 1 WHERE id = ${Number(mov)}; END`);
+    const antes = (await reservas(R1)).filter((r) => r.status === 'ATIVA').map((r) => r.id);
+    // Simula o concorrente: logo antes do UPDATE do claim deste estorno, a movimentacao e marcada cancelada.
+    const origRun = db.run; let disparou = false;
+    db.run = function run(sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes('SET cancelado = 1, cancelado_por = ?')) {
+        disparou = true;
+        return origRun.call(db, 'UPDATE movimentacoes_almoxarifado SET cancelado = 1 WHERE id = ?', [Number(mov)],
+          () => origRun.call(db, sql, params, cb));
+      }
+      return origRun.call(db, sql, params, cb);
+    };
     let e;
-    try { e = await estornar(mov); } finally { await dbRun(db, 'DROP TRIGGER IF EXISTS e74f5_corrida'); }
+    try { e = await estornar(mov); } finally { db.run = origRun; }
+    assert.ok(disparou, 'o gancho do claim nao disparou');
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
     assert.strictEqual(e.body.error, 'Movimentação já cancelada');
-    assert.strictEqual(await holdAtivo(R1), 4, 'a reserva liberada foi recriada');
+    assert.strictEqual(await holdAtivo(R1), 4, 'a reserva da chegada nao ficou de pe');
+    assert.deepStrictEqual((await reservas(R1)).filter((r) => r.status === 'ATIVA').map((r) => r.id), antes,
+      'o estorno que perdeu o claim mexeu na reserva (soltou e recriou)');
     assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
   });
 

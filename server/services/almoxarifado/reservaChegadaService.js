@@ -184,7 +184,8 @@ async function concluirPendencia(db, user, pendencia) {
   for (const { ctx, resultado } of pendencia.avisos || []) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      await receiptNotificationService.avisarLiberacao(db, user, ctx, resultado);
+      // Etapa 248 (RN-248.06): o aviso diz o que continua reservado — o estorno da nota que esperava a trava pode ter soltado.
+      await receiptNotificationService.avisarLiberacao(db, user, ctx, await resultadoDePe(db, resultado));
     } catch (e) {
       console.warn(`[almoxarifado-reservas] aviso da liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
     }
@@ -846,8 +847,32 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
   return resultado;
 }
 
-/** O que a resposta das tres rotas do lote mostra (B1465). */
-async function resumoDaReservaDoLote(db, materialId, resultado) {
+/**
+ * Etapa 248 (Fase 2, achado 2; RN-248.06) — o resultado de uma distribuicao relido na hora: cada reserva so com o que ainda esta de pe
+ * (`ATIVA` ou `CONSUMIDA`, ate a `quantidade` de agora — a liberacao parcial a reduz); a solta sai. Desde a 248 o estorno da nota espera a
+ * liberacao do lote na trava e pode soltar, logo depois, a reserva que ela acabou de criar — o aviso e a resposta da liberacao rodam
+ * depois de soltar a trava e prometiam a reserva que ja nao existia. Sem reserva com id, devolve o resultado como veio.
+ */
+async function resultadoDePe(db, resultado) {
+  const rs = (resultado && resultado.reservas) || [];
+  const ids = [...new Set(rs.map((r) => Number(r.reserva_id)).filter((x) => Number.isFinite(x) && x > 0))];
+  if (!ids.length) return resultado;
+  const linhas = await dbAll(db, `SELECT id, status, quantidade FROM reservas_material_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  const agora = new Map(linhas.map((l) => [Number(l.id), l]));
+  const reservas = [];
+  for (const r of rs) {
+    const l = agora.get(Number(r.reserva_id));
+    if (!r.reserva_id) { reservas.push(r); continue; } // eslint-disable-line no-continue
+    if (!l || !['ATIVA', 'CONSUMIDA'].includes(l.status)) continue; // eslint-disable-line no-continue
+    const q = Q.qtd(Math.min(num(r.quantidade), num(l.quantidade)));
+    if (q > EPS) reservas.push({ ...r, quantidade: q });
+  }
+  return { ...resultado, reservas };
+}
+
+/** O que a resposta das tres rotas do lote mostra (B1465). Desde a 248, so o que continua reservado (`resultadoDePe`). */
+async function resumoDaReservaDoLote(db, materialId, resultadoDaHora) {
+  const resultado = await resultadoDePe(db, resultadoDaHora);
   const rs = (resultado && resultado.reservas) || [];
   const mat = await dbGet(db, 'SELECT unidade FROM materiais_almoxarifado WHERE id = ?', [materialId]);
   return {
@@ -894,7 +919,8 @@ async function aposLiberacaoSemFalhar(db, user, ctx, opcoes = {}) {
 /**
  * Etapa 74 (T3, D8/B374 + Fase 2) — o estorno da ENTRADA_COMPRA desfaz a reserva que a PRÓPRIA nota criou,
  * só o necessário. Chamada LAZY pelo motor (`stockService.cancelarMovimentacao`) depois das guardas de
- * inspeção/reprovado/série e ANTES do claim. Sem isto, toda nota que atendeu alguém ficaria inestornável
+ * inspeção/reprovado/série. Até a 247 isto dizia "ANTES do claim" e ela rodava fora da trava; desde a Etapa 248 (C525, C534)
+ * roda DEPOIS do claim, no começo da seção da trava do material do estorno, colada no débito. Sem isto, toda nota que atendeu alguém ficaria inestornável
  * ("material já consumido") até alguém liberar à mão — e liberar à mão deixa o status mentindo (C127).
  *
  * Regras: só reservas ATIVAS com `recebimento_id` desta movimentação e do material dela, de requisições
@@ -918,7 +944,8 @@ async function liberarParaEstorno(db, user, mov) {
   // impedido: as pecas dela ja estao no impedido e saem com o estorno (o que pode sair nao muda), e descontar de novo soltaria a reserva
   // coberta pelo lote bom (RN-228.04) — ai fica a regua de hoje (`disp`), que so garante que o motor aceite o estorno. Sem teto no
   // estornado (B1505): outro lote desta nota bloqueado depois deixa o livre abaixo de zero, e soltar ate ele voltar a 0 nunca solta de
-  // mais. Lido fora da trava, como o resto daqui (soltar sem distribuir nao pega — B441; o lote mudando no meio: C534, B1506).
+  // mais. Lido SOB a trava do material desde a Etapa 248 (o estorno chama daqui de dentro da secao dele); ate a 247 dizia "fora da
+  // trava" (B1506) e o lote mudando no meio fazia soltar de menos ou de mais (C525, C534).
   const hoje = diaLocal.hojeLocalISO();
   const mat = await dbGet(db, `SELECT ${disponivelSql('lim_me')} AS disponivel, ${loteImpedidoSql('lim_me', hoje)} AS impedido,
       CASE WHEN COALESCE(lim_me.controle_lote,0) = 1 AND lim_le.id IS NOT NULL AND ${predicadoLoteImpedidoSql('lim_le', hoje)}
@@ -997,8 +1024,8 @@ async function liberarParaEstorno(db, user, mov) {
 
 /**
  * Etapa 171 (T2, RN-171.11, I5) — a reserva da OS (predicado congelado) que ESTE recebimento criou deste material, mais
- * novas primeiro, ate `qtd`. Fora da trava, como o resto de `liberarParaEstorno` (soltar sem distribuir nao pega —
- * B441). Cada uma no seu try: falhou, `console.warn` e segue (o estorno recusa pelo disponivel, como antes).
+ * novas primeiro, ate `qtd`. Sob a trava do material desde a Etapa 248, como o resto de `liberarParaEstorno` (ate a 247 isto
+ * dizia "fora da trava"). Cada uma no seu try: falhou, `console.warn` e segue (o estorno recusa pelo disponivel, como antes).
  */
 async function liberarReservaDaOsParaEstorno(db, user, mov, qtd) {
   if (!mov.recebimento_id || !(qtd > EPS)) return [];

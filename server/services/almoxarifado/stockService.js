@@ -3155,9 +3155,16 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   //      recalculado; a falha original continua sendo a resposta.
   // Descartado: mover a liberacao para DEPOIS do debito do ramo de entrada (ela existe justamente para o
   // debito caber no disponivel) e envolver tudo numa transacao (o motor nao tem transacao — Postgres depois).
+  //
+  // Etapa 248 (C525 + C534, B1506 revista): a pre-checagem e a liberacao rodam DENTRO da secao da trava do material (o comeco do
+  // `try` da secao, depois do claim) — `contaDaNotaSobTrava` abaixo. Ate a 247 rodavam aqui, ANTES do claim e fora da trava: a
+  // liberacao do lote (que reserva para quem espera sob a trava) no meio fazia o estorno nao soltar nada e ser recusado (C525), e o
+  // lote liberado entre a leitura e a soltura fazia o estorno soltar a reserva de quem ja podia sair (C534). Medido com gancho
+  // (`estornoNotaSobTrava.api.test.js`, 0/4 antes). Com a conta depois do claim, o claim perdido nao tem nada a recriar.
   let liberadasNoEstorno = [];
   let requisicoesDoEstorno = [];
-  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+  const contaDaNotaSobTrava = async () => {
+    if (!(mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id)) return;
     const permiteNegativoPre = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
     if (mov.lote_id && !permiteNegativoPre) {
       const linhaLote = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
@@ -3175,7 +3182,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     } catch (e) {
       console.warn(`[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
     }
-  }
+  };
 
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
@@ -3351,11 +3358,15 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     // 117 deu ao ramo de saida (C235). Ate a 118 o ramo de entrada travava so o debito (as linhas, as series e o livro rodavam
     // fora: uma devolucao avulsa das mesmas series cabia entre a troca das series e o desfazer — fisico 4 com 2 series, 3/3),
     // e BLOQUEIO e TRANSFERENCIA nao travavam nada (o desfazer do bloqueio subtrai do disponivel). Se algo falha aqui dentro, o
-    // desfazer dos efeitos e do claim roda ANTES de soltar. Fora da secao, como sempre: a liberacao e a recriacao das reservas
-    // da chegada e o recalculo das requisicoes (pegam a mesma trava — ela nao e reentrante; o descartado da B762), o pedido de
-    // compra, o alerta e a notificacao. As `naTravaDoMaterial` de dentro (as escritas do motor chamadas daqui) passam direto.
+    // desfazer dos efeitos e do claim roda ANTES de soltar. Fora da secao: o recalculo das requisicoes (pega a mesma trava por
+    // `comLockDosMateriais` — ela nao e reentrante; o descartado da B762), o pedido de compra, o alerta e a notificacao. Esta linha
+    // dizia que a liberacao e a recriacao das reservas da chegada tambem ficavam fora — valeu ate a 247; desde a Etapa 248 (C525,
+    // C534) as duas rodam aqui dentro (`contaDaNotaSobTrava` e o catch abaixo). As `naTravaDoMaterial` de dentro (as escritas do motor chamadas daqui) passam direto.
     await trava.naTravaDoMaterial(mov.material_id, async () => {
       try {
+        // Etapa 248 (C525 + C534): a conta do estorno da nota (pre-checagem do lote + soltar a reserva da chegada) sob a trava,
+        // colada no debito — a liberacao, o bloqueio e a correcao de validade do lote (que pegam esta trava) esperam o estorno inteiro.
+        await contaDaNotaSobTrava();
         if (tiposEntrada.includes(mov.tipo)) {
           // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
           // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
@@ -3723,6 +3734,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       } catch (eSecao) {
         await desfazerEfeitosDoEstorno();
         await desfazerClaim();
+        // Etapa 248 (RN-248.03): a reserva solta pela conta volta ANTES de soltar a trava — fora dela, uma aprovacao ou a liberacao do
+        // lote levava o livre que a recriacao precisa. `criarReserva`/`recriarReservaDaOs` usam `naTravaDoMaterial` (roda direto aqui).
+        // So a lista sai: `requisicoesDoEstorno` fica para o recalculo de fora (ele pega `comLockDosMateriais` — nao reentrante). Se o
+        // desfazer acima falhar, a recriacao de fora (fora da trava, como ate a 247) continua de reserva.
+        const recriar = liberadasNoEstorno;
+        liberadasNoEstorno = [];
+        await recriarReservasDoEstorno(db, user, recriar, movimentoId);
         throw eSecao;
       }
     });
