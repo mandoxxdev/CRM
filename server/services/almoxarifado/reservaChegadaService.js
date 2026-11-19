@@ -44,6 +44,7 @@ const trava = require('./travaPorMaterial');
 // Etapa 171 (T2): a reserva da OS (pedido de compra com OS). Pelo objeto do modulo.
 const reservaDaOs = require('./reservaDaOs');
 const retidoDoLote = require('./retidoDoLote'); // Etapa 220 (B1462): o livre do lote liberado
+const { estornoConcluidoSql } = require('./devolucaoViva'); // Etapa 247 (Fase 2, achado 3): a nota viva do lote liberado
 
 const { QTD_DO_ITEM_SQL, faltaDoItem } = receiptNotificationService;
 
@@ -764,9 +765,22 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     const sit = (await retidoDoLote.situacaoDosLotes(db, lote.material_id)).get(Number(lote.id));
     const livre = sit ? num(sit.livre) : 0;
     if (!(livre > EPS)) return resultado;
-    const recs = await dbAll(db, `SELECT DISTINCT recebimento_id FROM recebimentos_material_itens_almoxarifado
-      WHERE lote_id = ? AND recebimento_id IS NOT NULL`, [lote.id]);
-    const recebimentoId = recs.length === 1 ? Number(recs[0].recebimento_id) : null;
+    // Etapa 247 (C524, B1467): as notas VIVAS do lote — a ENTRADA_COMPRA deste lote cujo estorno nao CONCLUIU (a regua de
+    // `devolucaoViva.js`: o claim `cancelado = 1` e gravado fora da trava e volta a 0 se o estorno falhar — Fase 2, achado 3) —, com o
+    // quanto entrou por cada uma, o que ainda esta em inspecao e o que foi reprovado, a que entrou por ultimo primeiro (o maior id da
+    // ENTRADA_COMPRA; o id do recebimento e a ordem do cadastro, nao da entrada — Fase 2, achado 6). Ate a 246 a lista vinha dos itens do
+    // recebimento (que nao sabem do estorno) e, com mais de uma nota, a reserva ia sem marca: o estorno de qualquer uma era recusado.
+    const notas = (await dbAll(db, `SELECT mv.recebimento_id, SUM(mv.quantidade) AS q, MAX(mv.id) AS ultima,
+        SUM((SELECT COALESCE(SUM(COALESCE(ri.quantidade_em_inspecao, 0)), 0) FROM recebimentos_material_itens_almoxarifado ri
+          WHERE ri.movimentacao_entrada_id = mv.id)) AS em_inspecao,
+        SUM((SELECT COALESCE(SUM(COALESCE(i.quantidade_reprovada, 0)), 0) FROM inspecoes_recebimento_almoxarifado i
+          JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id WHERE ri.movimentacao_entrada_id = mv.id)) AS reprovado
+      FROM movimentacoes_almoxarifado mv
+      WHERE mv.tipo = 'ENTRADA_COMPRA' AND mv.lote_id = ? AND mv.material_id = ? AND mv.recebimento_id IS NOT NULL
+        AND NOT ${estornoConcluidoSql('mv')}
+      GROUP BY mv.recebimento_id ORDER BY ultima DESC`, [lote.id, lote.material_id]))
+      .map((x) => ({ id: Number(x.recebimento_id), q: num(x.q), emInspecao: num(x.em_inspecao), reprovado: num(x.reprovado) }));
+    const recebimentoId = notas.length === 1 ? notas[0].id : null;
     const rotulos = rotulosDoLoteLiberado(lote, recebimentoId);
     const acc = { tocadas: new Set(), resultado };
     if (pendencia) pendencia.distribuicoes.push({ acc, rotulos });
@@ -774,13 +788,38 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     // com o lote de varias notas (Fase 5, achado 1: so com nota unica, o lote de duas notas deixava a requisicao da OS sem as pecas, pior
     // que antes da 230). A reserva criada leva a marca da nota de onde veio a reserva da OS (o estorno dela a acha).
     let convertido = 0;
-    for (const r of recs) {
-      const recId = Number(r.recebimento_id);
-      const rot = recId === recebimentoId ? rotulos : rotulosDoLoteLiberado(lote, recId);
+    for (const n of notas) {
       // eslint-disable-next-line no-await-in-loop
-      convertido = Q.qtd(convertido + await converterReservaDaOsNoLoteLiberado(db, user, lote, recId, Q.qtd(livre - convertido), rot, acc));
+      convertido = Q.qtd(convertido + await converterReservaDaOsNoLoteLiberado(db, user, lote, n.id, Q.qtd(livre - convertido),
+        rotulosDoLoteLiberado(lote, n.id), acc));
     }
-    await distribuirSemLock(db, user, lote.material_id, Q.qtd(livre - convertido), rotulos, acc);
+    // Etapa 247 (C524): o resto vai para a fila repartido por nota — a cota de cada nota e o que entrou por ela menos o que ja esta
+    // reservado com a marca dela (a reserva da chegada, a da OS ou a que esta acabou de converter, a de uma liberacao anterior do mesmo
+    // lote), a mais nova primeiro (a recem-chegada e a que mais se estorna), e a mais antiga leva a sobra (a parte que nao e de nota
+    // nenhuma — uma entrada avulsa no lote — fica com ela, como a 220 fazia com o lote de uma nota so). Marcar a mais nao solta de mais: o
+    // estorno solta so o que falta para caber (Etapa 74). Sem nota viva: uma reserva sem marca, como antes. Fase 2 (achado 2): a parte
+    // ainda em inspecao nao esta no livre e nao conta na cota; a nota com reprovado nunca se estorna (Etapa 71) e fica sem cota.
+    for (const n of notas) {
+      // eslint-disable-next-line no-await-in-loop
+      const ja = await dbGet(db, `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_utilizada, 0)), 0) AS q
+        FROM reservas_material_almoxarifado WHERE status = 'ATIVA' AND recebimento_id = ? AND material_id = ?`, [n.id, lote.material_id]);
+      n.cota = n.reprovado > EPS ? 0 : Q.qtd(Math.max(0, n.q - n.emInspecao - num(ja && ja.q)));
+    }
+    let resta = Q.qtd(livre - convertido);
+    if (!notas.length) {
+      await distribuirSemLock(db, user, lote.material_id, resta, rotulos, acc);
+    } else {
+      for (let i = 0; i < notas.length && resta > EPS; i++) {
+        const n = notas[i];
+        const ultima = i === notas.length - 1;
+        const teto = ultima ? resta : Q.qtd(Math.min(resta, n.cota));
+        if (!(teto > EPS)) continue; // eslint-disable-line no-continue
+        // eslint-disable-next-line no-await-in-loop
+        const usado = await distribuirSemLock(db, user, lote.material_id, teto, rotulosDoLoteLiberado(lote, n.id), acc);
+        resta = Q.qtd(resta - usado);
+        if (usado < teto - EPS) break; // a fila (ou o que pode sair) acabou
+      }
+    }
     if (pendencia) {
       pendencia.avisos.push({
         ctx: {

@@ -337,14 +337,16 @@ process.on('exit', (code) => {
     const R2 = await reqDireta(m, 4);
     const R1 = await reqDireta(m, 4, os);
     const recA = await receber([[m, 4, 'L1']], { os_id: os.id });
-    await receber([[m, 4, 'L1']]);
+    const recB = await receber([[m, 4, 'L1']]);
     assert.deepStrictEqual([await reservas(R1), await reservas(R2), await daOs(os, m)], [[], [], 4], 'premissa');
     await statusLote(m, 'L1', 'ATIVO');
     assert.deepStrictEqual(await reservas(R1), [4], 'o lote de duas notas deixou a requisicao da OS sem as pecas da OS');
     assert.deepStrictEqual(await reservas(R2), [4]);
     assert.strictEqual(await daOs(os, m), 0);
     assert.strictEqual(Number((await reservaDe(R1)).recebimento_id), recA, 'a reserva de R1 nao veio da conversao da nota A');
-    assert.strictEqual((await reservaDe(R2)).recebimento_id, null, 'a reserva de R2 veio da reserva da OS');
+    // Etapa 247 (C524): dizia `null` (o lote de duas notas reservava sem marca); agora a reserva de R2 leva a marca da nota B (as pecas
+    // dela) — continua provando que nao veio da reserva da OS (que e da nota A).
+    assert.strictEqual(Number((await reservaDe(R2)).recebimento_id), recB, 'a reserva de R2 veio da reserva da OS (marca A) ou ficou sem marca');
   });
   await test('[RN-230.19] L1 de duas notas da MESMA OS (4 + 4), R1 da OS espera 8: liberar L1 -> R1 8, reserva da OS 0', async () => {
     const os = await novaOs();

@@ -424,12 +424,14 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await reservas(R1), []);
     assert.ok(EM_ESPERA.includes(await st(R1)), `R1 volta a esperar (${await st(R1)})`);
   });
-  await test('[RN-220.14 b] lote com duas notas: a reserva da liberacao vai sem recebimento (C524)', async () => {
-    const { m, R1 } = await bloqueadoComEspera(8);
-    await receber([[m, 4, 'L1']]);
+  // Etapa 247 (C524): este cenario afirmava "a reserva vai sem recebimento" — era a limitacao da B1467, que travava o estorno das duas
+  // notas. Agora a reserva e repartida por nota (a mais nova primeiro); o resto da regra esta em liberarLoteDeDuasNotas.api.test.js.
+  await test('[RN-220.14 b] lote com duas notas: a reserva da liberacao e repartida por nota, a mais nova primeiro (Etapa 247, C524)', async () => {
+    const { m, R1, rec } = await bloqueadoComEspera(8);
+    const rec2 = await receber([[m, 4, 'L1']]);
     await statusLote(m, 'L1', 'ATIVO');
-    const rs = await dbAll(db, "SELECT recebimento_id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [R1]);
-    assert.deepStrictEqual(rs.map((x) => x.recebimento_id), [null]);
+    const rs = await dbAll(db, "SELECT quantidade, recebimento_id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA' ORDER BY id", [R1]);
+    assert.deepStrictEqual(rs.map((x) => [Number(x.quantidade), Number(x.recebimento_id)]), [[4, rec2], [4, rec]]);
   });
 
   // ── RN-220.15 (Fase 5, B1468): corrigir a validade de um lote vencido para o futuro tambem o libera ─────────────────────────────

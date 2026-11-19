@@ -28,15 +28,19 @@ const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 // O nome do solicitante fica de fora de proposito: a tela nao precisa e a listagem nao tem gate de perfil.
 // Fase 5 (F1): + `requisicao_status` (aditivo, `null` na manual) — o dono so libera enquanto a requisicao
 // ainda se cancela (`assertPodeLiberarReserva`); sem o status a tela abriria o Liberar para morrer em 403.
+// Etapa 247 (RN-247.07): + `recebimento_numero` e `recebimento_nota_fiscal` (aditivos, `null` sem nota) — a reserva que leva a marca de
+// uma nota (a chegada, a inspecao, a liberacao do lote) diz qual; e a nota cujo estorno solta essa reserva.
 async function listarReservas(db, filters = {}) {
   let sql = `SELECT r.*,
       m.codigo as material_codigo, m.nome as material_nome, m.unidade as material_unidade,
       (r.quantidade - COALESCE(r.quantidade_utilizada, 0)) as saldo,
       rq.numero as requisicao_numero, rq.solicitante_id as requisicao_solicitante_id,
-      rq.status as requisicao_status
+      rq.status as requisicao_status,
+      rc.numero as recebimento_numero, rc.nota_fiscal as recebimento_nota_fiscal
     FROM reservas_material_almoxarifado r
     JOIN materiais_almoxarifado m ON r.material_id = m.id
     LEFT JOIN requisicoes_almoxarifado rq ON rq.id = r.requisicao_id
+    LEFT JOIN recebimentos_material_almoxarifado rc ON rc.id = r.recebimento_id
     WHERE 1=1`;
   const params = [];
   if (filters.status) { sql += ' AND r.status = ?'; params.push(filters.status); }
