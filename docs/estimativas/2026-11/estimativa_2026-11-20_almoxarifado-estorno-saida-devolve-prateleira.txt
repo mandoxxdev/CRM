@@ -1,0 +1,9 @@
+*Planejamento — estorno de uma saída devolve às prateleiras de onde saiu*
+_20/11/2026_
+
+*1. Estornar uma saída devolve as peças às prateleiras de onde saíram*
+Hoje, quando uma saída (ou uma entrega de requisição) tira peças de mais de uma prateleira e depois é estornada, o total volta certo, mas todas as peças aparecem numa prateleira só (a de origem informada ou a posição padrão do material, mesmo bloqueada), e as outras prateleiras continuam vazias no sistema. Com a alteração, o sistema passa a guardar de quais prateleiras a saída tirou as peças, e o estorno as devolve a essas mesmas prateleiras. Saídas feitas antes da alteração continuam estornando como hoje.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
