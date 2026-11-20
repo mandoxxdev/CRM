@@ -3491,13 +3491,39 @@ A prioridade da requisição não entra na ordem. Datas de necessidade antigas g
 ordenam corretamente entre si.
 
 **Cada linha mostra** o número, a urgência, *"Necessário em DD/MM/AAAA"* (ou *"Sem data de necessidade"*), o
-solicitante e o setor, os chips, *"Separado por: ⟨nomes⟩"* quando já houve rodada de separação, e os itens com algo a
-fazer, assim:
+solicitante e o setor, *"Projeto: ⟨nome⟩"* quando a requisição tem projeto (veja o filtro abaixo), os chips, *"Separado por:
+⟨nomes⟩"* quando já houve rodada de separação, e os itens com algo a fazer, assim:
 
 > *"a separar 5 UN (separável agora 3) · a entregar 2 UN (entregável agora 2) · disponível 3 · separado de A-01 — L-7"*
 
 Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a entregar* só se há separado não entregue;
 *separado de* só se o item tem endereço de separação — 10.2). O *separável agora* é o mesmo número que a separação aceita (10.2): dois itens do mesmo material na mesma requisição dividem o livre na ordem do pedido — o primeiro leva o que dá, o segundo o que sobra (a requisição pode mostrar *Separar* e *Aguardando saldo* ao mesmo tempo). O *disponível* da linha é o disponível do material somado ao que a reserva do item ainda segura: ele não desconta a caixa, então uma linha pode dizer *"a separar 4 PC (separável agora 0) · disponível 4"*. Em material com controle por lote, quando há saldo em lote *Bloqueado*, *Reprovado* ou vencido sem a liberação de vencimento, logo depois do *disponível* vem quanto está nesses lotes — o mesmo número do cartão **Em lote impedido** do extrato (6.9): *"a separar 5 UN (separável agora 4) · disponível 10 · 6 em lote impedido"*. O *disponível* continua com essas peças dentro (o *separável agora* já não as conta, 10.2), e o número pode passar do disponível quando há reserva sobre o material: com 8 reservadas, *"disponível 2 · 6 em lote impedido"*. Sem saldo em lote impedido, ou em material sem controle por lote, a parte não aparece.
+
+#### Filtrar a fila por setor, projeto e localização
+
+Quando a fila tem requisições, o topo mostra três filtros — **Setor**, **Projeto** e **Localização** —, cada um começando em **Todos**. Eles
+só **escondem** requisições: a ordem continua a de cima, e o grupo **"Aguardando"** continua separado. Os três valem juntos (a requisição
+tem de passar em todos). As opções de cada filtro saem das requisições que estão na fila naquele momento, em ordem alfabética.
+
+- **Setor:** o setor da requisição (o mesmo que aparece ao lado do solicitante). Espaços no começo e no fim não contam: *"Produção"* e
+  *" Produção "* são o mesmo setor. **Sem setor** junta as requisições sem setor preenchido.
+- **Projeto:** o projeto da requisição; quando ela não tem projeto, o projeto da **OS cadastrada** que ela cita (7.1). A OS digitada só como
+  texto, sem estar cadastrada, não traz projeto. Projeto sem nome (apagado do cadastro) aparece como *"Projeto #⟨número⟩"*. Dois projetos
+  com o mesmo nome continuam separados, com o número ao lado: *"Linha 2 (#7)"* e *"Linha 2 (#12)"*. **Sem projeto** junta as que não têm nenhum dos dois.
+- **Localização:** de onde pegar cada item — o endereço da dica (*"Pegar em …"*) e, para o que já foi separado, o endereço de separação
+  (*"separado de …"*). A lista traz cada nível da árvore de localizações: escolher um nível mostra as requisições com algum item nele **ou
+  abaixo dele** — *"ALM-GERAL / A"* inclui *"ALM-GERAL / A / A-01"*, mas não *"ALM-GERAL / AB"*. **Sem localização** mostra as requisições com
+  algum item sem endereço: aguardando saldo, barrado pela aprovação de valor (a fila não dá dica), sem endereço para sugerir (*"Sem endereço para
+  sugerir …"*), ou separado sem endereço de separação. A localização escolhe a **requisição** — os outros itens dela continuam na linha.
+
+Com algum filtro escolhido, aparece *"Mostrando ⟨N⟩ de ⟨total⟩ requisições."* e o botão **Limpar filtros**, que volta os três a **Todos**. Se
+nenhuma requisição passa, a tela diz *"Nenhuma requisição da fila com estes filtros."* — diferente de *"Nada para separar ou entregar
+agora."*, que só aparece quando a fila está vazia de verdade.
+
+As escolhas ficam guardadas **neste navegador**: **Atualizar**, **Abrir** uma requisição e voltar, ou fechar e abrir a tela não as perdem. Um
+valor que sumiu da fila depois de **Atualizar** continua escolhido (a tela mostra a frase de nenhuma requisição) até ser trocado. Outro
+computador ou outro navegador começa em **Todos**; um navegador que não guarda dados (janela anônima, bloqueio) também, e os filtros
+funcionam do mesmo jeito enquanto a tela está aberta.
 
 #### Onde pegar cada item, e a ordem de coleta
 
@@ -3596,8 +3622,9 @@ A fila imprime a dica em papel, para levar à prateleira:
 - **Imprimir lista de coleta**, ao lado de **Abrir**, em cada requisição que tem pelo menos um item com endereço sugerido ou com aviso.
   Baixa *lista-coleta-⟨número da requisição⟩.pdf*.
 - **Imprimir lista de coleta (todas)**, ao lado de **Atualizar**: um PDF só, *lista-coleta-fila-AAAA-MM-DD.pdf*, com uma seção por requisição
-  que tem algo **a separar** e algo a imprimir, na ordem da fila. Fica desabilitado quando nenhuma requisição se encaixa, ou enquanto a fila
-  carrega. As requisições não são misturadas: cada seção é uma caixa.
+  que tem algo **a separar** e algo a imprimir, na ordem da fila — **só as que estão na tela**: com um filtro escolhido (10.6), as escondidas
+  ficam de fora; cada seção leva a requisição inteira, inclusive os itens de outras localizações. Fica desabilitado quando nenhuma requisição
+  visível se encaixa, ou enquanto a fila carrega. As requisições não são misturadas: cada seção é uma caixa.
 
 Cada seção traz o título *"Lista de coleta — ⟨número⟩"*, a linha *"Fila carregada em DD/MM/AAAA HH:MM — a sugestão vale para esse momento;
 recarregue a fila antes de imprimir de novo."*, o solicitante com o setor e a urgência (*"Solicitante: ⟨nome⟩ · ⟨setor⟩ · Urgência:

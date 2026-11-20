@@ -1,6 +1,6 @@
 # Etapa 255 — Fila de separação com filtro por setor, projeto e localização
 
-> **Status:** em execução (20/11/2026). Feature 05 (`specs/modulo-almoxarifado/05-separacao-picking/README.md`), item `[ ]`
+> **Status:** FECHADA (20/11/2026). Feature 05 (`specs/modulo-almoxarifado/05-separacao-picking/README.md`), item `[ ]`
 > *"Agrupamento por projeto / setor / localização"*. Estimativa: `docs/estimativas/2026-11/estimativa_2026-11-20_almoxarifado-fila-separacao-filtros.*`
 > (`9df48668`, 1h15). Os itens 24-26 da estimativa de 18/11 continuam esperando resposta e **não** entram aqui.
 
@@ -64,13 +64,65 @@ deste plano dizia que ganhava). Sem parâmetro de consulta novo: o filtro é no 
 
 ## Tasks
 
-- [ ] **T1 (tronco)** — serviço: RN-255.01/02. Teste novo `server/tests/api/filaSeparacaoFiltros.api.test.js`: pela **rota** (projeto
+- [x] **T1 (tronco)** — `7941ba7f` (9 cenários vermelhos antes; 8 sabotagens, cada uma no seu cenário; o teste de chaves da 188 ganhou o
+  campo novo) — serviço: RN-255.01/02. Teste novo `server/tests/api/filaSeparacaoFiltros.api.test.js`: pela **rota** (projeto
   da requisição; projeto da OS; os dois → o da requisição; nenhum; projeto apagado; caminho da origem com pai) e pelo **serviço**
   (`listarFilaSeparacao` direto); sem as tabelas `projetos`/`ordens_servico` e com elas sem a coluna lida (a fila continua 200). Controle
   positivo em cada regra.
-- [ ] **T2 (galho)** — tela: RN-255.03..09 em `FilaSeparacao.js`, teste novo `FilaSeparacaoFiltros.test.js`. Controle positivo por regra.
-- [ ] **T3 (integração)** — o cenário de rota da T1 cobre a fiação do servidor; a tela é provada contra o JSON do contrato (fronteira HTTP).
-- [ ] **T4** — fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T2 (galho)** — `56fd4b51` (11 cenários; 17 sabotagens, cada uma no seu cenário) e Fase 5 `f13b0b4a` (+3 cenários, +4 sabotagens) — tela: RN-255.03..09 em `FilaSeparacao.js`, teste novo `FilaSeparacaoFiltros.test.js`. Controle positivo por regra.
+- [x] **T3 (integração)** — o cenário de rota da T1 cobre a fiação do servidor; a tela é provada contra o JSON do contrato (fronteira HTTP).
+- [x] **T4** — fechamento (fechar-etapa sem 7½ e 8): novidades, specs, guia, manual, plano e o estimado × realizado.
+
+## Fase 5 (um revisor fresco, 20/11) — nada crítico nem importante
+
+- **Menor, corrigido:** dois projetos com o mesmo nome viravam duas opções iguais → *"Linha 2 (#7)"* (`f13b0b4a`).
+- **Menor, buracos de teste, cobertos:** todas as requisições do teste tinham um item só (trocar *algum item* por *todos* passava verde);
+  nenhum teste guardava filtro de tipo errado (`f13b0b4a`).
+- **Menor, declarado:** o filtro guardado vale para o navegador — num computador compartilhado, quem abrir depois herda (B1599); código de
+  localização com *" / "* dentro se confunde com os níveis (D (255) 6; a lista de coleta já tinha o mesmo caso).
+- **Ruído:** requisição sem itens some com filtro de localização — o servidor não põe na fila requisição sem item listado.
+
+## Divergências do plano
+
+- A primeira versão do plano dizia que o recorte `sugestao-coleta` ganhava os campos novos — não ganha (Fase 2, achado 2).
+- A primeira versão tolerava só *no such table*; a Fase 2 mediu ~25 suítes com `ordens_servico` sem `projeto_id` (*no such column*) → `PRAGMA`.
+- A T2 foi escrita antes do teste (o teste veio depois, com controle positivo por sabotagem em todas as regras) — fora da ordem TDD.
+- O teste de chaves da Etapa 188 (`filaSugestaoColeta`) fixava as chaves do item e caiu com o campo novo (esperado, atualizado no T1).
+
+## Verificação (medida sobre o código final, `f13b0b4a`)
+
+- `npm run test:api` (rodado **sozinho** depois do último commit de servidor `7941ba7f`, `NODE_OPTIONS=--max-old-space-size=4096`):
+  **652/652 arquivos de teste OK** (o mais lento: `entregaGuardaSemLote`, 106,3 s). O `f13b0b4a` só mexe na tela.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, código final): **240/240 suítes, 3248/3248 testes**.
+- `CI=true npx react-scripts build`: **Compiled successfully.**
+- Nenhum clique no navegador (F (255)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 1 (o teste de chaves da 188).
+- Achados: Fase 2, 7 reais (absorvidos no plano antes do código); Fase 5, 3 menores reais (1 corrigido, 2 declarados), 2 buracos de teste, 1 ruído.
+- Paralelismo: T1 e T2 em sequência na mesma árvore; os revisores rodaram em paralelo com o trabalho, sem retrabalho.
+- Defeito que escapou: (preencher na etapa seguinte). Da 254: nenhum apontado.
+
+## Próxima tarefa detalhada
+
+1. **Itens 24, 25 e 26 da estimativa de 18/11 — continuam esperando resposta da empresa.** O caminho reversível de cada um está no plano da
+   253 ("Próxima tarefa detalhada"). **Não comece sem a resposta.**
+2. **Sem resposta, o próximo do almoxarifado sem dependência da empresa: o C549** — o estorno do Ajuste sem lote devolve tudo na posição
+   padrão. Gravar as linhas drenadas por movimento (tabela ou coluna nova, migration `safeAlter`) e o estorno sem lote devolvê-las antes do
+   resíduo, sob a mesma seção da trava, com o desfazer (`compensarLinhasClaim`) — **motor**: Fase 2 e Fase 5 completas, ~1h30. Medir antes:
+   `stockService.syncSaldoLocalizacaoPadrao` (o `drenar` do AJUSTE) e o estorno em `cancelarMovimentacao`; os testes
+   `ajusteSemLotePoupaCaixa.api.test.js` (o *[documenta]* do estorno vira a prova do conserto).
+3. **Se pedirem, a continuação desta etapa:** (a) agrupar a fila em seções (B1600 — por cima dos filtros, sem mudar a ordem dentro de cada
+   seção); (b) o campo **Projeto** no formulário da requisição (o `POST` já aceita `projeto_id`, `requisitionCreateService.js:301`; mudaria o
+   que o solicitante preenche — espera pedido); (c) filtro guardado por usuário. Contrato que a tela da fila consome hoje: `GET
+   /api/almoxarifado/fila-separacao` → por requisição `setor`, `projeto_id`, `projeto_nome`; por item `pegar_em.caminho` e
+   `origem_separacao_caminho` (separador `' / '`). A lógica dos filtros mora em `client/src/utils/filtrosFilaSeparacao.js`.
+4. Outras 🟡 já medidas (plano da 254): a dupla aprovação do Ajuste (06) espera decisão; lista de separação como entidade e kits (05) fora da
+   estimativa.
+- **O que já está pronto e não reabre:** os três filtros da Fila, o projeto no cartão e na fila, o caminho da origem separada.
+
 
 ## Fase 2 (revisor fresco, 20/11) — 7 achados, todos absorvidos acima
 

@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 253 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 255 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 254 fechada — 2026-11-20.** **O Ajuste sem lote que não tira da prateleira separada e o material
+> **O desenvolvimento parou aqui: Etapa 255 fechada — 2026-11-20.** **A Fila de separação filtra por setor, projeto e localização.** No
+> topo da Fila, três filtros escondem o que não é do setor, do projeto (o da requisição ou o da OS cadastrada) ou da localização escolhida
+> (com tudo o que está abaixo dela), na mesma ordem de urgência; o cartão mostra o projeto; a lista de coleta de todas imprime só o que está
+> na tela; e as escolhas ficam guardadas no navegador. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da
+> 255). **Onde parou, exatamente:** a **255 está fechada**; os itens 24 a 26 da estimativa de 18/11 **esperam resposta**; sem ela, a
+> próxima está no fim do plano da 255.
+>
+> *(Antes:)* **Etapa 254 fechada — 2026-11-20.** **O Ajuste sem lote que não tira da prateleira separada e o material
 > da sobra/remessa com "cadastro a completar".** O Ajuste do total tira primeiro o que não está separado numa requisição (inclusive na
 > posição padrão), e a entrega deixa de ser recusada; o material que a sobra e a remessa criam aparece no **Compras → Materiais** com aviso,
 > filtro e selo até o Compras salvar. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 254). **Onde parou,
@@ -7410,6 +7417,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 255 — A Fila de separação filtra por setor, projeto e localização (ENTREGUE — 2026-11-20)
+
+**O que mudou, em uma frase:** a Fila de separação ganhou três filtros — setor, projeto e localização — e o cartão de cada requisição mostra
+o projeto.
+
+**O problema que ela resolve.** A Fila mostrava todas as requisições juntas: quem cuida de um setor, de um projeto ou de um corredor do
+galpão tinha de ler a lista inteira para achar o seu trabalho.
+
+| Antes | Agora |
+|---|---|
+| A fila inteira, sem recorte | Filtros **Setor**, **Projeto** e **Localização** no topo, com *"Mostrando N de M requisições."* e **Limpar filtros** |
+| O projeto não aparecia | *"Projeto: ⟨nome⟩"* no cartão (o da requisição ou o da OS cadastrada) |
+| **Imprimir lista de coleta (todas)**: todas as requisições a separar | Só as que estão na tela |
+| A ordem, os chips, o grupo *Aguardando*, **Abrir**, a janela de separação | **Igual** |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **Administrador do almoxarifado**. Tenha três requisições aprovadas: *R1* do setor *Produção*, com a **OS cadastrada** de um
+   projeto (ex.: *Linha 2*) e material na prateleira *A-01* (filha de *A*); *R2* do setor *Manutenção*, sem OS, com material em *B-02*; *R3*
+   do setor *Produção* com material sem saldo (fica em *Aguardando*).
+2. **Fila de separação** → **Confira:** os filtros **Setor**, **Projeto** e **Localização** no topo, todos em *Todos*; *R1* mostra *"Projeto:
+   Linha 2"*.
+3. **Setor = Produção** → **Confira:** *R1* e *R3* (a *R3* no grupo *Aguardando*) e *"Mostrando 2 de 3 requisições."*.
+4. **Projeto = Linha 2** → só *R1*. **Localização** = o nível *… / A* → *R1* continua; = *… / B* → *"Nenhuma requisição da fila com estes
+   filtros."* (não *"Nada para separar ou entregar agora."*).
+5. **Limpar filtros** → as três de volta. **Localização = Sem localização** → só *R3*.
+6. **Setor = Manutenção** → **Imprimir lista de coleta (todas)** → o PDF traz só a *R2*.
+7. Com o filtro escolhido, **Abrir** a *R2* e voltar pelo menu → **Confira:** o filtro continua; **Atualizar** também não o perde.
+
+**O que esta etapa não cobre:** a fila não é dividida em seções por setor, projeto ou localização (é filtro, não agrupamento); a
+localização escolhe a requisição, não esconde os outros itens dela (nem no papel); a OS só digitada não traz projeto, e a requisição continua
+sem campo de projeto no formulário; as escolhas ficam no navegador (num computador compartilhado, quem abrir depois vê o filtro de quem usou
+antes — o *"Mostrando N de M"* e o **Limpar filtros** mostram que há filtro).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 254 — O Ajuste sem lote que não tira da prateleira separada e o material da sobra/remessa com "cadastro a completar" (ENTREGUE — 2026-11-20)
 

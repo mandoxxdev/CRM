@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-20):** **Etapa 254 fechada** (**o Ajuste sem lote que não tira da prateleira separada e o material da
+> **Onde o desenvolvimento está (2026-11-20):** **Etapa 255 fechada** (**a Fila de separação filtra por setor, projeto e localização** — três
+> filtros no topo da Fila, na mesma ordem de urgência; o projeto vem da requisição ou da OS cadastrada; a localização pega tudo o que está
+> abaixo do nível escolhido; a lista de coleta de todas imprime só o que está na tela. Decisões **B1598** a **B1600**; limitação **D (255)**;
+> verificação **F (255)**; sem consulta antes do deploy).
+> **Próxima:** os itens 24 a 26 da estimativa de 18/11 **esperam resposta**; sem ela, a próxima está no fim do plano da 255.
+> *(Antes, 2026-11-20:)* **Etapa 254 fechada** (**o Ajuste sem lote que não tira da prateleira separada e o material da
 > sobra/remessa com "cadastro a completar"** — o Ajuste do total tira primeiro o que não está separado numa requisição, inclusive na posição
 > padrão, e a entrega deixa de ser recusada (**C548**); o material que a sobra e a remessa criam aparece no **Compras → Materiais** com aviso,
 > filtro e selo até o Compras salvar o cadastro (item 27 da estimativa de 18/11, que esperava resposta — caminho reversível). Decisões
@@ -4858,7 +4863,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15601,6 +15606,28 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1598 (NOVA, da Etapa 255; decisão do agente) — o projeto da requisição na Fila é o dela; sem ele, o da OS cadastrada.** A requisição
+tem um campo de projeto, mas **nenhuma tela o preenche** (o formulário da requisição não tem projeto): o projeto chega, na prática, pela OS
+cadastrada escolhida na requisição (Etapa 172). **Escolhido:** o projeto gravado na requisição e, sem ele, o da OS cadastrada. **Descartado:**
+só o campo da requisição (o filtro diria *"Sem projeto"* para todas); filtrar por OS (cada requisição tem uma OS diferente — não agrupa
+nada); pôr o campo Projeto no formulário da requisição (mudaria o que o solicitante preenche — fica para quando pedirem). A OS só digitada,
+sem estar cadastrada, não traz projeto. **Reversível.** `7941ba7f`.
+
+**B1599 (NOVA, da Etapa 255; decisão do agente) — os filtros da Fila são da tela, sobre a fila já carregada, e ficam guardados no navegador.**
+**Escolhido:** a tela esconde o que não passa, sem pedir nada de novo ao servidor; as escolhas ficam neste navegador (Atualizar, Abrir e
+voltar não as perdem). **Descartado:** filtro no servidor por parâmetro (a fila inteira já vem numa chamada; o filtro no servidor só mudaria
+quem faz a conta); guardar no endereço da página (o **Abrir** troca de tela e a volta pelo menu perderia); guardar por usuário no servidor
+(cadastro novo para uma preferência de tela). Outro navegador começa em *Todos*; num computador **compartilhado** do almoxarifado, quem
+abrir depois vê o filtro de quem usou antes (a revisão final apontou) — o *"Mostrando N de M"* e o **Limpar filtros** deixam isso à vista.
+**Reversível.** `56fd4b51`.
+
+**B1600 (NOVA, da Etapa 255; decisão do agente) — filtro, não agrupamento.** O item da spec é *"Agrupamento por projeto / setor /
+localização"*. **Escolhido:** três filtros que **escondem**, mantendo a ordem de urgência e o grupo *Aguardando* (a ordem da fila é a regra
+mais importante dela). **Descartado:** seções por setor, projeto ou localização (a requisição de urgência *Crítico* de um setor ficaria
+abaixo da *Normal* de outro; e uma requisição com itens em duas localizações apareceria em duas seções). A lista de coleta de todas imprime
+só o que está na tela, com cada requisição inteira (**D (255)**). Se pedirem agrupamento, ele entra por cima dos filtros. **Reversível.**
+`56fd4b51`.
+
 **B1593 (NOVA, da Etapa 254; decisão do agente; o item 27 da estimativa de 18/11 esperava resposta) — o material da sobra e da remessa
 continua sendo criado pelo Almoxarifado, mas nasce marcado "cadastro a completar".** Pela regra "cadastro é do Compras", o Almoxarifado não
 deveria cadastrar; a sobra (retalho) e a remessa a terceiros ainda criam o material que a operação precisa, só com código, nome, unidade,
@@ -21412,6 +21439,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(255) Os filtros da Fila de separação, o que ficou de fora.** (1) **Filtro, não agrupamento** — a fila não ganha seções por setor,
+  projeto ou localização (**B1600**). (2) A localização escolhe a **requisição**: os outros itens dela continuam na linha e vão inteiros na
+  lista de coleta de todas (*A* com um item em *ALM / A* e outro em *ALM / B*, filtro *ALM / A* → o papel traz os dois). (3) O projeto vem da
+  requisição ou da OS **cadastrada**; a OS só digitada não traz projeto, e o formulário da requisição continua sem campo de projeto (**B1598**).
+  (4) As escolhas ficam no navegador de quem usa, não no usuário (**B1599**). (5) A janela de separação e a lista de coleta individual não
+  mudam. (6) Código de localização com *" / "* dentro (ex.: *"A / 1"*) se confunde com os níveis da árvore: o filtro mostra um nível *A* que
+  não existe e, havendo uma *A* de verdade, a escolha dela pega as duas — os códigos do cadastro são do tipo *A-01* (a lista de coleta já
+  tinha o mesmo caso).
 - **(254) O Ajuste sem lote que poupa a prateleira separada e o cadastro a completar, o que ficou de fora.** (1) O Ajuste sem lote só baixa
   prateleiras **sem lote**: quando o resto do material está num lote, a prateleira separada é baixada mesmo assim (o total manda) e a entrega
   dela fica sem as peças — *A* 4 separadas, *B* 1 sem lote e 3 do lote *LY*, Ajuste para 5 → *A* 2 (anterior). (2) O estorno do Ajuste sem
@@ -23021,6 +23056,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(255) Nenhum clique foi dado.** O projeto e o caminho da origem foram provados pela rota real e pelo serviço em
+`filaSeparacaoFiltros` (com e sem as tabelas de projeto e de OS); os filtros, a frase do sem resultado, a lista de coleta de todas, o
+projeto no cartão e as escolhas guardadas pela tela em `FilaSeparacaoFiltros` (jsdom). Vale 5 minutos: o roteiro da seção da 255.
 
 **(254) Nenhum clique foi dado.** O Ajuste foi provado pelas rotas reais (Movimentações v2, separação, entrega, estorno) em
 `ajusteSemLotePoupaCaixa`; o cadastro a completar pelas rotas reais da sobra/remessa e do Compras em `cadastroACompletar` e pela tela nos
@@ -44117,12 +44156,73 @@ material"* antes de salvar). **Inativar** e **Reativar** não tiram a marca (o i
 - O Ajuste sem lote não tira de linhas com lote; sem outra prateleira sem lote, a separada é baixada (**D (254)**). O estorno do Ajuste sem
   lote devolve na posição padrão, mesmo quando o Ajuste baixou outra prateleira (**C549**, **B1597**).
 
+## Etapa 255 — A Fila de separação filtra por setor, projeto e localização (2026-11-20)
+
+A **Fila de separação** é a lista de trabalho do almoxarife, na ordem de urgência — mas mostrava todas as requisições juntas: quem cuida de
+um setor, de um projeto ou de um corredor do galpão lia a lista inteira para achar o seu trabalho. Agora a Fila tem três filtros no topo:
+**Setor**, **Projeto** e **Localização**. Eles só escondem — a ordem e o grupo *Aguardando* continuam os mesmos. O projeto da requisição
+aparece no cartão; como nenhuma tela grava o projeto na requisição, ele vem da **OS cadastrada** que a requisição cita (**B1598**). A
+localização segue a árvore do galpão: escolher *A* mostra também o que está em *A-01*. Decisões do agente: **B1598** a **B1600**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A fila inteira, sem recorte | **Setor**, **Projeto** e **Localização** no topo, cada um com *Todos* |
+| — | Com filtro: *"Mostrando 2 de 5 requisições."* e **Limpar filtros** |
+| — | Nada passa: *"Nenhuma requisição da fila com estes filtros."* (a fila vazia continua *"Nada para separar ou entregar agora."*) |
+| O cartão: número, urgência, data, solicitante e setor | E *"Projeto: Linha 2"* (o da requisição; sem ele, o da OS cadastrada; projeto apagado: *"Projeto #8"*) |
+| **Imprimir lista de coleta (todas)**: todas as requisições a separar | Só as que estão na tela, cada uma inteira |
+| — | **Atualizar**, **Abrir** e voltar não perdem as escolhas (ficam no navegador) |
+| A ordem, os chips, *Aguardando*, a janela de separação, a lista de coleta de uma requisição | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; localizações *A* (com a filha *A-01*), *AB* (com a filha *AB-01*) e *B* (com a filha
+*B-02*), no mesmo almoxarifado; uma OS cadastrada do projeto *Linha 2*.
+
+**1. Setor (RN-255.03).** Requisições do setor *Produção*, *" Produção "* (com espaços) e *Manutenção*, e uma sem setor. **Setor** lista
+*Manutenção*, *Produção* e *Sem setor* — os dois *Produção* são o mesmo. **Produção** → as duas; **Sem setor** → a sem setor.
+
+**2. Projeto (RN-255.01, .03, .08).** *R1* com a OS cadastrada do projeto *Linha 2* → o cartão diz *"Projeto: Linha 2"* e o filtro tem *Linha
+2*. Requisição sem OS → **Sem projeto**. OS só digitada (sem escolher na lista de OS cadastradas) → sem projeto. Dois projetos com o mesmo
+nome → *"Linha 2 (#7)"* e *"Linha 2 (#12)"*.
+
+**3. Localização (RN-255.04).** *R1* com a dica *"Pegar em A-01 (… / A / A-01) …"*; *R2* já separada de *AB-01*, a entregar.
+**Localização = … / A** → só *R1* (*AB* não é filha de *A*); **… / AB** → só *R2* (conta o *"separado de"*); o nível do almoxarifado → as
+duas. Requisição aguardando saldo → **Sem localização**; requisição com um item em *B-02* e outro aguardando saldo → aparece em **… / B** e
+em **Sem localização**.
+
+**4. Sem resultado (RN-255.05, .06).** **Setor = Produção** e **Localização = … / B** sem nada de *Produção* em *B* → *"Nenhuma requisição da
+fila com estes filtros."* e **Limpar filtros**; clicar → todas de volta, filtros em *Todos*.
+
+**5. A lista de coleta de todas (RN-255.07).** **Localização = … / B** → **Imprimir lista de coleta (todas)** → o PDF só com a requisição de
+*B*. Filtro que deixa só requisições *a entregar* → o botão fica apagado.
+
+**6. As escolhas guardadas (RN-255.09).** Escolha **Setor = Manutenção**, **Abrir** uma requisição, volte pela **Fila de separação** → o
+filtro continua. **Atualizar** também. Se o valor escolhido sumir da fila (a requisição foi entregue), ele continua escolhido e a tela diz a
+frase do sem resultado.
+
+### O que esta etapa NÃO cobre
+
+- **Filtro, não agrupamento** — a fila não é dividida em seções (**B1600**, **D (255)**).
+- A localização escolhe a requisição: os outros itens dela continuam na linha e no papel (**D (255)**).
+- O formulário da requisição continua sem campo de projeto; a OS só digitada não traz projeto (**B1598**).
+- As escolhas ficam no navegador, não no usuário (**B1599**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 255 entregue (2026-11-20):** **a Fila de separação filtra por setor, projeto e localização** (a próxima tarefa do plano da 254;
+  item *"Agrupamento por projeto / setor / localização"* da feature 05, que continua `[ ]` — é filtro, não agrupamento). O projeto vem da
+  requisição ou da OS cadastrada (**B1598**); os filtros são da tela, guardados no navegador (**B1599**); filtro, não agrupamento (**B1600**).
+  Commits `9df48668` (estimativa), `ac79f814` (plano e Fase 2), `7941ba7f`, `56fd4b51`, Fase 5 `f13b0b4a` e o fechamento. **O que é
+  seu:** as **B1598** a **B1600** (reversíveis); a limitação **(255)** em D e a verificação **(255)** em F. Sem consulta antes do deploy.
+  **Próxima:** os itens 24 a 26 (esperam resposta) e o que está no fim do plano da 255.
 
 - **Etapa 254 entregue (2026-11-20):** **o Ajuste sem lote que não tira da prateleira separada** (**C548** resolvido) e **o material da
   sobra/remessa com "cadastro a completar" no Compras** (item 27 da estimativa de 18/11, pelo caminho reversível). A criação continua no
