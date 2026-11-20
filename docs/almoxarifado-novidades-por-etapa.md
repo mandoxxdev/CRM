@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-19):** **Etapa 251 fechada** (**quanto cada item pode entregar quando dividem o mesmo lote, e quando o
+> **Onde o desenvolvimento está (2026-11-20):** **Etapa 252 fechada** (**o endereço na troca para o automático, a frase de dois itens na mesma
+> prateleira e a peça com série que respeita a separação do outro item** — o bloco **Substituições** diz *"saiu de B-02 (automático)"*
+> (**C495**); a recusa de dois itens no mesmo endereço diz que o resto sai para a outra peça (**C497**); a peça com série sai da prateleira
+> onde está, sem levar a peça que o outro item separou (**C493**). Itens 22, 19 e 23 da estimativa de 18/11; decisões **B1581** a **B1585**;
+> limitação **D (252)**; verificação **F (252)**; sem consulta antes do deploy).
+> **Próxima:** **a busca de entrega na tela Devoluções** (item 13, **C477**) e **o ajuste de saldo com lote** (item 18, **C475**) —
+> detalhadas no fim do plano da 252; os itens 24 a 27 esperam resposta.
+> *(Antes, 2026-11-19:)* **Etapa 251 fechada** (**quanto cada item pode entregar quando dividem o mesmo lote, e quando o
 > lote da separação deixou de servir** — com lote impedido no material, a janela de entrega, o botão de um clique e a Fila dividem o lote bom
 > entre os itens na ordem do pedido (**C489**); a peça separada de um lote bloqueado depois deixa de contar (**C491**); e o botão de um clique
 > se apaga com *"… das 3 un separadas dele, só 2 podem sair (peça presa no lote) …"*, abrindo a janela no automático (**C518**). Itens 20 e 21
@@ -4837,7 +4844,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15548,6 +15555,38 @@ continua com o alerta de que o sistema não sabe em que endereço estão as peç
 já descontou. **Descartado:** tirar o alerta nesse caso (exigiria separar o retido com lote do sem lote na leitura da Fila; ganho pequeno).
 **Reversível.** `69c3f581`.
 
+**B1581 (NOVA, da Etapa 252; decisão do agente) — o endereço da troca para o automático vem das linhas que a saída debitou; o histórico não
+muda.** A saída automática sem endereço continua sem endereço no histórico de movimentações (o estorno lê o endereço da saída para devolver a
+peça — mudar isso mudaria o estorno). O motor passa a dizer, só para a entrega, de quais endereços tirou; quando foi um só (e a linha não
+ficou negativa), a troca grava esse endereço e o detalhe diz *"saiu de B-02 (automático)"*. Só a troca **automática**: a escolhida à mão só
+pelo lote continua sem endereço (Fase 2). **Descartado:** gravar o endereço na própria saída do histórico (mudaria o estorno e a exclusão).
+**Reversível.** `b326b672`, `0c524552`.
+
+**B1582 (NOVA, da Etapa 252; decisão do agente) — a frase de "outra peça desta entrega" só para quem escolheu à mão, e só quando ela é a
+verdade.** A recusa de saldo do endereço escolhido no **Sai de** diz que o resto sai para a outra peça quando o saldo do endereço menos o que
+outras requisições separaram de lá — e menos o que outros itens desta requisição, fora desta entrega, deixam separado de lá — cobriria a
+quantidade. Com essas partes no meio, fica a frase de antes (a nova diria *"sobra 2"* quando sobra 0 — Fase 2 para outra requisição, Fase 5
+para outro item desta). A origem da separação num clique continua com *"não serve mais"*. **Descartado:** reaproveitar a frase
+do *"já está separado dali para outra peça"* (Etapa 208) — o irmão que sai nesta mesma entrega não é "separado que fica", e aquela conta nem
+dispara. **Reversível.** `b8ccaf79`, `73b0a9d9`, `e56365df`.
+
+**B1583 (NOVA, da Etapa 252; decisão do agente; revoga a B1404 na parte do irmão) — a peça com série sai pelo endereço da série só quando a
+saída de sempre levaria a parte separada de outro item.** Sem parte separada no caminho, a saída automática de peça com série continua sem
+endereço, tirando da linha de sempre (a padrão, depois a maior) — e por isso o saldo do endereço e as séries dele podem continuar
+divergindo (a série B1 sai, a linha de A baixa), como antes. **Descartado:** (a) sair sempre pelo endereço da série (mudaria toda entrega de
+peça com série, inclusive sem ninguém esperando); (b) as fatias por livre da Etapa 207 (respeitariam a separação, mas tirariam de uma
+prateleira que não é a da peça). **Reversível.** `89665967`.
+
+**B1584 (NOVA, da Etapa 252, Fase 2; decisão do agente) — o endereço da série só vale quando bate com o saldo dali.** A transferência entre
+endereços leva o saldo e não muda o endereço gravado na série (C76): com mais séries em estoque num endereço do que saldo sem lote nele, o
+endereço da série não diz onde a peça está, e a entrega sai como antes. **Descartado:** confiar sempre no endereço da série (a saída iria para
+*B* com a peça em *A* — a revisão do plano mediu). **Reversível.** `89665967`.
+
+**B1585 (NOVA, da Etapa 252, Fase 2; decisão do agente) — as séries escolhidas que estão na origem da separação do item saem com a parte de
+lá.** A entrega dividida (parte da origem + parte automática) dava as séries na ordem da lista: a saída de *A* levava A1 e B1 e a automática
+A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
+material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
+
 **B1576 (NOVA, da Etapa 251; decisão do agente; revê o descartado da B1395) — o lote bom é dividido entre os itens na tela e na Fila, não no
 número de cada item.** Com lote impedido no material, o detalhe manda o teto de cada item **sozinho** (o mesmo de antes) e a parte dele que sai
 da própria prateleira separada (`saldo_entregavel_lote`, `saldo_entregavel_lote_proprio`, aditivos); a janela de entrega e o botão de um clique
@@ -19639,12 +19678,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      As séries escolhidas decidem as peças; a linha de saldo que a baixa tira continua sendo escolhida pela regra de sempre (padrão, depois a
      de mais saldo), sem saber da parte separada. Reproduzido no teste *"[RN-207.02 c]"* (o livro de hoje). **O que fazer:** entregar
      primeiro o item separado do endereço. Conserto: não medido.
+     *(**Resolvido na Etapa 252** — `89665967`: quando a saída de sempre levaria a parte separada, a peça com série sai pelo endereço
+     onde a série está (uma saída com endereço por endereço), se ele cobre as séries dele e o endereço da série bate com o saldo dali
+     (**B1583**, **B1584**); senão, como antes. No cenário do teste: a série B1 sai de *B*, *A* fica com 3 e o irmão sai num clique. Sem
+     parte separada no caminho, a saída continua a de sempre — **D (252)**.)*
 494. *(Número sem uso: era reservado ao corte da **B1405**, que não aconteceu.)*
 495. **NOVO (da Etapa 207, revisão do plano; o comportamento é anterior) — MENOR: a troca para o automático não diz de onde saiu.** Quando a
      entrega de um item com origem da separação vai por *"Qualquer endereço (automático)"*, o bloco **Substituições** do detalhe registra
      *"automático"*, mesmo quando a saída saiu em pedaços com endereço; o endereço de cada pedaço está no histórico de movimentações do
      material. Não é regressão (antes da 207 a saída nem tinha endereço). **O que fazer:** consultar o histórico de movimentações. Conserto:
      gravar o endereço na troca quando a saída foi de um endereço só (não medido).
+     *(**Resolvido na Etapa 252** — `b326b672`, `0c524552`: a troca para o automático grava o endereço quando todas as saídas do item
+     tiraram de um só; o bloco diz *"saiu de B-02 (automático)"* (**B1581**). Com mais de um endereço, saldo sem endereço ou linha negativa,
+     continua *"automático"*. **O "o que fazer" acima deixou de ser preciso** nesse caso.)*
 
 496. **NOVO (da Etapa 207, revisão da Fase 5; o comportamento é anterior à etapa) — IMPORTANTE: entregar escolhendo de onde sai pode levar
      a peça que o irmão da mesma requisição separou.** Dois casos: escolher o **mesmo** endereço da separação do item **além** da parte
@@ -19660,6 +19706,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      a quantidade (3) — a saída tiraria de outros endereços"*), não a da parte separada. Desde a Fase 2 da 208 ela cai no item escolhido à
      mão (o certo — **B1415**); a frase continua sem dizer que o resto do endereço é do item 2. **Nada gravado**, nenhum erro de estoque.
      **O que fazer:** escolher outro endereço para o item 1. Conserto: uma frase própria para o excesso (pequeno; não medido).
+     *(**Resolvido na Etapa 252** — `b8ccaf79`, `73b0a9d9`: no item escolhido à mão, *"⟨material⟩: em A há 3 para esta entrega, mas 2 saem
+     dali nesta entrega para outra peça desta requisição; sobra 1, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer
+     endereço (automático)""* (**B1582**). Com a parte de outra requisição, ou de outro item desta fora da entrega, também no endereço, a frase
+     de antes; Fase 5 `e56365df`.)*
 498. **NOVO (da Etapa 208; corte declarado, B1410) — a parte separada sem lote não conta quando o "Sai de" escolhe um lote no mesmo
      endereço.** Material com lote, um item (desta ou de outra requisição) separado de *A* sem dizer o lote; outro item entregando com **Sai
      de** (*A*, *L1*): a parte do primeiro não é descontada, e a entrega dele depois pode tomar *"… a origem da separação (A) não serve mais
@@ -21263,6 +21313,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(252) A troca para o automático, a frase da outra peça e a peça com série, o que ficou de fora.** (1) A saída automática continua sem
+  endereço no histórico de movimentações; só o registro da troca o diz (**B1581**). (2) A peça com série sem separação de outro item no
+  caminho continua saindo da linha de sempre (a padrão, depois a maior) — o saldo da prateleira e as séries dela podem não bater, como antes
+  (**B1583**). (3) Depois de uma transferência, o endereço gravado na série não é usado (**B1584**). (4) Material com lote e série: a parte
+  automática continua saindo do lote das séries, sem endereço. (5) A peça com série escolhida na própria prateleira que outro item separou
+  continua levando a parte dele (a peça escolhida está lá) — o outro item é recusado depois com *"não serve mais"*.
 - **(251) O entregável dividido pelo lote e o lote da separação, o que ficou de fora.** (1) A divisão supõe a parte separada saindo da
   prateleira separada: escolhendo outro endereço no **Sai de**, a janela pode aceitar mais do que a entrega deixa (a entrega recusa sem baixar,
   **B1579**). (2) Material com número de série e material sem controle por lote ficam fora (como a régua da 206, **C486**). (3) Sem lote
@@ -22855,6 +22911,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(252) Nenhum clique foi dado.** O registro da troca, a frase e a saída da peça com série foram provados pelas rotas reais da entrega e do
+detalhe em `substituicaoAutomaticaEndereco`, `entregaFraseDoIrmao` e `entregaSerieRespeitaGuarda`, e o texto do bloco pelos testes da tela
+(`RequisicoesSubstituicaoEndereco`). Vale 5 minutos: o roteiro da seção da 252.
 
 **(251) Nenhum clique foi dado.** O número foi provado pelas rotas reais do detalhe, da Fila e da entrega em `entregavelDivididoPeloLote`
 (entregando exatamente o número mostrado) e a janela e o botão de um clique pelos testes da tela (`RequisicoesEntregaLoteDividido`). Vale 5
@@ -43782,12 +43842,68 @@ recusada — use "Entregar escolhendo de onde sai…"."* Clique **Entregar escol
 - Sem lote impedido no material, o número do item com peça presa no lote da separação não muda — o automático já entrega ele (**B1577**).
 - Material com número de série, e material sem controle por lote, ficam como antes (**D (251)**).
 
+## Etapa 252 — De qual prateleira saiu a troca automática, a frase de dois itens na mesma prateleira e a peça com série que respeita a separação do outro item (2026-11-20)
+
+Três ajustes da entrega de requisição. Quando a peça separada de uma prateleira é entregue pelo automático, o registro da troca dizia só
+*"automático"*, mesmo com a peça saindo toda de outra prateleira — agora diz qual (**C495**). Quando dois itens da mesma requisição tiram do
+mesmo endereço e o saldo não cobre os dois, a recusa dizia *"O saldo em A (1) …"*, com o 1 sendo o que sobrava depois da outra peça — agora
+diz que o resto sai para a outra peça (**C497**). E a peça com número de série escolhida numa prateleira baixava o saldo de outra — a maior —,
+levando a peça que outro item tinha separado de lá; esse outro item, depois, era recusado com *"não serve mais"* (**C493**). Agora ela sai
+da prateleira onde está. Itens 22, 19 e 23 da estimativa de 18/11. Decisões do agente: **B1581** a **B1585**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Troca para o automático, a peça saindo toda de *B-02*: o bloco **Substituições** dizia *"saiu de automático"* | *"saiu de B-02 (automático)"* (*"saiu de B-02 — lote L-8 (automático)"* com lote) |
+| Item 1 com **Sai de** *A* e 3, item 2 com a origem dele em *A* (2), *A* com 3: *"O saldo em A (1) não cobre a quantidade (3) — a saída tiraria de outros endereços"* | *"em A há 3 para esta entrega, mas 2 saem dali nesta entrega para outra peça desta requisição; sobra 1, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)""* |
+| Peça com série B1 (em *B*), com outro item separado de *A*: a saída tirava de *A* (a maior); o outro item, num clique, *"… não serve mais …"* | Sai de *B*; *A* continua com 3; o outro item sai num clique |
+| Troca escolhida à mão; troca saindo de mais de um endereço; peça com série sem separação no caminho | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**.
+
+**1. O endereço da troca (RN-252.01/03).** Material *SUB-252* sem controle por lote: **Entrada** de 2 em *A-01* e 5 em *B-02*. Requisição de
+2, aprovada, separada com **Sai de** = *A-01*. **Entregar escolhendo de onde sai…** → **Sai de** = *"Qualquer endereço (automático)"* →
+**Confirmar Entrega**. No bloco **Substituições (1)**: *"SUB-252: 2 — separado de A-01 · saiu de B-02 (automático)"*. Com a saída tirando de
+dois endereços (ex.: 1 na posição padrão e 1 em *A-01*), continua *"saiu de automático"*.
+
+**2. A frase da outra peça (RN-252.10/11).** Material *PAR-252* sem lote: 3 em *A-01*, 5 em *B-02*. Requisição com dois itens (3 e 2);
+separe o primeiro sem **Sai de** e o segundo com **Sai de** = *A-01*. **Entregar escolhendo de onde sai…**: primeiro item **Sai de** = *A-01* e
+3; o segundo já vem com *A-01* e 2 → *"PAR-252: em A-01 há 3 para esta entrega, mas 2 saem dali nesta entrega para outra peça desta
+requisição; sobra 1, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*. Nada é baixado.
+Com 1 no primeiro → aceita. Se outra requisição — ou outro item desta, fora da entrega — também tiver separado de *A-01*, a recusa é a de antes (*"O saldo em A-01 (…) não cobre a
+quantidade (…) — a saída tiraria de outros endereços"*).
+
+**3. A peça com série (RN-252.20 a .23).** Material *SER-252* com número de série, sem lote: **Entrada** de 3 em *A-01* (S-A1, S-A2, S-A3) e 2
+em *B-02* (S-B1, S-B2). Requisição com dois itens (1 e 3); separe o primeiro sem **Sai de** e o segundo com **Sai de** = *A-01*. Entregue só o
+primeiro (1, série **S-B1**, o segundo com 0) → no extrato do material, *A-01* 3 e *B-02* 1. Entregue o segundo (S-A1, S-A2, S-A3) → aceita.
+(Antes: *A-01* 2 e *B-02* 2, e o segundo *"SER-252: a origem da separação (A-01) não serve mais (O saldo em A-01 (2) não cobre a quantidade
+(3) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai"*.)
+
+### O que esta etapa NÃO cobre
+
+- A saída automática continua **sem endereço** no histórico de movimentações; só o registro da troca diz o endereço (**B1581**).
+- A peça com série **sem** separação de outro item no caminho continua saindo da linha de sempre — o saldo da prateleira e as séries dela
+  podem continuar não batendo (**B1583**, **D (252)**).
+- Depois de transferir saldo entre prateleiras, o endereço da série não é usado (**B1584**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 252 entregue (2026-11-20):** **o endereço na troca para o automático**, **a frase de dois itens na mesma prateleira** e **a peça
+  com série que respeita a separação do outro item** (itens 22, 19 e 23 da estimativa de 18/11; **C495**, **C497** e **C493** resolvidos). O
+  endereço vem das linhas que a saída debitou (**B1581**), a frase só para quem escolheu à mão e quando é a verdade (**B1582**), a série pelo
+  endereço só quando a saída de sempre levaria a separação do outro (**B1583**) e quando o endereço da série bate com o saldo (**B1584**), as
+  séries da origem com a parte de lá (**B1585**). Commits `b326b672`, `0c524552`, `b8ccaf79`, `73b0a9d9`, `89665967`, Fase 5 `e56365df` e o fechamento. **O que
+  é seu:** as **B1581** a **B1585** (reversíveis); a limitação **(252)** em D e a verificação **(252)** em F. Sem consulta antes do deploy.
+  **Próxima:** a busca de entrega na tela Devoluções (**C477**, item 13) e o ajuste de saldo com lote (**C475**, item 18) — detalhados no fim
+  do plano da 252; os itens 24 a 27 esperam resposta.
 
 - **Etapa 251 entregue (2026-11-19):** **quanto cada item pode entregar quando dividem o mesmo lote** e **quando o lote da separação deixou de
   servir** (itens 20 e 21 da estimativa de 18/11; **C489**, **C491** e **C518** resolvidos). A divisão na tela e na Fila (**B1576**, revê o

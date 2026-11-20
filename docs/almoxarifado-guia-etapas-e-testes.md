@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-19 (Etapa 251 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 252 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 251 fechada — 2026-11-19.** **Quanto cada item pode entregar quando dividem o mesmo lote, e quando o
+> **O desenvolvimento parou aqui: Etapa 252 fechada — 2026-11-20.** **De qual prateleira saiu a troca automática, a frase de dois itens na
+> mesma prateleira e a peça com série que respeita a separação do outro item.** O bloco **Substituições** diz *"saiu de B-02 (automático)"*;
+> a recusa de dois itens no mesmo endereço diz *"… mas 2 saem dali nesta entrega para outra peça desta requisição; sobra 1 …"*; e a peça com
+> série sai da prateleira onde está, sem levar a peça que o outro item separou. **Sem consulta antes do deploy.** **Nenhum clique foi dado**
+> (roteiro na seção da 252). **Onde parou, exatamente:** a **252 está fechada**; a **próxima** são os itens 13 (busca de entrega na tela
+> Devoluções) e 18 (ajuste de saldo com lote) da estimativa de 18/11, detalhados no fim do plano da 252; os itens 24 a 27 esperam resposta.
+>
+> *(Antes:)* **Etapa 251 fechada — 2026-11-19.** **Quanto cada item pode entregar quando dividem o mesmo lote, e quando o
 > lote da separação deixou de servir.** Com lote impedido no material, a janela de entrega, o botão de um clique e a Fila dividem o lote bom
 > entre os itens (3 e 0, antes 3 e 3); a peça separada de um lote bloqueado depois deixa de contar; e o botão de um clique se apaga com *"…
 > das 3 un separadas dele, só 2 podem sair (peça presa no lote) …"*, abrindo a janela no automático. **Sem consulta antes do deploy.**
@@ -7390,6 +7397,51 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 252 — De qual prateleira saiu a troca automática, a frase de dois itens na mesma prateleira e a peça com série que respeita a separação do outro item (ENTREGUE — 2026-11-20)
+
+**O que mudou, em uma frase:** a troca para o automático diz de qual prateleira a peça saiu; a recusa de dois itens no mesmo endereço diz que
+o resto é da outra peça; e a peça com número de série sai da prateleira onde ela está, sem levar a peça que o outro item separou.
+
+**O problema que ela resolve.** O bloco **Substituições** dizia *"saiu de automático"* mesmo com a peça saindo toda de uma prateleira. Na
+entrega de dois itens do mesmo endereço, a recusa dizia *"O saldo em A (1) não cobre a quantidade (3)"* — o 1 era o que sobrava depois da
+outra peça, e parecia que A tinha 1. E a peça com série escolhida em *B* baixava o saldo de *A*, levando a peça que o outro item tinha
+separado de lá: o outro item, num clique, era recusado com *"não serve mais"*.
+
+| Antes | Agora |
+|---|---|
+| Troca para o automático, a peça saindo toda de *B-02*: *"saiu de automático"* | *"saiu de B-02 (automático)"* (com *" — lote L-8"* quando há lote) |
+| Item 1 com *Sai de A* 3 e item 2 com a origem dele em *A* (2), *A* com 3: *"O saldo em A (1) não cobre a quantidade (3) …"* | *"… em A há 3 para esta entrega, mas 2 saem dali nesta entrega para outra peça desta requisição; sobra 1, que não cobre a quantidade (3). …"* |
+| Série B1 (em *B*) entregue com o outro item separado de *A*: a saída tirava de *A*; o outro item era recusado | Sai de *B*; *A* continua com 3 e o outro item sai num clique |
+| Sem separação no caminho; troca escolhida à mão; troca saindo de mais de um endereço | **Igual** |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *SUB-252* **sem** controle por lote e sem série.
+2. **Movimentações → Entrada**: 2 *SUB-252* em *A-01*; 5 em *B-02*.
+3. Requisição de 2 *SUB-252*, aprovada; **Iniciar Separação** com **Sai de** = *A-01*, 2 → confirme.
+4. **Entregar escolhendo de onde sai…** → **Sai de** = *"Qualquer endereço (automático)"* → **Confirmar Entrega**. **Confira** no bloco
+   **Substituições (1)**: *"SUB-252: 2 — separado de A-01 · saiu de B-02 (automático)"* (antes: *"saiu de automático"*).
+5. Material *PAR-252* sem lote: 3 em *A-01*, 5 em *B-02*. Requisição com **dois itens**, 3 e 2. Separe o primeiro (3) **sem** Sai de e o
+   segundo (2) com **Sai de** = *A-01*.
+6. **Entregar escolhendo de onde sai…**: no primeiro item, **Sai de** = *A-01*, 3; o segundo já vem com *A-01*, 2 → **Confirmar Entrega**.
+   **Confira** a recusa: *"PAR-252: em A-01 há 3 para esta entrega, mas 2 saem dali nesta entrega para outra peça desta requisição; sobra 1,
+   que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*. Nada é baixado. Troque o primeiro para 1
+   → aceita.
+7. Material *SER-252* **com número de série**, sem lote: **Entrada** de 3 em *A-01* (séries S-A1, S-A2, S-A3) e 2 em *B-02* (S-B1, S-B2).
+8. Requisição com dois itens, 1 e 3. Separe o primeiro (1) sem Sai de; o segundo (3) com **Sai de** = *A-01*.
+9. **Entregar escolhendo de onde sai…**: o primeiro com 1, **Sai de** em *"Qualquer endereço (automático)"* e a série **S-B1** marcada; o
+   segundo com **0** → **Confirmar Entrega**. **Confira** no extrato do material,
+   bloco *Saldos por localização*: *A-01* continua com 3 e *B-02* com 1 (antes: *A-01* 2 e *B-02* 2).
+10. **Entregar escolhendo de onde sai…** o segundo (3), com o **Sai de** que já vem em *A-01* e as séries S-A1, S-A2 e S-A3 → aceita (antes:
+    *"a origem da separação (A-01) não serve mais …"*).
+
+**O que esta etapa não cobre:** a peça com série, **sem** separação de outro item no caminho, continua saindo pela regra de sempre (a padrão,
+depois a maior prateleira) — o saldo da prateleira e as séries dela podem continuar não batendo; depois de transferir saldo entre
+prateleiras o sistema não confia no endereço da série e a saída é a de sempre; o histórico de movimentações da saída automática continua sem
+o endereço (só o registro da troca o diz).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 251 — Quanto cada item pode entregar quando dividem o mesmo lote, e quando o lote da separação deixou de servir (ENTREGUE — 2026-11-19)
 
