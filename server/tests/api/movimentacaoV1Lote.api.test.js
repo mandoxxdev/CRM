@@ -5,7 +5,7 @@
  * "tire 1 do lote LV" (vencido) recebia 201, a peca saia "de lugar nenhum" e a linha "Sem lote atribuido" do saldo por lote ficava
  * negativa (C458). Agora a v1 repassa `lote`, `lote_id` e `data_validade` ao motor (B1350), com a forma de `lote`/`lote_id` validada
  * pelo schema da v2 (B1351), `null`/vazio = sem lote (B1352), e — Fase 2 — SEM repassar nada de lote no AJUSTE (o AJUSTE com lote
- * deixa a linha do lote negativa no motor: C475, documentado aqui pela v2).
+ * deixava a linha do lote negativa no motor: C475, documentado aqui pela v2 e fechado na Etapa 253 — o motor recusa).
  *
  * Cuidado com teste vazio: a saida com lote bom TAMBEM dava 201 antes (saia sem lote) — so o livro (`lote_id`/`lote`) e as linhas
  * de `estoque_saldo_almoxarifado` distinguem. Todo cenario confere o livro e as linhas, nao so o status.
@@ -313,16 +313,18 @@ const MSG_VENCIDO = (c, d) => `Lote ${c} vencido em ${d} nao pode sair para cons
     const r = await v1({ material_id: m, tipo: 'AJUSTE', quantidade: 12, motivo: 'contagem', lote_id: 'abc' });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   });
-  await test('[C475, documenta] AJUSTE v2 com lote_id: a linha do lote fica negativa (defeito do motor, nao consertado)', async () => {
+  await test('[C475, fechado na Etapa 253] AJUSTE v2 com lote_id que deixaria o lote negativo -> 400, nada muda', async () => {
     const m = await material(false);
     await entrada(m, 5, { lote: 'LB', data_validade: FUTURO });
     await entrada(m, 3);
     const LB = await loteDe(m, 'LB');
     const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 1, motivo: 'contagem', justificativa: 'contagem', lote_id: LB.id });
-    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
-    assert.strictEqual(await fisico(m), 1);
-    // Se um dia o motor consertar o AJUSTE com lote, este teste muda junto (e o C475 fecha).
-    assert.ok(await linhaLote(m, LB.id) < 0, `C475 mudou: linha do LB = ${await linhaLote(m, LB.id)}`);
+    // Ate a 253 era 201 com a linha do LB em -2 (o C475, documentado aqui). Agora o motor recusa (RN-253.10,
+    // ajusteComLoteNaoNegativa.api.test.js) e o lote fica como estava.
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/deixaria o lote com saldo negativo/.test(r.body.error), r.body.error);
+    assert.strictEqual(await fisico(m), 8);
+    assert.strictEqual(await linhaLote(m, LB.id), 5);
   });
 
   terminou = true;

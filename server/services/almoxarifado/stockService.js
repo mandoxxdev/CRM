@@ -183,6 +183,64 @@ async function caixaParaGuardaDoAjuste(db, material, novoTotal) {
 }
 
 /**
+ * Etapa 253 (C475, RN-253.10/.14; Fase 2 achados 1 e 4) — o lote L depois de um AJUSTE (ou do estorno dele) SEM localizacao que o cita.
+ * O ajuste define o TOTAL do material e poe a diferenca na linha do lote (`syncSaldoLocalizacaoPadrao`): o lote depois = novo total −
+ * `fora` (a soma das linhas que nao sao de L) — o mesmo numero que o residuo do sync com o drenar (as duas contas leem as linhas). O `piso`
+ * e o que esta PRESO no lote e nao pode sair por ajuste: a caixa viva de todas as requisicoes no lote (`guardadoNoLoteDeOutras`, com ou
+ * sem reserva) e as parcelas cruas do retido do lote (em inspecao, quarentena/avulso, reprovado, em terceiros) — a MESMA regua do
+ * Bloquear indicando o lote (Etapa 249, `lotService.lotesParaBloquear`). So le; quem chama segura a trava do material.
+ * @returns {{ atual, fora, depois, piso, partes: string[] }}
+ */
+async function projecaoDoLoteNoAjuste(db, materialId, loteId, novoTotal) {
+  const rdl = require('./retidoDoLote');
+  const row = await dbGet(db, `SELECT
+      COALESCE((SELECT SUM(CASE WHEN pl_s.lote_id IS pl_l.id THEN pl_s.quantidade ELSE 0 END) FROM estoque_saldo_almoxarifado pl_s
+        WHERE pl_s.material_id = pl_m.id), 0) AS atual,
+      COALESCE((SELECT SUM(CASE WHEN pl_s.lote_id IS pl_l.id THEN 0 ELSE pl_s.quantidade END) FROM estoque_saldo_almoxarifado pl_s
+        WHERE pl_s.material_id = pl_m.id), 0) AS fora,
+      COALESCE((SELECT SUM(pl_ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado pl_ri
+        WHERE pl_ri.lote_id = pl_l.id AND COALESCE(pl_ri.quantidade_em_inspecao, 0) > 0), 0) AS insp,
+      ${rdl.quarentenaDoLoteSql('pl_m', 'pl_l')} AS quar, ${rdl.reprovadoDoLoteSql('pl_l')} AS repr,
+      ${rdl.terceirosDoLoteSql('pl_m', 'pl_l')} AS terc
+    FROM lotes_almoxarifado pl_l JOIN materiais_almoxarifado pl_m ON pl_m.id = ? WHERE pl_l.id = ?`, [materialId, loteId]);
+  // eslint-disable-next-line global-require
+  const caixa = Q.qtd(await require('./requisitionService').guardadoNoLoteDeOutras(db, materialId, loteId, null));
+  const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
+  const parcelas = [['separada na caixa de requisição', caixa], ['em inspeção', n(row && row.insp)],
+    ['bloqueada no lote', n(row && row.quar)], ['reprovada na inspeção', n(row && row.repr)], ['em terceiros', n(row && row.terc)]];
+  const fora = Q.qtd(Number(row && row.fora) || 0);
+  return {
+    atual: Q.qtd(Number(row && row.atual) || 0),
+    fora,
+    depois: Q.qtd(Number(novoTotal) - fora),
+    piso: Q.qtd(parcelas.reduce((s, [, q]) => s + q, 0)),
+    partes: parcelas.filter(([, q]) => q > Q.QTD_FOLGA).map(([r, q]) => `${r}: ${q}`),
+  };
+}
+
+/**
+ * Etapa 253 (RN-253.10/.14) — a recusa do ajuste (ou do estorno) que deixaria o lote negativo ou, quando REDUZ o lote, abaixo do piso.
+ * O piso so vale quando o lote desce (um lote ja abaixo do piso nao trava o ajuste que o sobe). Null = pode. `estorno` muda o texto.
+ */
+function recusaDoLoteNoAjuste(p, { novoTotal, unidade, codigo, estorno = false }) {
+  const negativo = p.depois < -Q.QTD_FOLGA;
+  const abaixoDoPiso = p.piso > Q.QTD_FOLGA && p.depois < p.atual - Q.QTD_FOLGA && p.depois < p.piso - Q.QTD_FOLGA;
+  if (!negativo && !abaixoDoPiso) return null;
+  const un = (q) => `${Q.qtd(q)} ${unidade}`;
+  const comPiso = p.piso > Q.QTD_FOLGA;
+  const estado = comPiso
+    ? `com ${un(p.depois)}, abaixo do que está preso nele (${p.partes.join(', ')}; mínimo do lote: ${un(p.piso)})`
+    : `com saldo negativo (${un(p.depois)})`;
+  if (estorno) {
+    return `Não é possível estornar: o estorno volta o total para ${un(novoTotal)}, mas fora do lote ${codigo} já há ${un(p.fora)} — `
+      + `o lote ${codigo} ficaria ${estado}. Faça um novo ajuste em vez de estornar.`;
+  }
+  return `Ajuste para ${un(novoTotal)} indicando o lote ${codigo} deixaria o lote ${estado}: fora do lote ${codigo} há ${un(p.fora)}. `
+    + `Para baixar só este lote, o novo total tem de ser de no mínimo ${un(Q.qtd(p.fora + (comPiso ? p.piso : 0)))}; para baixar mais, `
+    + 'faça o ajuste sem indicar o lote.';
+}
+
+/**
  * Recalcula o TOTAL FÍSICO do material a partir da soma das linhas de saldo por localização/lote.
  *
  * Restaurada no review round 3 desta task (removida no round 2, achando que o delta local era
@@ -562,7 +620,7 @@ async function absorverNegativosSemLote(db, materialId, { excluirId = null } = {
  * outras linhas conhecidas. Isso preserva quantidade já distribuída em localizações/lotes reais,
  * em vez de sobrescrever cegamente com o total inteiro.
  */
-async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false } = {}) {
+async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false, drenadas = [] } = {}) {
   const material = await getMaterial(db, materialId);
   const locKey = material.localizacao_padrao_id || null;
   const materialQty = material.quantidade_atual || 0;
@@ -576,22 +634,34 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
   // saldo antes de negativar a linha padrão/NULL — senão A30 e B20 ajustados para 5 davam A:30,
   // B:20, NULL:−45, e os dois endereços pareciam ocupados com o material quase zerado.
   // `drenar` só vem ligado do AJUSTE de ida: esta função também serve à reconciliação de estorno e
-  // às compensações, e drenar ali mudaria caminhos que ninguém pediu (Fase 2, MINOR 5).
-  if (drenar && !loteId && novaLinha < -EPS) {
-    const positivas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
-      WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
-      ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
+  // às compensações, e drenar ali mudaria caminhos que ninguém pediu (Fase 2, MINOR 5). Etapa 253: e do
+  // estorno do AJUSTE sem localização COM lote (com o desfazer das linhas drenadas); sem lote, o estorno não drena.
+  // Etapa 253 (C475, RN-253.11): com lote, drena as linhas positivas DO LOTE nos outros enderecos (o lote noutro endereco deixava a
+  // linha padrao do lote negativa e o endereco dizendo o que nao tem) — as de endereco bloqueado por ultimo, como a saida do lote (Fase 2,
+  // achado 6). Sem lote, a ordem e a consulta de sempre (Etapa 51). Devolve as linhas drenadas ([{ id, quantidade }]) para o desfazer
+  // do estorno (Fase 2, achado 2) — no rastreador do chamador (`drenadas`), linha a linha, para uma falha no meio nao perder as ja drenadas.
+  if (drenar && novaLinha < -EPS) {
+    const positivas = loteId
+      ? await dbAll(db, `SELECT s.id, s.quantidade FROM estoque_saldo_almoxarifado s
+          LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+          WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > 0 AND s.id != ?
+          ORDER BY COALESCE(lc.bloqueada, 0) ASC, s.quantidade DESC, s.id`, [materialId, loteId, saldo.id])
+      : await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
+          ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
     for (const p of positivas) {
       if (novaLinha >= -EPS) break;
       const tira = Math.min(-novaLinha, Number(p.quantidade));
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [tira, p.id]);
+      drenadas.push({ id: p.id, quantidade: tira });
       novaLinha += tira;
     }
   }
   await dbRun(db,
     'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [Q.qtd(novaLinha), saldo.id]); // Etapa 96 (Fase 2, I4): calculada em JS, gravada absoluta
+  return drenadas;
 }
 
 /**
@@ -1760,6 +1830,15 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     const motivoRecusa = motivoRecusaAjustePorRetencao(material, parseFloat(quantidade),
       await caixaParaGuardaDoAjuste(db, material, parseFloat(quantidade)));
     if (motivoRecusa) throw Object.assign(new Error(motivoRecusa), { status: 400 });
+    // Etapa 253 (C475, RN-253.10): citando o lote, a diferenca cai na linha do lote — o lote nao pode ficar negativo nem, ao descer,
+    // abaixo do que esta preso nele. Depois da guarda de retencao (e da das series, mais acima); antes de qualquer efeito. Quem permite
+    // saldo negativo fica como antes (RN-253.12). Leitura e escrita na mesma secao da trava do material (`registrarMovimentacao`).
+    if (loteIdFinal && !permiteNegativo) {
+      const proj = await projecaoDoLoteNoAjuste(db, material_id, loteIdFinal, parseFloat(quantidade));
+      const recusaLote = recusaDoLoteNoAjuste(proj, { novoTotal: parseFloat(quantidade), unidade: material.unidade,
+        codigo: loteCodigoFinal });
+      if (recusaLote) throw Object.assign(new Error(recusaLote), { status: 400 });
+    }
     saldoPosterior = parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo)) {
     // AJUSTE/AJUSTE_INVENTARIO COM localizacao: comportamento de sempre, guarda de retencao
@@ -3677,6 +3756,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
             const atualSemLoc = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
             await guardaEstornoAjuste(mov.saldo_anterior, Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
+            // Etapa 253 (C475, RN-253.14): o estorno do ajuste com lote poe a diferenca na linha do lote — a mesma guarda do ajuste de
+            // ida (negativo; abaixo do preso quando desce), antes de qualquer efeito; a recusa devolve o claim pelo catch de fora.
+            if (mov.lote_id && opcoesEstorno.compensacao !== true) {
+              const matL = await getMaterial(db, mov.material_id);
+              const permiteNegL = matL.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+              if (!permiteNegL) {
+                const projL = await projecaoDoLoteNoAjuste(db, mov.material_id, mov.lote_id, Q.qtd(mov.saldo_anterior));
+                const recusaL = recusaDoLoteNoAjuste(projL, { novoTotal: Q.qtd(mov.saldo_anterior), unidade: matL.unidade,
+                  codigo: mov.lote || `#${mov.lote_id}`, estorno: true });
+                if (recusaL) throw Object.assign(new Error(recusaL), { status: 400 });
+              }
+            }
             await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
               [Q.qtd(mov.saldo_anterior), mov.material_id]);
             // Etapa 118 (C238, RN-03): o desfazer volta o total por delta (o lido antes do SET) e re-sincroniza a linha padrao depois
@@ -3685,7 +3776,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             compensarQuantidadeMaterial = Q.qtd((Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0) - Q.qtd(mov.saldo_anterior)) || null;
             compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
             saldoDepois = Q.qtd(mov.saldo_anterior);
-            await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
+            // Etapa 253 (RN-253.14; Fase 2, achado 2): com lote, o estorno drena as linhas do lote nos outros enderecos (sem isto, um
+            // ajuste para cima seguido de uma transferencia do lote deixava a linha padrao do lote negativa). As drenadas entram no
+            // rastreador que o desfazer devolve ANTES do total e do sync (`compensarLinhasClaim`). Sem lote, como sempre (sem drenar).
+            if (mov.lote_id) compensarLinhasClaim = [];
+            await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id,
+              { drenar: Boolean(mov.lote_id), drenadas: compensarLinhasClaim || [] });
           }
         } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
           // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao
