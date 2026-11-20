@@ -29,8 +29,8 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 11 | Reserva da liberação repartida por nota | 1h15 | motor/estorno | 1h15 | C524, B1467 (Etapa 247, `2026-11-18-almoxarifado-etapa247-liberar-lote-de-mais-de-uma-nota.md`) | liberação de lote (Etapa 220) + conta do estorno da nota — **confirmado na Fase 0 da 247** (sonda: lote de duas notas → reserva sem marca → os dois estornos recusados) | 1,3 h (horas.js 18/11, grupo C524) | 1h30 | `5ac930cf`, `7305080c`, `493cfeba`, `0e163246`, `b01e30ae` |
 | 12 | Estorno da nota sob a trava (C525 + C534) | 1h30 | trava/estorno | 1h30 | C525, C534, B1506 (Etapa 248, `2026-11-18-almoxarifado-etapa248-estorno-da-nota-sob-a-trava.md`) | a conta do estorno que solta reservas roda fora de `naTravaDoMaterial` — **confirmado na Fase 0 da 248** (sonda com gancho: 0/4 — o estorno recusado no meio da liberação do lote; a requisição solta com o lote liberado no meio) | 1,3 h (horas.js 19/11, grupo C525) | 1h30 | `d7da2ad1`, `99a2fabf`, `2bdc900f` |
 | 13 | Busca de entrega na tela Devoluções | 1h15 | tela + servidor (o C477 dizia ~1h30 na régua antiga) | 1h15 | C477, B1367 | `returnService.js:486-495` (páginas de 30, cursor `antes_de`) | — | — | — |
-| 14 | Bloquear material indicando o lote | 1h30 | motor (BLOQUEIO com lote; regra "o lote tem livre para bloquear") | 1h30 | C500, B1419 | `extended.js:1302` (`/materiais/:id/bloquear`); Etapa 209 já grava lote no BLOQUEIO da devolução | — | — | — |
-| 15 | Mensagem própria na liberação pela NC | 30 min | frase | 30 min | C501 | `nonConformityService.js` `executarLiberacao` `:1036` | — | — | — |
+| 14 | Bloquear material indicando o lote | 1h30 | motor (BLOQUEIO com lote; regra "o lote tem livre para bloquear") | 1h30 | C500, B1419 (Etapa 249, `2026-11-19-almoxarifado-etapa249-bloquear-indicando-o-lote.md`) | `extended.js:1302` (`/materiais/:id/bloquear`); Etapa 209 já grava lote no BLOQUEIO da devolução — **confirmado na Fase 0 da 249** (o serviço não lia `lote_id`; teste vermelho 0/14) | 0,675 h (rateio da Etapa 249: 0,9 h medida no horas.js 19/11, grupo C500 — os commits do pacote citam C500 —, pelos 1h30 + 30 min estimados) | 45 min | `9ef32392`, `55b78b37`, `7fd033c9`, `20ed25bb`, `df6054f3` |
+| 15 | Mensagem própria na liberação pela NC | 30 min | frase | 30 min | C501 (Etapa 249) | `nonConformityService.js` `executarLiberacao` `:1047` — **confirmado na Fase 0 da 249** (a aceitação recebia *"Informe o lote…"*) | 0,225 h (rateio da Etapa 249, como o item 14) | 30 min | `9ef32392`, `df6054f3` |
 | 16 | Entrega diz quantas peças do lote estão bloqueadas | 45 min | fatia de tela | 45 min | C514, B1440 | janela de entrega (Etapa 218 já mostra quanto pode sair do lote) | — | — | — |
 | 17 | Sugestão da fila lê a conta do lote preso | 45 min | fatia (o C517 diz "pequeno") | 45 min | C517 | dica "pegar em XB-01, lote L1" da Fila | — | — | — |
 | 18 | Ajuste com lote limita a baixa ao saldo do lote | 1h15 | motor (o C475 dizia ~1h30 na régua antiga) | 1h15 | C475, B1357 | ramo de Ajuste do `registrarMovimentacao`; só pela movimentação nova (integração) | — | — | — |
@@ -90,6 +90,11 @@ ou reprovada, a mesma nota em dois lotes), corrigidos com teste; e a tela Reserv
 revisão final acharam três casos vizinhos (a mensagem da liberação e o aviso prometendo a reserva que o estorno soltou, a requisição
 cancelada no meio do estorno fazendo soltar a reserva de outra, e a reserva recriada sumindo da mensagem), corrigidos com teste. Medido
 1,3 h → 1h30.
+**Etapa 249 (itens 14 e 15, 19/11):** não revisados (a medição confirmou os dois). 45 min abaixo do estimado no total: a régua do lote já
+existia (a da entrega) e a frase era só a troca da mensagem. A revisão do plano trocou a régua da entrega pelas parcelas cruas (com ela a peça
+reprovada parecia livre) e restringiu o lote a material com controle por lote e sem série; a revisão final limitou o livre de cada lote pelo
+do material — corrigidos com teste. Medido 0,9 h para os dois (todos os commits citam C500; o grupo C501 não casa sozinho) → 45 min + 30 min.
+
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
 - **24 Aplicação** (espera o Matheus): esconder o campo do formulário (Compras e consulta do Almoxarifado), sem apagar a coluna nem o
