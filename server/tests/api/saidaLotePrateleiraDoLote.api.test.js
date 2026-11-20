@@ -160,9 +160,10 @@ process.on('exit', (code) => {
     const doLote = Number((await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id = ?',
       [m, await loteDe(m)])).q);
     assert.strictEqual(doLote, 5);
-    // o estorno devolve na linha da padrao (pendencia da spec 10, "o enderecamento pode consolidar"; aviso C da 239): o total volta
-    assert.strictEqual(await em(m, A), 3);
-    assert.strictEqual(await em(m, P), 2);
+    // Etapa 257 (C544, RN-257.02): o estorno devolve a A, de onde a saida tirou — esta linha afirmava "na linha da padrao" (P 2, A 3;
+    // a pendencia da spec 10, "o enderecamento pode consolidar") e estava certa ate a 257. A padrao bloqueada nao recebe nada.
+    assert.strictEqual(await em(m, A), 5);
+    assert.strictEqual(await em(m, P), 0);
   });
 
   await test('[RN-239.05] integracao: material de cliente com lote, padrao bloqueada -> a devolucao ao cliente sai do endereco do lote; '

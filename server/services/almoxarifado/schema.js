@@ -1605,6 +1605,8 @@ async function initSchemaUmaExecucao(db) {
   // Etapa 256 (C549, RN-256.01): as linhas de estoque que o AJUSTE sem localizacao drenou (outras prateleiras), por movimento e na
   // ordem da drenagem. O estorno do ajuste le esta tabela e devolve as pecas a essas linhas antes do residuo da posicao padrao —
   // sem ela, o estorno punha tudo na padrao (B1597). Ajuste antigo (sem linha aqui): o estorno faz o de antes. Tabela nova, sem ALTER.
+  // Etapa 257 (C544, B1603): tambem as linhas que a SAIDA (todo TIPOS_SAIDA) baixou — o estorno da saida devolve a cada uma o que saiu
+  // dela. A chave e o movimento (um id e de um tipo so), entao a mesma tabela serve; o nome ficou o da 256 (renomear descartado).
   await dbRun(db, `CREATE TABLE IF NOT EXISTS ajuste_linhas_drenadas_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     movimentacao_id INTEGER NOT NULL,

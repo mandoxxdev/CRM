@@ -176,7 +176,8 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     db.get = function (sql, params, cb) {
       if (typeof params === 'function') { cb = params; params = []; }
       if (estado.armado && /^\s*UPDATE estoque_saldo_almoxarifado/.test(String(sql)) && Array.isArray(params)
-        && Number(params[0]) === 2 && Number(params[1]) === m.id) {
+        // Etapa 257: a saida com o registro das linhas devolve pelo id (`... WHERE id = ? AND material_id = ?`, material no 3o)
+        && Number(params[0]) === 2 && (Number(params[1]) === m.id || Number(params[2]) === m.id)) {
         estado.armado = false;
         estado.meio = foraDaSecao(() => stockService.registrarMovimentacao(db, SUPER, { material_id: m.id, tipo: 'SAIDA',
           quantidade: 5, motivo: 'meio', justificativa: 'meio', documento_vinculado: 'NF-MEIO' })

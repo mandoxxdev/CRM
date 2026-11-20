@@ -2748,15 +2748,21 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // Depois do livro (precisa do id) e ainda dentro da secao do material (o motor inteiro roda sob `naTravaDoMaterial`). NAO-FATAL, como
   // o vinculo de serie acima e a auditoria (Etapa 120, C250): o ajuste ja valeu e os chamadores leem a excecao como "nada aconteceu".
   // Sem o registro, o estorno deste ajuste faz o de antes (tudo na posicao padrao). So o AJUSTE: o AJUSTE_INVENTARIO nao e estornavel.
-  if (tipo === 'AJUSTE' && drenadasDoAjuste.length > 0) {
+  // Etapa 257 (C544, RN-257.01): a SAIDA (todo `TIPOS_SAIDA`: avulsa, entrega, consumo...) grava do mesmo jeito as linhas que baixou — o
+  // rastreador da compensacao (`saldoLinhasSaidaParaReverter`), que depois do livro tem exatamente o que saiu (as compensacoes o esvaziam
+  // antes de lancar). Mesma tabela (B1603: a chave e o movimento; o nome ficou o da 256), mesma regra nao-fatal: sem o registro, o estorno
+  // desta Saida faz o de antes (tudo na origem do livro ou na padrao).
+  const baixadasParaRegistrar = tipo === 'AJUSTE' ? drenadasDoAjuste
+    : (tiposSaida.includes(tipo) ? saldoLinhasSaidaParaReverter : []);
+  if (baixadasParaRegistrar.length > 0) {
     // Tudo ou nada (Fase 2, achado 2): um INSERT so, com todas as linhas — o comando e atomico no SQLite. Linha a linha, uma falha no
     // meio deixava o registro pela metade e o estorno devolvia so parte, sem dizer.
     try {
       await dbRun(db, `INSERT INTO ajuste_linhas_drenadas_almoxarifado (movimentacao_id, saldo_id, quantidade)
-        VALUES ${drenadasDoAjuste.map(() => '(?, ?, ?)').join(', ')}`,
-      drenadasDoAjuste.flatMap((d) => [result.lastID, d.id, Q.qtd(d.quantidade)]));
+        VALUES ${baixadasParaRegistrar.map(() => '(?, ?, ?)').join(', ')}`,
+      baixadasParaRegistrar.flatMap((d) => [result.lastID, d.id, Q.qtd(d.quantidade)]));
     } catch (e) {
-      console.warn(`[almoxarifado] linhas drenadas do ajuste ${result.lastID} nao registradas (o estorno devolve na posicao padrao): ${e.message}`);
+      console.warn(`[almoxarifado] linhas baixadas da movimentacao ${result.lastID} (${tipo}) nao registradas (o estorno devolve numa linha so): ${e.message}`);
     }
   }
   // Vínculo série → movimentação de SAÍDA (Etapa 6b, Task 4): mesmo raciocínio e mesma janela que
@@ -3734,15 +3740,39 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // real é de DISTRIBUIÇÃO: quando a saída original drenou linhas de mais de uma localização
           // (`claimSaldoDoLote`), o estorno devolve tudo na linha desta chave. O total volta exato; o
           // endereçamento pode consolidar. Pendência declarada na spec 10.
+          // Etapa 257 (C544, RN-257.02..05): o paragrafo acima vale so para a saida SEM registro (antiga, ou o registro falhou). Com o
+          // registro da ida (`ajuste_linhas_drenadas_almoxarifado`, as linhas que o claim baixou), devolve a cada linha, pelo id, o que
+          // saiu dela — sem limite nem guarda (delta positivo; a soma e a quantidade da saida). A linha que nao existe mais ou nao e
+          // deste lote e pulada e a parte dela segue o caminho de antes (`resto`). Cada devolucao entra no rastreador do desfazer
+          // (`compensarLinhasClaim`, que SOMA a quantidade — aqui negativa) logo depois de aplicada; o desfazer o roda antes do total.
+          // Prateleira bloqueada recebe de volta (B1604; o estorno nao confere endereco, Etapa 2).
+          let resto = Q.qtd(mov.quantidade);
+          const baixadas = await dbAll(db, `SELECT saldo_id AS id, SUM(quantidade) AS quantidade, MIN(id) AS ordem
+            FROM ajuste_linhas_drenadas_almoxarifado WHERE movimentacao_id = ? GROUP BY saldo_id ORDER BY ordem`, [mov.id]);
+          if (baixadas.length) {
+            compensarLinhasClaim = [];
+            for (const b of baixadas) {
+              const q = Q.qtd(Math.min(Number(b.quantidade) || 0, resto));
+              if (!(q > EPS)) continue;
+              const u = await dbGet(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')},
+                updated_at = CURRENT_TIMESTAMP WHERE id = ? AND material_id = ? AND lote_id IS ? RETURNING id`,
+              [q, b.id, mov.material_id, mov.lote_id || null]);
+              if (!u) continue;
+              compensarLinhasClaim.push({ id: b.id, quantidade: -q });
+              resto = Q.qtd(resto - q);
+            }
+          }
           const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-          const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
-          if (r.aplicado) {
-            // Fix round 1 (Task 5): compensação é o delta oposto na mesma chave (−mov.quantidade),
-            // espelhando o +mov.quantidade que este `ajustarSaldoExistente` acabou de aplicar.
-            compensarLinha = { loc, loteId: mov.lote_id, delta: -mov.quantidade };
-          } else {
-            const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
-            if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+          if (resto > EPS) {
+            const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, resto);
+            if (r.aplicado) {
+              // Fix round 1 (Task 5): compensação é o delta oposto na mesma chave (−resto),
+              // espelhando o +resto que este `ajustarSaldoExistente` acabou de aplicar.
+              compensarLinha = { loc, loteId: mov.lote_id, delta: -resto };
+            } else {
+              const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+              if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+            }
           }
           // Serie (Etapa 6b, Task 5): devolve a EM_ESTOQUE as series ENTREGUE/SUCATEADA desta saida,
           // logo apos o saldo ja ter voltado. Sem guarda de disponibilidade aqui (diferente do ramo
