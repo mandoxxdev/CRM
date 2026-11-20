@@ -1,0 +1,6 @@
+*Concluído — estorno de um ajuste depois de outros movimentos*
+_20/11/2026_
+
+1. Estornar um ajuste desfaz só a diferença que ele fez — estimado 1h15 · realizado 1h30
+
+*Total: estimado 1h15 · realizado 1h30*

@@ -19,10 +19,15 @@ reescreve o manual em três lugares e muda um teste que afirmava o defeito: **1h
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Estornar um ajuste desfaz só a diferença que ele fez | 1h15 | motor/estorno (E256 0,8 h; E257 0,9 h) | 1h15 | Etapa 258 (`2026-11-20-almoxarifado-etapa258-estorno-ajuste-fora-de-ordem.md`) | fatia do almoxarifado no motor | — | — | — |
+| 1 | Estornar um ajuste desfaz só a diferença que ele fez | 1h15 | motor/estorno (E256 0,8 h; E257 0,9 h) | 1h15 | Etapa 258 (`2026-11-20-almoxarifado-etapa258-estorno-ajuste-fora-de-ordem.md`) | fatia do almoxarifado no motor | 1,5 h (horas.js 20/11, grupo "Etapa 258|Estimativa: estorno do ajuste fora de ordem") | 1h30 | `4f4240bd`, `6b968923`, `8f0ce1f5`, `3dc41e84`, `1663f022`, `9e9bab9c` |
 
 ## Medição no fechamento
 
 ```
-node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-20 --ate 2026-11-21 --grupos "Estorno do ajuste fora de ordem=Etapa 258|ajuste fora de ordem"
+node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-20 --ate 2026-11-21 --grupos "Estorno do ajuste fora de ordem=Etapa 258|Estimativa: estorno do ajuste fora de ordem"
 ```
+
+**Etapa 258 (20/11):** não revisada. Medido 1,5 h (~89 min, arredondado para 1h30) — 15 min acima do estimado: a revisão do plano e a
+revisão final acharam dois casos novos que viraram regra (o ajuste mais recente que trava o estorno, a guarda do bloqueado no material que
+aceita negativo). A régua do grupo foi trocada para não pegar um commit da 257 cujo assunto também diz "ajuste fora de ordem". A suíte do
+servidor inteira (duas vezes, ~45 min de relógio cada, sem commit no meio) não entra no horas.js.
