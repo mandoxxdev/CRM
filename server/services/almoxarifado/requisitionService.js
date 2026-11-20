@@ -1113,6 +1113,46 @@ async function conferirSeparacao(db, requisicaoId, user) {
 
 /** Etapa 63 (RN-03): as substituicoes da origem separada, com os codigos, para o detalhe. */
 /**
+ * Etapa 255 (RN-255.01, B1598): o projeto de cada requisicao da fila — o gravado nela; sem ele, o da OS cadastrada (nenhuma tela grava
+ * `requisicoes_almoxarifado.projeto_id`: o projeto chega pela OS). Duas consultas a parte (sem N+1), fora da consulta da fila: `projetos` e
+ * `ordens_servico` sao tabelas core: ausentes, ou sem a coluna lida (o harness de testes, e as ~25 suites que criam `ordens_servico` sem
+ * `projeto_id` — Fase 2), so tiram o projeto/nome. Conferido por PRAGMA antes de ler (nao por mensagem de erro): outro erro sobe.
+ * Devolve Map(requisicao_id -> { projeto_id, projeto_nome }).
+ */
+async function tabelaTemColunas(db, tabela, colunas) {
+  const cols = new Set((await dbAll(db, `PRAGMA table_info(${tabela})`)).map((c) => c.name));
+  return colunas.every((c) => cols.has(c));
+}
+async function lerProjetosDaFila(db, reqs) {
+  const idDe = (v) => (v ? Number(v) : null);
+  const projetoDe = new Map(reqs.map((r) => [r.id, idDe(r.projeto_id)]));
+  const semProjeto = reqs.filter((r) => !idDe(r.projeto_id) && idDe(r.os_id));
+  const osIds = [...new Set(semProjeto.map((r) => idDe(r.os_id)))];
+  if (osIds.length && await tabelaTemColunas(db, 'ordens_servico', ['id', 'projeto_id'])) {
+    const oss = await dbAll(db, `SELECT id, projeto_id FROM ordens_servico WHERE id IN (${osIds.map(() => '?').join(',')})`, osIds);
+    const daOs = new Map(oss.map((o) => [Number(o.id), idDe(o.projeto_id)]));
+    for (const r of semProjeto) projetoDe.set(r.id, daOs.get(idDe(r.os_id)) || null);
+  }
+  const pids = [...new Set([...projetoDe.values()].filter((v) => v))];
+  const nomes = new Map();
+  if (pids.length && await tabelaTemColunas(db, 'projetos', ['id', 'nome'])) {
+    const ps = await dbAll(db, `SELECT id, nome FROM projetos WHERE id IN (${pids.map(() => '?').join(',')})`, pids);
+    for (const p of ps) nomes.set(Number(p.id), p.nome || null);
+  }
+  return new Map(reqs.map((r) => {
+    const pid = projetoDe.get(r.id) || null;
+    return [r.id, { projeto_id: pid, projeto_nome: pid ? (nomes.get(pid) || null) : null }];
+  }));
+}
+
+/** Etapa 255 (RN-255.02): o caminho da origem separada na arvore da coleta ('ALM / pai / endereco'), ou null. */
+function caminhoDaOrigem(arvore, origemId) {
+  if (!origemId || !arvore) return null;
+  const { segmentos } = sugestaoDeColeta.caminhoDaLocalizacao(arvore, origemId);
+  return segmentos.length ? segmentos.join(' / ') : null;
+}
+
+/**
  * Etapa 64 — a fila de separação do almoxarife. SÓ LEITURA: não muda regra de separar/entregar, e de
  * propósito NÃO chama `verificarBloqueioLiberacao` (ela ESCREVE: muda status e notifica). Uma consulta
  * de requisições + UMA de itens (sem N+1) + uma de separadores.
@@ -1133,7 +1173,8 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   // a divisao e a leitura da coleta ficam iguais. Por requisicao, o resultado so depende das linhas dela e dos dados globais.
   const porRequisicao = opcoes.requisicaoId != null;
   const reqs = await dbAll(db, `SELECT r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.solicitante_nome,
-      r.setor, r.created_at, r.conferido_por_id, r.requer_aprovacao_valor, r.data_aprovacao_valor
+      r.setor, r.created_at, r.conferido_por_id, r.requer_aprovacao_valor, r.data_aprovacao_valor,
+      r.projeto_id, r.os_id -- Etapa 255 (RN-255.01): o projeto da requisicao (senao o da OS) para o filtro da tela
     FROM requisicoes_almoxarifado r
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusFila.map(() => '?').join(',')})${porRequisicao ? ' AND r.id = ?' : ''}`,
   porRequisicao ? [...statusFila, opcoes.requisicaoId] : statusFila);
@@ -1158,6 +1199,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
     FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
     GROUP BY requisicao_id, usuario_id`, ids);
   const podeConferirPerfil = can(user, 'conferir_separacao');
+  const projetosDaFila = await lerProjetosDaFila(db, reqs); // Etapa 255 (RN-255.01, B1598)
   // Etapa 188 (T2): a sugestao de coleta — lida UMA vez para a fila inteira (sem N+1), sem trava (RN-188.07, B1250).
   const dadosColeta = await lerDadosDaColeta(db, itens);
   // Etapa 206 (Fase 5, R1, B1395): o teto do entregavel pela regua da conferencia da entrega (`tetoDaEntregaPeloLote`, o mesmo do
@@ -1220,6 +1262,8 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)
           - num(i.lote_impedido)), tetosLote.has(i.id) ? tetosLote.get(i.id).teto : Infinity)),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
+        // Etapa 255 (RN-255.02): o caminho da origem na arvore (o formato do pegar_em.caminho) — o filtro de localizacao da tela.
+        origem_separacao_caminho: caminhoDaOrigem(dadosColeta.arvore, i.origem_separacao_id),
         // Etapa 227 (B1502, RN-227.09): o impedido do material (o numero do extrato) — a tela diz "disponivel 10 (6 em lote impedido)".
         lote_impedido: Q.qtd(Math.max(0, num(i.lote_impedido))),
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
@@ -1278,6 +1322,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
     fila.push({
       id: r.id, numero: r.numero, status: r.status, urgencia: r.urgencia, data_necessidade: r.data_necessidade || null,
       solicitante_nome: r.solicitante_nome, setor: r.setor, created_at: r.created_at,
+      ...projetosDaFila.get(r.id),
       etapas, acionavel: etapas.some((e) => ['SEPARAR', 'CONFERIR', 'REABRIR_SEPARACAO', 'RETOMAR_SEPARACAO', 'ENTREGAR'].includes(e)),
       conferencia_pendente: conferenciaPendente, separadores: quemSeparou,
       posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
