@@ -185,6 +185,20 @@ process.on('exit', (code) => {
     assert.strictEqual(await saidas(R), 0);
   });
 
+  // Fase 5 (achado 1): um terceiro item DESTA requisicao guardou 2 de A e fica fora da entrega — a frase nova diria "ha 4 ... sobra 2";
+  // entregando so o item 1, a resposta e "sobra 0". Fica a de hoje.
+  await test('[RN-252.11 e] o item 3 desta requisicao guardou 2 de A e nao entra na entrega (A 4): a literal de antes, nao "sobra 2"', async () => {
+    const m = await material();
+    await entrar(m, A.id, 4); await entrar(m, B.id, 3);
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 2], [m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: A.id },
+      { item_id: ids[2], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    const msg = await recusa(R, [{ item_id: ids[0], quantidade_atendida: 3, localizacao_origem_id: A.id }, { item_id: ids[1], quantidade_atendida: 2 }]);
+    assert.strictEqual(msg, `${m.nome}: O saldo em TF-A (2) não cobre a quantidade (3) — a saída tiraria de outros endereços`);
+    assert.strictEqual(await saidas(R), 0);
+  });
+
   console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
   terminou = true;
   await close();

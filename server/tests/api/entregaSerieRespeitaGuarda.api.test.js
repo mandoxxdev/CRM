@@ -216,6 +216,47 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await seriesDaSaida(R, m), ['A1@TS-A', 'A2@TS-A', 'B1@-']);
   });
 
+  // Fase 5 (achado 2): series intercaladas — cada SAIDA leva as series do SEU endereco (sem o reagrupamento, a de B levava A1).
+  await test('[RN-252.20 b] series intercaladas [B1, A1, B2], A 4 com 3 guardados: a SAIDA de B leva B1 e B2; a de A, A1', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['A1', 'A2', 'A3', 'A4']); await entrar(m, B.id, ['B1', 'B2', 'B3']);
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 3]]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 3, localizacao_origem_id: A.id }]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3,
+      serie_ids: [await serie(m, 'B1'), await serie(m, 'A1'), await serie(m, 'B2')] }]);
+    assert.deepStrictEqual(await seriesDaSaida(R, m), ['A1@TS-A', 'B1@TS-B', 'B2@TS-B']);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['TS-A=3', 'TS-B=1'], fisico: 4 });
+  });
+
+  // Fase 5 (achado 3): com reserva parcial + excedente, os dois pedacos automaticos (com e sem reserva) saem pelo endereco da serie.
+  await test('[RN-252.20 c] reserva de 1 + excedente de 1, series B1 e B2, A guardado por outra requisicao: as duas saem de B; a outra sai de A', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['A1', 'A2', 'A3']); await entrar(m, B.id, ['B1']);
+    const aprovada = async (q) => {
+      const R = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+        VALUES (?, 2, 'Sol', 'PENDENTE')`, [`REQ-E252S-${++seq}`])).lastID;
+      const i = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+        quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,?,0,0,0)`, [R, m.id, q])).lastID;
+      const ap = await request(app).put(`${API}/requisicoes/${R}/aprovar`).send({});
+      assert.strictEqual(ap.status, 200, JSON.stringify(ap.body));
+      return { R, i };
+    };
+    const r2 = await aprovada(3);
+    await separar(r2.R, [{ item_id: r2.i, quantidade_separada: 3, localizacao_origem_id: A.id }]);
+    const r1 = await aprovada(2);
+    const res = await dbAll(db, 'SELECT quantidade q FROM reservas_material_almoxarifado WHERE requisicao_id = ?', [r1.R]);
+    assert.deepStrictEqual(res.map((x) => Number(x.q)), [1], 'premissa: reserva parcial de 1');
+    await entrar(m, B.id, ['B2']);
+    await separar(r1.R, [{ item_id: r1.i, quantidade_separada: 2 }]);
+    await entregar(r1.R, [{ item_id: r1.i, quantidade_atendida: 2, serie_ids: [await serie(m, 'B1'), await serie(m, 'B2')] }]);
+    assert.deepStrictEqual(await livro(r1.R, m), [['TS-B', 1], ['TS-B', 1]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['TS-A=3'], fisico: 3 });
+    await entregar(r2.R, [{ item_id: r2.i, quantidade_atendida: 3,
+      serie_ids: [await serie(m, 'A1'), await serie(m, 'A2'), await serie(m, 'A3')] }]);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
+  });
+
   console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
   terminou = true;
   await close();

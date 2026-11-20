@@ -1443,8 +1443,12 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   // quando a outra requisicao ja guardou esses 2: fica a de hoje.
   const outrasDoParQ = entrega && entrega.irmaos && entrega.outras && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA
     && pecasAntes > 0 && fisico + 1e-9 >= qty ? (Number((await entrega.outras(item.material_id, origemId, loteId)).q) || 0) : 0;
+  // Etapa 252 (Fase 5, achado 1): e a guarda que fica de outros itens desta requisicao fora desta entrega (sem ela, "ha 4 ... sobra 2" com 2 do
+  // item 3, que nao sai agora: entregando so o item 1 a resposta e "sobra 0").
+  const irmaosDoParQ = outrasDoParQ !== 0 || !(entrega && entrega.guardaDosIrmaos && entrega.irmaos && origemId && saldo + 1e-9 < qty
+    && jaPedido > Q.QTD_FOLGA && pecasAntes > 0 && fisico + 1e-9 >= qty) ? 0 : (Number(await entrega.guardaDosIrmaos(item, origemId, loteId)) || 0);
   if (entrega && entrega.irmaos && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA && pecasAntes > 0
-    && fisico - outrasDoParQ + 1e-9 >= qty) {
+    && fisico - outrasDoParQ - irmaosDoParQ + 1e-9 >= qty) {
     const r6 = (x) => Math.round(x * 1e6) / 1e6;
     const cod = loteCodigo ? `${codigoOrigem}, lote ${loteCodigo}` : codigoOrigem;
     const sai = jaPedido < 2 - Q.QTD_FOLGA ? 'sai' : 'saem';
@@ -2668,7 +2672,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
       await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem, null,
-        { pecas: pecasPorOrigem, irmaos: !planejada, outras: outrasDaFrase }); // Etapa 252 (RN-252.10): a frase do C497 so para quem escolheu a origem
+        { pecas: pecasPorOrigem, irmaos: !planejada, outras: outrasDaFrase,
+          // Fase 5 (achado 1): a guarda que FICA dos outros itens desta requisicao no par (a mesma parcela da E1 da 208)
+          guardaDosIrmaos: async (it, o, l) => (await guardaDosIrmaosNoPar(db, requisicaoId, it.id, it.material_id, o, l, parteQueFicaPorItem())).q }); // Etapa 252 (RN-252.10): a frase do C497 so para quem escolheu a origem
       if (contarOutras) casoC.push({ item, origemId, loteId, qtdComOrigem });
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
       if (loteId) conferidasNoLote.push({ item, origemId, loteId, qtdComOrigem, planejada }); // Etapa 218: a passada do lote
@@ -2689,6 +2695,13 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // Etapa 196 (RN-196.07): item com origem guardada -> se esta entrega sai DELA (a parte cai pelo que saiu) ou de outro par
   // (consome primeiro a parte sem origem; a parte so e limitada a caixa que sobra). Lido no finally.
   const origemGuardada = new Map();
+  // Etapa 252 (Fase 5): declarado aqui (antes estava depois da passada do caso (c), sem mudar o corpo) — a frase do C497 (RN-252.10) le a
+  // guarda que fica dos irmaos durante a conferencia. Lido no meio do laco, o item ainda nao conferido conta pela parte do banco.
+  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
+    .filter(([, og]) => (og.saiDaOrigem ? og.parte !== undefined : og.parteQueFica !== undefined))
+    .map(([id, og]) => [Number(id), og.saiDaOrigem
+      ? Q.qtd(Math.max(0, og.parte - num(origemPorItem.get(id)?.qtdComOrigem)))
+      : og.parteQueFica]));
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     const qty = entrada ? num(entrada.quantidade_atendida) : 0;
@@ -2783,11 +2796,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // tirava o que saiu: na conferencia (antes da baixa) dava certo, mas na passada 2 o entregue ja tinha subido e a caixa encolhido — o que
   // saiu contava duas vezes, a guarda que fica virava 0 e o automatico do irmao a levava (a segunda entrega do item: "nao serve mais").
   // Agora a conferencia e a baixa leem o MESMO numero, fixado antes de baixar.
-  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
-    .filter(([, og]) => (og.saiDaOrigem ? og.parte !== undefined : og.parteQueFica !== undefined))
-    .map(([id, og]) => [Number(id), og.saiDaOrigem
-      ? Q.qtd(Math.max(0, og.parte - num(origemPorItem.get(id)?.qtdComOrigem)))
-      : og.parteQueFica]));
+  // (Etapa 252, Fase 5: parteQueFicaPorItem declarado logo depois do origemGuardada — a frase do C497 o usa na conferencia)
   // Etapa 208: sobe para antes da passada do caso (c), sem mudar o corpo — a E1 le a guarda que fica dos irmaos com ele (B1407).
   // Etapa 200 (RN-200.01/06, B1338-B1340): a passada do caso (c). `ja` = o que os OUTROS itens desta entrega pedem do par (todos, antes
   // ou depois na ordem); E1 quando o fisico menos isso menos a parte guardada das outras caixas vivas nao cobre. So le — sob a trava
