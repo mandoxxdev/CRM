@@ -1544,7 +1544,8 @@ C545). A **C543** no motor. Material sem negativo, saída **com lote** e **sem o
   (o saldo inteiro). **O plano dizia "descontar a parte bloqueada" (Fase 2) — estava errado** (Fase 5, reproduzido: o que faltava saía
   "sem lote", linha sem lote −3 e o lote inflado); corrigido antes do commit — `e21132d1`.
 - [ ] **Fora (D (239)):** resto nas bloqueadas quando as livres não cobrem; a baixa não segue a prateleira da série (C545); o estorno
-  devolve na padrão (C544, pendência antiga desta spec: "o endereçamento pode consolidar").
+  devolve na padrão (C544, pendência antiga desta spec: "o endereçamento pode consolidar"). *(O estorno na padrão: **resolvido na
+  Etapa 257** — `9fda71f7`, o estorno devolve às prateleiras de onde a saída tirou; ver a spec 03.)*
 
 Teste: `saidaLotePrateleiraDoLote.api.test.js` (14). Continua 🟢.
 
