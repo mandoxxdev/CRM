@@ -642,20 +642,38 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
   // do estorno (Fase 2, achado 2) — no rastreador do chamador (`drenadas`), linha a linha, para uma falha no meio nao perder as ja drenadas.
   if (drenar && novaLinha < -EPS) {
     const positivas = loteId
-      ? await dbAll(db, `SELECT s.id, s.quantidade FROM estoque_saldo_almoxarifado s
+      ? await dbAll(db, `SELECT s.id, s.quantidade, s.localizacao_id FROM estoque_saldo_almoxarifado s
           LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
           WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > 0 AND s.id != ?
           ORDER BY COALESCE(lc.bloqueada, 0) ASC, s.quantidade DESC, s.id`, [materialId, loteId, saldo.id])
       : await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
           WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
           ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
-    for (const p of positivas) {
-      if (novaLinha >= -EPS) break;
-      const tira = Math.min(-novaLinha, Number(p.quantidade));
-      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [tira, p.id]);
-      drenadas.push({ id: p.id, quantidade: tira });
-      novaLinha += tira;
+    // Etapa 253 (Fase 5, achado 1): com lote, duas passadas — primeiro so a parte de cada endereco que NAO esta guardada pela caixa viva de
+    // uma requisicao (`parteGuardadaDeOutrasPorPar`, todas as requisicoes), depois o resto. Numa passada so, a maior linha (a da caixa
+    // separada) era drenada e a entrega da requisicao era recusada com "a origem da separacao nao serve mais". Sem lote, a passada unica de
+    // sempre (Etapa 51; o mesmo defeito ali e anterior — C548).
+    let guardadoPorPar = null;
+    if (loteId && positivas.length) {
+      // eslint-disable-next-line global-require
+      guardadoPorPar = await require('./requisitionService').parteGuardadaDeOutrasPorPar(db, materialId, null);
+    }
+    const restam = positivas.map((p) => ({ ...p, resta: Number(p.quantidade) }));
+    const passadas = guardadoPorPar
+      ? [(p) => Math.max(0, p.resta - (p.localizacao_id === null ? 0 : (guardadoPorPar.get(`${Number(p.localizacao_id)}|${Number(loteId)}`) || 0))),
+        (p) => p.resta]
+      : [(p) => p.resta];
+    for (const podeTirar of passadas) {
+      for (const p of restam) {
+        if (novaLinha >= -EPS) break;
+        const tira = Math.min(-novaLinha, podeTirar(p));
+        if (!(tira > 0)) continue;
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [tira, p.id]);
+        drenadas.push({ id: p.id, quantidade: tira });
+        p.resta -= tira;
+        novaLinha += tira;
+      }
     }
   }
   await dbRun(db,

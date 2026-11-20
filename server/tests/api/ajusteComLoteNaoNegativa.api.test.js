@@ -184,6 +184,54 @@ const MSG_EST = (t, l, f, d) => `Não é possível estornar: o estorno volta o t
     assert.strictEqual(await linhas(m), 'P253T/LB=1.5 P253T/LC=3');
   });
 
+  await test('[RN-253.10, Fase 5] em inspecao, reprovado e em terceiros no lote tambem sao piso (cada parcela nomeada)', async () => {
+    const { m, LB } = await montar();
+    const rec = (await dbRun(db, "INSERT INTO recebimentos_material_almoxarifado (numero) VALUES (?)", [`REC253-${++seq}`])).lastID;
+    const ri = (await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+      quantidade_recebida, lote_id, quantidade_em_inspecao) VALUES (?, ?, 5, 5, ?, 1)`, [rec, m, LB])).lastID;
+    await dbRun(db, 'INSERT INTO inspecoes_recebimento_almoxarifado (recebimento_item_id, quantidade_reprovada) VALUES (?, 1)', [ri]);
+    const rem = (await dbRun(db, "INSERT INTO remessas_terceiro_almoxarifado (numero) VALUES (?)", [`REM253-${seq}`])).lastID;
+    await dbRun(db, `INSERT INTO itens_remessa_terceiro_almoxarifado (remessa_id, material_id, quantidade, lote_id, enviado_em)
+      VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP)`, [rem, m, LB]);
+    const antes = await foto(m);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 5, lote_id: LB });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Ajuste para 5 UN indicando o lote LB deixaria o lote com 2 UN, abaixo do que está preso nele '
+      + '(em inspeção: 1, reprovada na inspeção: 1, em terceiros: 1; mínimo do lote: 3 UN): fora do lote LB há 3 UN. Para baixar só este '
+      + 'lote, o novo total tem de ser de no mínimo 6 UN; para baixar mais, faça o ajuste sem indicar o lote.');
+    assert.deepStrictEqual(await foto(m), antes);
+    const ok = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 6, lote_id: LB });
+    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+  });
+
+  // Requisicao aprovada com um item do material, separada pelo ALMOXARIFE da origem e do lote dados. Devolve { R, item }.
+  const separar = async (m, q, origem, lote) => {
+    const R = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES (?,1,'S','APROVADO')`, [`R253T-${++seq}`])).lastID;
+    const item = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+      quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,?,0,0,0)`, [R, m, q])).lastID;
+    const sep = await como('ALMOX').put(`${API}/requisicoes/${R}/separacao`, { itens_separados: [{ item_id: item,
+      quantidade_separada: q, localizacao_origem_id: origem, lote_id: lote }] });
+    assert.strictEqual(sep.status, 200, `separacao de premissa: ${JSON.stringify(sep.body)}`);
+    return { R, item };
+  };
+  const entregar = (R, item, q) => como('ALMOX').put(`${API}/requisicoes/${R}/entregar`,
+    { itens_atendidos: [{ item_id: item, quantidade_atendida: q }] });
+
+  await test('[RN-253.14, Fase 5] o estorno que desce o lote abaixo da caixa separada dele e recusado com o texto do estorno', async () => {
+    const { m, LB } = await montar();
+    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 10, lote_id: LB });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    await separar(m, 6, P.id, LB);
+    const antes = await foto(m);
+    const r = await cancelar(aj.body.id);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Não é possível estornar: o estorno volta o total para 8 UN, mas fora do lote LB já há 3 UN — o lote LB '
+      + 'ficaria com 5 UN, abaixo do que está preso nele (separada na caixa de requisição: 6; mínimo do lote: 6 UN). Faça um novo ajuste em vez '
+      + 'de estornar.');
+    assert.deepStrictEqual(await foto(m), antes);
+  });
+
   // ── RN-253.11: o drenar do lote ───────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-253.11] o lote noutro endereco: a baixa sai das linhas do lote, nenhuma linha do lote negativa', async () => {
     const { m, LB } = await montar({ onde: A.id });
@@ -211,6 +259,39 @@ const MSG_EST = (t, l, f, d) => `Não é possível estornar: o estorno volta o t
     } finally {
       await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [A.id]);
     }
+  });
+
+  await test('[RN-253.11, Fase 5 achado 1] o drenar nao tira da prateleira da caixa separada: a entrega sai', async () => {
+    const m = await material();
+    await entrar(m, 4, { lote: 'LB', localizacao_destino_id: A.id });
+    await entrar(m, 3, { lote: 'LB', localizacao_destino_id: B.id });
+    const LB = await loteId(m, 'LB');
+    const { R, item } = await separar(m, 4, A.id, LB);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 4, lote_id: LB });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(await linhas(m), 'A253T/LB=4 B253T/LB=0 P253T/LB=0', 'o drenar levou a caixa de A');
+    const ent = await entregar(R, item, 4);
+    assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
+    assert.strictEqual(await linhas(m), 'A253T/LB=0 B253T/LB=0 P253T/LB=0');
+  });
+
+  await test('[RN-253.14, Fase 5 achado 1] o drenar do estorno tambem poupa a caixa separada', async () => {
+    const m = await material();
+    await entrar(m, 6, { lote: 'LB', localizacao_destino_id: A.id });
+    await entrar(m, 3, { lote: 'LB', localizacao_destino_id: B.id });
+    const LB = await loteId(m, 'LB');
+    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 12, lote_id: LB });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    const tr = await v2({ material_id: m, tipo: 'TRANSFERENCIA', quantidade: 3, lote_id: LB, localizacao_origem_id: P.id,
+      localizacao_destino_id: B.id });
+    assert.strictEqual(tr.status, 201, JSON.stringify(tr.body));
+    // A e B empatam em 6: na passada unica o drenar tiraria de A (o id menor) — a caixa.
+    const { R, item } = await separar(m, 6, A.id, LB);
+    const r = await cancelar(aj.body.id);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(await linhas(m), 'A253T/LB=6 B253T/LB=3 P253T/LB=0', 'o drenar do estorno levou a caixa de A');
+    const ent = await entregar(R, item, 6);
+    assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
   });
 
   // ── RN-253.12 e RN-253.13: o que nao muda ─────────────────────────────────────────────────────────────────────────────────
