@@ -2977,6 +2977,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     planos.push({
       controleLote: Number(matLote && matLote.controle_lote) === 1,
       item, qtyEntregar, pedacos, movimentosDoItem: [], entregueAcumulado: getEntregue(item),
+      enderecosSaida: new Set(), // Etapa 252 (RN-252.01): os enderecos das linhas que as baixas do item debitaram
       baixadoComOrigem: 0, // Etapa 196 (Fase 2 item 3): o que SAIU de fato pelos pedacos com origem (decrementa a parte no finally)
       // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
       seriesRestantes: [...(seriesPorItem.get(item.id)?.ids || [])],
@@ -3039,8 +3040,11 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         // Etapa 77 (C136): a marca que deixa o motor consumir a reserva de origem REQUISICAO
         // DESTA requisicao — sem ela o motor recusa (a reserva da requisicao so sai pela entrega).
         requisicaoDaEntrega: requisicaoId,
+        comEnderecosDaSaida: true, // Etapa 252 (RN-252.01, C495): a troca pelo automatico grava o endereco quando foi um so
       });
       plano.movimentosDoItem.push(mov.id);
+      if (Array.isArray(mov.enderecos_saida)) mov.enderecos_saida.forEach((e) => plano.enderecosSaida.add(e));
+      else plano.enderecosSaida.add(undefined); // sem a leitura: nao se sabe -> a troca fica sem endereco
       if (baixa.comOrigem) plano.baixadoComOrigem = Q.qtd(plano.baixadoComOrigem + quantidade);
     } catch (e) {
       const err = new Error(`${item.material_nome}: ${e.message}`);
@@ -3128,13 +3132,17 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         const lotes = await dbAll(db, `SELECT DISTINCT lote_id FROM movimentacoes_almoxarifado
           WHERE id IN (${movimentosDoItem.map(() => '?').join(',')})`, movimentosDoItem);
         const loteSaida = s.saiuLote || (lotes.length === 1 ? lotes[0].lote_id : null);
+        // Etapa 252 (RN-252.01, C495): a troca pelo automatico grava o endereco quando TODAS as baixas do item debitaram linhas de um
+        // endereco so (nao nulo). Antes gravava nulo sempre e o detalhe dizia "saiu de automatico" mesmo com a peca saindo toda de B.
+        const ends = [...plano.enderecosSaida];
+        const saiuOrigem = s.saiuOrigem || (ends.length === 1 && Number.isInteger(ends[0]) ? ends[0] : null);
         // eslint-disable-next-line no-await-in-loop
         await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
           (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
            localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [requisicaoId, item.id, item.material_id, s.quantidade, s.planOrigem, s.planLote,
-          s.saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
+          saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
           user.id, nomeDoUsuario(user)]);
       }
       // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais. Etapa 136: no finally, para todo item que teve

@@ -2077,6 +2077,9 @@ const RequisicoesList = () => {
                       } else {
                         texto = `${s.material_codigo}: ${s.quantidade} — separado de ${s.planejada_codigo}${s.planejada_lote ? ` — lote ${s.planejada_lote}` : ''}`
                           + ` · saiu de ${s.saiu_codigo || 'automático'}${s.saiu_lote ? ` — lote ${s.saiu_lote}` : ''}`
+                          // Etapa 252 (RN-252.03, C495): o automático que saiu todo de uma prateleira traz o endereço — diz qual, e que foi
+                          // pelo automático (sem endereço, "saiu de automático", como antes).
+                          + `${s.saiu_codigo && Number(s.automatica) === 1 ? ' (automático)' : ''}`
                           + `${motivo ? ` · ${motivo}` : ''}`;
                       }
                       return (

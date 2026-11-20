@@ -106,7 +106,11 @@ let seq = 0;
     await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]);
     assert.strictEqual((await entregar(id, [{ item_id: ids[0], quantidade_atendida: 3, origem_automatica: true }])).status, 200);
     const s = await subs(id);
-    assert.strictEqual(s.length, 1); assert.strictEqual(s[0].automatica, 1); assert.strictEqual(s[0].saiu_codigo, null);
+    // Etapa 252 (RN-252.01, C495): o material nao tem controle de lote, o automatico tira da linha sem lote (A, a unica; a guarda do
+    // item solta) -> a troca grava A, sem lote. Isto afirmava saiu_codigo null (o comportamento de antes: o detalhe dizia "saiu de
+    // automatico" com a peca saindo toda de A).
+    assert.strictEqual(s.length, 1); assert.strictEqual(s[0].automatica, 1); assert.strictEqual(s[0].saiu_codigo, A.codigo);
+    assert.strictEqual(s[0].saiu_lote, null);
   });
 
   await test('Fase 2 (critico): entrega ACIMA do pendente — o pendente sai da planejada, o excedente automatico', async () => {

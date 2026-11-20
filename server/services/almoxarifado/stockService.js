@@ -2769,8 +2769,24 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     }
   }
 
+  // Etapa 252 (RN-252.02, C495): os enderecos das linhas que a SAIDA debitou (distintos; null = a linha sem endereco), so para quem pede —
+  // a troca da origem da separacao pelo automatico grava o endereco quando foi um so. O livro nao muda (a SAIDA sem endereco continua sem:
+  // o estorno le `localizacao_origem_id` para devolver). Leitura depois do livro; falha aqui nao desfaz nada (devolve sem o campo).
+  let enderecosSaida;
+  if (opcoes.comEnderecosDaSaida && tiposSaida.includes(tipo) && saldoLinhasSaidaParaReverter.length) {
+    try {
+      const ids = saldoLinhasSaidaParaReverter.map((l) => l.id);
+      const rows = await dbAll(db, `SELECT DISTINCT localizacao_id FROM estoque_saldo_almoxarifado
+        WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+      enderecosSaida = rows.map((r) => (r.localizacao_id == null ? null : Number(r.localizacao_id)));
+    } catch (endErr) {
+      console.warn(`[almoxarifado] enderecos da saida nao lidos (movimentacao ${result.lastID}): ${endErr.message}`);
+    }
+  }
+
   return {
     id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior,
+    ...(enderecosSaida ? { enderecos_saida: enderecosSaida } : {}),
     ...(avisoCaixa ? { aviso_caixa: avisoCaixa } : {}),
     ...(avisoRetencao ? { aviso_retencao: avisoRetencao } : {}),
     ...(avisosValidade.length ? { aviso_validade: avisosValidade.join(' ') } : {}),
