@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-20):** **Etapa 255 fechada** (**a Fila de separação filtra por setor, projeto e localização** — três
+> **Onde o desenvolvimento está (2026-11-20):** **Etapa 256 fechada** (**o estorno de um Ajuste devolve as peças às prateleiras de onde
+> saíram** — o Ajuste do total que tirou de outras prateleiras passa a guardar de onde tirou, e o **Estornar** devolve a essas prateleiras, não
+> mais tudo na posição padrão (**C549** resolvido; vale com e sem lote). Ajuste feito antes da etapa estorna como antes. Decisões **B1601** e
+> **B1602**; limitação **D (256)**; verificação **F (256)**; sem consulta antes do deploy).
+> **Próxima:** os itens 24 a 26 da estimativa de 18/11 **esperam resposta**; sem ela, a próxima está no fim do plano da 256.
+> *(Antes, 2026-11-20:)* **Etapa 255 fechada** (**a Fila de separação filtra por setor, projeto e localização** — três
 > filtros no topo da Fila, na mesma ordem de urgência; o projeto vem da requisição ou da OS cadastrada; a localização pega tudo o que está
 > abaixo do nível escolhido; a lista de coleta de todas imprime só o que está na tela. Decisões **B1598** a **B1600**; limitação **D (255)**;
 > verificação **F (255)**; sem consulta antes do deploy).
@@ -4863,7 +4868,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15606,6 +15611,22 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1601 (NOVA, da Etapa 256; decisão do agente) — o estorno do Ajuste devolve às prateleiras de onde a baixa saiu, sem nunca baixar a
+posição padrão para isso.** Inverte a **B1597** (e a parte do estorno da **B1590**, Etapa 253). O Ajuste do total que tira de outras
+prateleiras guarda de onde tirou; o **Estornar** devolve primeiro a essas prateleiras, na ordem em que foram baixadas, até o que saiu de cada
+uma — **limitado ao que, sem isso, iria a mais para a posição padrão** (a padrão fica com pelo menos o que tem; se estiver negativa, conta como
+0). Com movimento no meio (uma Entrada na padrão depois do Ajuste), devolve só uma parte e o resto fica na padrão, como antes. Vale com e sem
+lote. Ajuste feito **antes** da etapa (sem o registro) estorna como antes, tudo na padrão; se gravar o registro falhar, o Ajuste vale e o
+estorno dele faz o de antes. **Descartado:** devolver sempre tudo às prateleiras (com uma Entrada no meio, a padrão ficava negativa —
+medido); recusar o estorno quando não dá para devolver tudo (o total continuaria certo; a recusa travaria um estorno que hoje passa); gravar
+de onde saiu numa coluna de texto do próprio histórico (a tabela nova se lê sob a trava com uma consulta só e não muda o histórico);
+consertar só o Ajuste sem lote (o com lote tinha o mesmo defeito, na mesma função). **Reversível.** `84f75167`.
+
+**B1602 (NOVA, da Etapa 256; decisão do agente) — a prateleira bloqueada (ou inativa) recebe de volta o que o Ajuste tirou dela.** O
+estorno diz que as peças nunca sumiram: estão onde estavam. **Escolhido:** devolver à prateleira mesmo que ela tenha sido bloqueada ou
+inativada depois do Ajuste (a separação e a sugestão de onde pegar já deixam de fora a prateleira bloqueada). **Descartado:** pular a prateleira bloqueada e pôr na padrão
+(mostraria peças num lugar onde elas não estão — o defeito que a etapa conserta). **Reversível.** `84f75167`.
+
 **B1598 (NOVA, da Etapa 255; decisão do agente) — o projeto da requisição na Fila é o dela; sem ele, o da OS cadastrada.** A requisição
 tem um campo de projeto, mas **nenhuma tela o preenche** (o formulário da requisição não tem projeto): o projeto chega, na prática, pela OS
 cadastrada escolhida na requisição (Etapa 172). **Escolhido:** o projeto gravado na requisição e, sem ele, o da OS cadastrada. **Descartado:**
@@ -20083,6 +20104,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      aparecem em *A*). Depois disso, o estorno de uma transferência para *B* pode ser recusado (*"o destino não tem mais o saldo transferido"*).
      **O que fazer:** depois de estornar um Ajuste, conferir as prateleiras e acertar com um Ajuste com localização (pela integração) ou uma
      Transferência. Conserto: gravar de onde a baixa saiu (registro novo no histórico — **B1597**).
+     *(**Resolvido na Etapa 256** — `84f75167`: o Ajuste guarda de onde tirou e o **Estornar** devolve a essas prateleiras (*A* 4, *B* 3), com e
+     sem lote, sem baixar a posição padrão para isso — **B1601**. Ajuste feito antes da etapa estorna como antes, **D (256)**.)*
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -21439,6 +21462,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(256) O estorno do Ajuste que devolve às prateleiras, o que ficou de fora.** (1) **Ajuste feito antes da etapa** (sem o registro de onde
+  tirou) estorna como antes: tudo na posição padrão — conferir as prateleiras depois de estornar um Ajuste antigo. (2) Com movimento no meio,
+  a devolução é parcial: a posição padrão nunca desce por causa dela (**B1601**) — *P* padrão, *A* 5 e *B* 3, Ajuste para 2 (*A* 0, *B* 2),
+  Entrada de 3 sem destino (*P* 3), **Estornar** → *A* 3, *B* 2, *P* 3. (3) O estorno do Ajuste sem localização continua voltando o total ao
+  de antes do Ajuste (valor fixo, como sempre): dois Ajustes estornados fora de ordem dão o total do primeiro (anterior). (4) Se o registro de
+  onde tirou falhar ao gravar, o Ajuste vale e o estorno dele faz o de antes (o servidor registra o aviso). (5) O Ajuste de inventário não
+  grava (não pode ser estornado).
 - **(255) Os filtros da Fila de separação, o que ficou de fora.** (1) **Filtro, não agrupamento** — a fila não ganha seções por setor,
   projeto ou localização (**B1600**). (2) A localização escolhe a **requisição**: os outros itens dela continuam na linha e vão inteiros na
   lista de coleta de todas (*A* com um item em *ALM / A* e outro em *ALM / B*, filtro *ALM / A* → o papel traz os dois). (3) O projeto vem da
@@ -21450,12 +21480,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(254) O Ajuste sem lote que poupa a prateleira separada e o cadastro a completar, o que ficou de fora.** (1) O Ajuste sem lote só baixa
   prateleiras **sem lote**: quando o resto do material está num lote, a prateleira separada é baixada mesmo assim (o total manda) e a entrega
   dela fica sem as peças — *A* 4 separadas, *B* 1 sem lote e 3 do lote *LY*, Ajuste para 5 → *A* 2 (anterior). (2) O estorno do Ajuste sem
-  lote devolve na posição padrão (**C549**, **B1597**). (3) Só o material criado pela sobra ou remessa **depois** da etapa ganha a marca
+  lote devolve na posição padrão (**C549**, **B1597**; *resolvido na Etapa 256 — **B1601***). (3) Só o material criado pela sobra ou remessa **depois** da etapa ganha a marca
   *cadastro a completar* (**B1594**); tirar a marca não exige campo nenhum (**B1595**); o Almoxarifado continua criando o material (**B1593**).
 - **(253) A busca da entrega e o Ajuste com lote, o que ficou de fora.** (1) A busca casa a OS pelo número que a tela mostra, não pelo do
   cadastro de OS (**B1586**); a `busca` repetida na chamada vira o texto "a,b". (2) O estorno de um Ajuste que tirou de outra prateleira do lote
   devolve o lote na posição padrão, não na prateleira de onde saiu (**B1590**) — uma transferência do lote a partir daquela prateleira pode
-  ser recusada depois; o mesmo acontecia com o Ajuste sem lote desde a Etapa 51. (3) O Ajuste de inventário sem lote, com o lote em outra
+  ser recusada depois; o mesmo acontecia com o Ajuste sem lote desde a Etapa 51 (*resolvido na Etapa 256, com e sem lote — **B1601***). (3) O Ajuste de inventário sem lote, com o lote em outra
   prateleira, ainda pode deixar o "sem lote" negativo (anterior; o inventário não indica lote). (4) Se o registro do Ajuste com lote falhar
   depois de drenar as prateleiras do lote, as prateleiras não voltam (o mesmo do Ajuste sem lote; só o estorno tem o desfazer).
 - **(252) A troca para o automático, a frase da outra peça e a peça com série, o que ficou de fora.** (1) A saída automática continua sem
@@ -23056,6 +23086,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(256) Nenhum clique foi dado.** O estorno foi provado pelas rotas reais (Movimentações v2, separação, entrega, estorno) e pelo serviço em
+`estornoAjusteDevolvePrateleira`, com o livro do estorno forçado a falhar (o desfazer) e o registro forçado a falhar. Vale 5 minutos: o
+roteiro da seção da 256 (o saldo por prateleira aparece no **Sai de** de uma Saída avulsa, que se cancela).
 
 **(255) Nenhum clique foi dado.** O projeto e o caminho da origem foram provados pela rota real e pelo serviço em
 `filaSeparacaoFiltros` (com e sem as tabelas de projeto e de OS); os filtros, a frase do sem resultado, a lista de coleta de todas, o
@@ -44210,12 +44244,68 @@ frase do sem resultado.
 - O formulário da requisição continua sem campo de projeto; a OS só digitada não traz projeto (**B1598**).
 - As escolhas ficam no navegador, não no usuário (**B1599**).
 
+## Etapa 256 — O estorno de um Ajuste devolve as peças às prateleiras de onde saíram (2026-11-20)
+
+O **Ajuste de saldo** que baixa o total sem dizer a prateleira tira as peças de outras prateleiras (primeiro o que não está separado numa
+requisição). Quando esse Ajuste era **estornado** — porque a contagem estava errada —, o total voltava certo, mas todas as peças apareciam na
+**posição padrão** do material, e a prateleira de onde elas tinham saído continuava vazia no sistema, cheia no galpão. Quem fosse buscar pela
+tela ia ao lugar errado, e uma transferência a partir daquela prateleira podia ser recusada (**C549**). Agora o Ajuste guarda de quais
+prateleiras tirou e quanto, e o **Estornar** devolve a essas mesmas prateleiras. Vale com e sem lote. Decisões do agente: **B1601** e **B1602**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Posição padrão *A* com 4 separadas numa requisição e *B* com 3; Ajuste do total para 4 (*A* 4, *B* 0); **Estornar** → *A* 7, *B* 0 | **Estornar** → *A* 4, *B* 3 (as 3 voltam a *B*); a entrega da requisição continua saindo de *A* |
+| Sem nada separado: *A* 30, *B* 20, padrão *P*; Ajuste para 5 (*A* 0, *B* 5); **Estornar** → *A* 0, *B* 5, *P* 45 | **Estornar** → *A* 30, *B* 20, *P* 0 |
+| O mesmo com o Ajuste de um lote (pela integração): o lote voltava todo na posição padrão | Volta às prateleiras do lote de onde saiu |
+| — | Com uma Entrada na posição padrão entre o Ajuste e o estorno: devolve só o que iria a mais para a padrão (a padrão não desce) |
+| Ajuste feito antes desta alteração; Ajuste com localização; Ajuste para cima; a recusa do estorno abaixo do separado | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; material *EAJ-256* sem lote nem série, posição padrão *A*; prateleira *B* no mesmo
+almoxarifado. Para ver quanto há em cada prateleira: **Movimentações → Saída** do material — o campo **Sai de** mostra cada prateleira com a
+quantidade (depois, cancele a Saída sem gravar).
+
+**1. O estorno devolve a quem perdeu (RN-256.01, .02).** **Entrada** de 4 sem destino (vai para *A*) e **Entrada** de 3 em *B*. Requisição de 4,
+aprovada, **Separar** escolhendo *A*. **Movimentações → Ajuste** do total para 4 → grava; o **Sai de** mostra *A* 4 e *B* 0. No histórico,
+**Estornar** esse Ajuste (motivo *contagem errada*) → grava; o total volta a 7 e o **Sai de** mostra **A 4 e B 3** (antes desta alteração:
+*A* 7 e *B* 0). **Entregar** a requisição → sai de *A*, *B* continua com 3.
+
+**2. Sem nada separado (RN-256.02).** Material com posição padrão *P*, **Entrada** de 30 em *A* e de 20 em *B*; Ajuste do total para 5 →
+*A* 0, *B* 5. **Estornar** → *A* 30, *B* 20, *P* 0.
+
+**3. Com movimento no meio (RN-256.03).** Material com padrão *P*, **Entrada** de 5 em *A* e de 3 em *B*; Ajuste para 2 → *A* 0, *B* 2.
+**Entrada** de 3 sem destino (vai para *P*). **Estornar** o Ajuste → o total volta a 8 (o de antes do Ajuste, como sempre) e as prateleiras
+ficam *A* 3, *B* 2, *P* 3: a posição padrão não perde as 3 que entraram; só o que iria a mais para ela volta a *A* (a primeira de onde o
+Ajuste tirou).
+
+**4. O que não muda (RN-256.04, .06).** Um Ajuste feito **antes** desta alteração, estornado agora → tudo na posição padrão, como antes. O
+Ajuste **com localização** (pela integração) e o Ajuste para cima estornam como sempre. A recusa do estorno que deixaria o disponível abaixo do
+separado continua a mesma.
+
+### O que esta etapa NÃO cobre
+
+- O Ajuste feito antes da alteração não tem o registro de onde tirou e estorna como antes (**D (256)**).
+- Com movimento no meio, a devolução pode ser parcial — a posição padrão nunca desce por causa dela (**B1601**, **D (256)**).
+- O estorno continua voltando o total ao valor de antes do Ajuste; dois Ajustes estornados fora de ordem dão o total do primeiro (anterior,
+  **D (256)**).
+- Não há tela nova: o que muda aparece no saldo por prateleira.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 256 entregue (2026-11-20):** **o estorno de um Ajuste devolve as peças às prateleiras de onde saíram** (**C549** resolvido; a
+  próxima tarefa do plano da 255). O Ajuste guarda de onde tirou; o estorno devolve, sem baixar a padrão (**B1601**, inverte a **B1597**);
+  a prateleira bloqueada recebe de volta (**B1602**). Commits `f4153785` (estimativa), `f178287b` (plano e Fase 2), `84f75167`, Fase 5 `a930c7be` e o
+  fechamento. **O que é seu:** as **B1601** e **B1602** (reversíveis); a limitação **(256)** em D e a verificação **(256)** em F. Sem
+  consulta antes do deploy (tabela nova, vazia; Ajuste antigo estorna como antes). **Próxima:** os itens 24 a 26 (esperam resposta) e o que
+  está no fim do plano da 256.
 
 - **Etapa 255 entregue (2026-11-20):** **a Fila de separação filtra por setor, projeto e localização** (a próxima tarefa do plano da 254;
   item *"Agrupamento por projeto / setor / localização"* da feature 05, que continua `[ ]` — é filtro, não agrupamento). O projeto vem da

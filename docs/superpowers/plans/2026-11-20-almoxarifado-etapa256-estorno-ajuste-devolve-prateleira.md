@@ -100,11 +100,63 @@ não estorna; nenhum `compensacao: true` estorna Ajuste; `registrarMovimentacaoS
 
 ## Tasks
 
-- [ ] **T1 (tronco, motor)** tabela + gravação na ida + devolução no estorno + desfazer. Teste novo
-  `estornoAjusteDevolvePrateleira.api.test.js` (RN-256.01..06, rota e serviço) e o *[documenta]* da 254 virando a prova (A 4, B 3).
-  Sabotagens com controle positivo.
-- [ ] **T2** integração — no T1: ajuste pela rota → entrega da requisição → estorno pela rota → linhas; e um cenário pelo serviço
-  (`registrarMovimentacao` + `cancelarMovimentacao`).
-- [ ] **T3** prova de primeiro boot (`CRM_DATA_DIR` vazio, `node index.js`, `no such table` = 0, duas vezes).
-- [ ] **T4** Fase 5 — revisor fresco com sonda executada.
-- [ ] **T5** fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T1 (tronco, motor)** — `84f75167`: tabela `ajuste_linhas_drenadas_almoxarifado` (schema), gravação na ida (um `INSERT` só, não-fatal),
+  devolução no estorno dentro do sync (`devolver`/`devolvidas`), desfazer pelo `compensarLinhasClaim`. `estornoAjusteDevolvePrateleira.api.test.js`
+  (17 no commit; 11 de 14 vermelhos no código de antes — os 3 verdes eram os cenários "como antes"). O *[documenta]* da 254 e o RN-253.14
+  declarado da 253 viraram a prova (*A* 4, *B* 3; *A* 5). **Sabotagens (11):** sem devolução, sem limite, sem pular a padrão, desfazer sem a
+  devolução, ida não grava, inventário grava, registro linha a linha, padrão negativa contada, falha do registro fatal, ordem invertida, sem
+  conferir a linha — cada uma derruba o seu cenário (lida a asserção). A S10 (sem conferir a linha) não derrubava nada na 1ª rodada: faltava
+  o cenário da linha que não existe mais (só alcançável apagando direto no banco) — escrito.
+- [x] **T2** integração — no T1: pela rota (v2 → separação → estorno → entrega) e pelo serviço (`registrarMovimentacao` + `cancelarMovimentacao`).
+- [x] **T3** prova de primeiro boot — `CRM_DATA_DIR` vazio, `node index.js` duas vezes: `no such table|no column named` = 0 e 0, *Schema
+  almoxarifado v3 inicializado* nas duas; a tabela e o índice criados.
+- [x] **T4** Fase 5 — `a930c7be`. Um revisor fresco, adversarial, sondas executadas (dois ajustes encadeados com troca da padrão; fracionário;
+  material que permite negativo com saída no meio; falha injetada na 2ª devolução, no `movimento_estorno_id` e na escrita da padrão — estado
+  exato nas três). **Nenhum defeito reproduzido no código.** 1 menor real (teste): o teste passava inteiro com o estorno lendo o registro de
+  todos os movimentos → cenário dos dois ajustes encadeados (sabotagem S12 derruba). +2 lacunas (o físico no cenário do serviço; o estorno da
+  transferência depois). 1 ruído (o `SET` absoluto com saída no meio, já declarado).
+- [x] **T5** fechamento (fechar-etapa sem 7½ e 8).
+
+## Divergências do plano
+
+- A gravação linha a linha com `DELETE` no catch (como saiu do primeiro rascunho do T1) virou um `INSERT` só (Fase 2, achado 2).
+- O limite com a padrão negativa (Fase 2, achado 3) não estava no plano.
+- O plano previa o conserto só pela lente do Ajuste sem lote; o com lote (Etapa 253) tinha o mesmo defeito na mesma função e entrou (B1601).
+- **CLAUDE.md:** nenhuma linha ficou errada — a gravação e a leitura do registro ficam dentro das seções que a seção das travas já descreve.
+
+## Verificação (medida sobre o código final, `a930c7be`)
+
+- `npm run test:api` (rodado **sozinho**, `NODE_OPTIONS=--max-old-space-size=4096`, sem sabotagem rodando): **653/653 arquivos de teste OK**
+  (o mais lento: `entregaGuardaSemLote`, 81,6 s).
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0 (sobre `84f75167`; a Fase 5 só mexeu no teste novo,
+  que roda dentro do `test:api`: `estornoAjusteDevolvePrateleira` 19/19).
+- Jest da tela (`--maxWorkers=2`): **240 suítes, 3248 testes**, verdes; `CI=true react-scripts build`: *Compiled successfully* (nenhum arquivo da
+  tela mudou).
+- Os 62 arquivos de `tests/api` que citam `AJUSTE`, rodados um a um depois do T1: nenhum vermelho além dos dois declarados (atualizados).
+- Primeiro boot: 0 `no such table` em duas rodadas. Nenhum clique no navegador (F (256)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2: o `INSERT` só e a padrão negativa; Fase 5: os testes).
+- Achados: Fase 2 — 4 menores reais, 3 ruídos; Fase 5 — 1 menor real (teste) + 2 lacunas de teste, 1 ruído; nenhum defeito no código.
+- Paralelismo: o revisor da Fase 2 rodou enquanto o T1 era escrito (sondas numa cópia, sem retrabalho); um revisor na Fase 5.
+- Defeito que escapou: (preencher na etapa seguinte). Da 255: nenhum apontado.
+
+## Próxima tarefa detalhada
+
+1. **Itens 24, 25 e 26 da estimativa de 18/11 — continuam esperando resposta da empresa.** Caminho reversível de cada um no plano da 253
+   ("Próxima tarefa detalhada"). **Não comece sem a resposta.**
+2. **Sem resposta, o próximo do almoxarifado: o C544 — o estorno de uma Saída que baixou de várias prateleiras devolve tudo numa só** (a
+   origem do livro ou a posição padrão, mesmo bloqueada). É a mesma família do C549 e reusa o registro desta etapa. **Medido (20/11):** a ida
+   já tem as linhas baixadas — `saldoLinhasSaidaParaReverter` (`stockService.js`, ~2529 `claimSaldoDoLote` com lote, ~2548
+   `claimSaldoSemLote` sem lote, ~2556 a linha única do material que permite negativo); o estorno (`cancelarMovimentacao`, ramo SAIDA, ~3700)
+   faz `loc = mov.localizacao_origem_id || material.localizacao_padrao_id` e `ajustarSaldoExistente` numa chave só (o comentário "o
+   endereçamento pode consolidar" — a pendência declarada da spec 10). Fazer: gravar as linhas baixadas da SAIDA (e da entrega/consumo que
+   passam pelo motor) na mesma tabela, depois do livro, um `INSERT` só, não-fatal; o estorno devolver a elas, por id, com o rastreador do
+   desfazer (`compensarLinhasClaim`, antes do total). Pontos de atenção: as guardas de série da saída (a série volta à prateleira dela — C545);
+   a devolução que cita a saída (`devolucaoViva.js`) não mexe em linhas; **renomear a tabela antes** para um nome genérico (ex.:
+   `movimentacao_linhas_baixadas_almoxarifado`) só se ainda não houver deploy — senão, tabela nova ou coluna `tipo`. Motor: Fase 2 e Fase 5
+   completas, ~1h30. Teste molde: `estornoAjusteDevolvePrateleira.api.test.js`.
+3. Outras 🟡 medidas (planos da 254 e 255): o agrupamento da Fila em seções (B1600, se pedirem); a dupla aprovação do Ajuste (06, espera
+   decisão); lista de separação como entidade e kits (05, fora da estimativa).
+- **O que já está pronto e não reabre:** o registro das linhas drenadas do AJUSTE e a devolução no estorno (com e sem lote, limite, desfazer).

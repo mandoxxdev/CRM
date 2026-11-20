@@ -5,14 +5,20 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 255 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 256 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 255 fechada — 2026-11-20.** **A Fila de separação filtra por setor, projeto e localização.** No
+> **O desenvolvimento parou aqui: Etapa 256 fechada — 2026-11-20.** **O estorno de um Ajuste devolve as peças às prateleiras de onde
+> saíram.** O Ajuste do total que tira de outras prateleiras guarda de onde tirou, e o **Estornar** devolve a elas (não mais tudo na posição
+> padrão), com e sem lote, sem baixar a posição padrão para isso. Ajuste feito antes da alteração estorna como antes. **Sem consulta antes do
+> deploy.** **Nenhum clique foi dado** (roteiro na seção da 256). **Onde parou, exatamente:** a **256 está fechada**; os itens 24 a 26 da
+> estimativa de 18/11 **esperam resposta**; sem ela, a próxima está no fim do plano da 256.
+>
+> *(Antes:)* **Etapa 255 fechada — 2026-11-20.** **A Fila de separação filtra por setor, projeto e localização.** No
 > topo da Fila, três filtros escondem o que não é do setor, do projeto (o da requisição ou o da OS cadastrada) ou da localização escolhida
 > (com tudo o que está abaixo dela), na mesma ordem de urgência; o cartão mostra o projeto; a lista de coleta de todas imprime só o que está
 > na tela; e as escolhas ficam guardadas no navegador. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da
@@ -7418,6 +7424,35 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 256 — O estorno de um Ajuste devolve as peças às prateleiras de onde saíram (ENTREGUE — 2026-11-20)
+
+**Em uma frase:** o Ajuste do total que tira peças de outras prateleiras passa a guardar de onde tirou, e o **Estornar** devolve as peças a
+essas prateleiras — antes, todas apareciam na posição padrão do material.
+
+| Antes | Agora |
+|---|---|
+| Padrão *A* com 4 separadas, *B* 3; Ajuste para 4 (*A* 4, *B* 0); **Estornar** → *A* 7, *B* 0 | **Estornar** → *A* 4, *B* 3 |
+| Sem nada separado: *A* 30, *B* 20 (padrão *P*); Ajuste para 5; **Estornar** → *P* 45 | *A* 30, *B* 20, *P* 0 |
+| Entrada na padrão entre o Ajuste e o estorno | A padrão não perde o que entrou; só o que iria a mais para ela volta às prateleiras |
+| Ajuste feito antes desta alteração; Ajuste com localização; Ajuste para cima | **Igual** |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *EAJ-256* sem lote nem série, com posição padrão *A*.
+2. **Movimentações → Entrada**: 4 sem destino (vão para *A*); 3 em *B*.
+3. Requisição de 4 *EAJ-256*, aprovada; **Iniciar Separação** com **Sai de** = *A*, 4 → confirme.
+4. **Movimentações → Ajuste** do total para 4 → **Confira:** *"Movimentação registrada!"*. Comece uma **Saída** do material: o **Sai de**
+   mostra *A* com 4 e *B* com 0. Cancele a Saída.
+5. No histórico de **Movimentações**, **Estornar** o Ajuste (motivo *contagem errada*) → confirme.
+6. Comece de novo uma **Saída**: **Confira:** o **Sai de** mostra *A* com 4 e **B com 3** (antes desta alteração: *A* 7 e *B* 0). Cancele.
+7. Entregue a requisição → **Confira:** sai de *A* sem recusa; *B* continua com 3.
+8. (Opcional, o limite) Outro material com padrão *P*: Entrada de 5 em *A* e 3 em *B*; Ajuste para 2; Entrada de 3 sem destino; **Estornar**
+   o Ajuste → **Confira:** *A* 3, *B* 2, *P* 3.
+
+**O que esta etapa NÃO cobre:** o Ajuste feito antes da alteração estorna como antes (tudo na posição padrão); com movimento no meio, a
+devolução é parcial (a posição padrão nunca desce por causa dela); o estorno continua voltando o total ao valor de antes do Ajuste; não há
+tela nova.
+
 ## Etapa 255 — A Fila de separação filtra por setor, projeto e localização (ENTREGUE — 2026-11-20)
 
 **O que mudou, em uma frase:** a Fila de separação ganhou três filtros — setor, projeto e localização — e o cartão de cada requisição mostra
@@ -7478,6 +7513,7 @@ retalho ou da remessa chegava ao Compras sem NCM, custo nem fornecedor, sem ning
    *A* com 4 e *B* com 0 (antes: *A* 1 e *B* 3). Cancele a Saída.
 5. Entregue a requisição → **Confira:** sai sem recusa.
 6. (Opcional) Estorne o Ajuste antes da entrega: o total volta a 7, com 7 em *A* e 0 em *B* — o estorno devolve na posição padrão (C549).
+   *(Desde a Etapa 256: 4 em *A* e 3 em *B* — o estorno devolve a *B*; roteiro na seção da 256.)*
 
 **Roteiro — cadastro a completar (≈5 min):**
 
