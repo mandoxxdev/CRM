@@ -11,6 +11,10 @@ import {
 import {
   gerarListaColetaPDF, podeImprimirListaColeta, requisicoesParaImprimir, nomeArquivoListaColeta, nomeArquivoListaColetaFila,
 } from '../../utils/listaColetaPdf';
+// Etapa 255 (RN-255.03..09): os filtros por setor, projeto e localização — só escondem, na ordem do servidor.
+import {
+  TODOS, FILTROS_VAZIOS, passaNosFiltros, filtroAtivo, opcoesDosFiltros, lerFiltrosGuardados, guardarFiltros, rotuloProjeto,
+} from '../../utils/filtrosFilaSeparacao';
 import './Almoxarifado.css';
 
 /**
@@ -151,6 +155,11 @@ const LinhaFila = ({ req, onAbrir, onImprimir }) => {
           {solicitante && (
             <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>{solicitante}</div>
           )}
+          {req.projeto_id != null && (
+            <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginTop: 2 }} data-testid={`fila-projeto-${req.id}`}>
+              {req.projeto_nome ? `Projeto: ${req.projeto_nome}` : rotuloProjeto(req.projeto_id, null)}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
             {(req.etapas || []).map((etapa) => (
               <span
@@ -228,9 +237,25 @@ const LinhaFila = ({ req, onAbrir, onImprimir }) => {
   );
 };
 
+// Etapa 255 (RN-255.03): a barra dos filtros — um <select> por filtro, opções da fila carregada.
+const SeletorFiltro = ({ rotulo, valor, opcoes, onChange, testid }) => (
+  <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.85rem', minWidth: 180, flex: '1 1 180px' }}>
+    {rotulo}
+    <select value={valor} onChange={(e) => onChange(e.target.value)} data-testid={testid} className="almox-form-select">
+      <option value={TODOS}>Todos</option>
+      {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+    </select>
+  </label>
+);
+
 const FilaSeparacao = () => {
   const navigate = useNavigate();
   const [fila, setFila] = useState([]);
+  // Etapa 255 (RN-255.09): as escolhas sobrevivem ao Atualizar (estado) e ao Abrir e voltar (navegador, em try/catch).
+  const [filtros, setFiltros] = useState(lerFiltrosGuardados);
+  useEffect(() => { guardarFiltros(filtros); }, [filtros]);
+  const mudarFiltro = (campo) => (valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
+  const limparFiltros = () => setFiltros({ ...FILTROS_VAZIOS });
   const [loading, setLoading] = useState(true);
   const [semPermissao, setSemPermissao] = useState(null); // null | { detalhe }
   const [erro, setErro] = useState(null);
@@ -269,15 +294,19 @@ const FilaSeparacao = () => {
   const imprimir = (req) => gerarListaColetaPDF({
     requisicoes: [req], carregadaEm, nomeArquivo: nomeArquivoListaColeta(req.numero || req.id),
   });
-  const imprimiveis = requisicoesParaImprimir(fila);
+  // Etapa 255 (RN-255.05/07): o que passa nos filtros, na ordem do servidor; a lista de coleta de todas imprime só o visível.
+  const visiveis = fila.filter((r) => passaNosFiltros(r, filtros));
+  const opcoes = opcoesDosFiltros(fila, filtros);
+  const comFiltro = filtroAtivo(filtros);
+  const imprimiveis = requisicoesParaImprimir(visiveis);
   const imprimirTodas = () => {
     if (!imprimiveis.length) return;
     gerarListaColetaPDF({ requisicoes: imprimiveis, carregadaEm, nomeArquivo: nomeArquivoListaColetaFila(carregadaEm) });
   };
 
   // Filtra preservando a ordem do servidor dentro de cada grupo.
-  const acionaveis = fila.filter((r) => r.acionavel !== false);
-  const aguardando = fila.filter((r) => r.acionavel === false);
+  const acionaveis = visiveis.filter((r) => r.acionavel !== false);
+  const aguardando = visiveis.filter((r) => r.acionavel === false);
 
   return (
     <div className="almox-page">
@@ -320,6 +349,34 @@ const FilaSeparacao = () => {
         </div>
       ) : (
         <>
+          <div
+            data-testid="fila-filtros"
+            style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}
+          >
+            <SeletorFiltro rotulo="Setor" valor={filtros.setor} opcoes={opcoes.setor} onChange={mudarFiltro('setor')} testid="fila-filtro-setor" />
+            <SeletorFiltro
+              rotulo="Projeto" valor={filtros.projeto} opcoes={opcoes.projeto} onChange={mudarFiltro('projeto')} testid="fila-filtro-projeto"
+            />
+            <SeletorFiltro
+              rotulo="Localização" valor={filtros.local} opcoes={opcoes.local} onChange={mudarFiltro('local')} testid="fila-filtro-local"
+            />
+            {comFiltro && (
+              <button type="button" className="btn-almox-secondary" onClick={limparFiltros} data-testid="fila-limpar-filtros">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+          {comFiltro && visiveis.length > 0 && (
+            <p data-testid="fila-contagem" style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', margin: '0 0 10px' }}>
+              {`Mostrando ${visiveis.length} de ${fila.length} requisições.`}
+            </p>
+          )}
+          {visiveis.length === 0 && (
+            <div className="almox-empty" data-testid="fila-filtro-vazio">
+              <FiInbox size={28} />
+              <p>Nenhuma requisição da fila com estes filtros.</p>
+            </div>
+          )}
           {acionaveis.length > 0 && (
             <ul style={{ padding: 0, margin: 0 }} data-testid="fila-acionaveis">
               {acionaveis.map((r) => <LinhaFila key={r.id} req={r} onAbrir={abrir} onImprimir={imprimir} />)}
