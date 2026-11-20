@@ -1,0 +1,9 @@
+*Planejamento — excluir uma requisição devolve as peças às prateleiras de onde saíram*
+_20/11/2026_
+
+*1. Excluir uma requisição já entregue devolve cada peça à prateleira de onde ela saiu*
+Hoje, quando uma requisição entregue é excluída, todo o material volta para uma prateleira só (a de origem da entrega ou a posição padrão do material), mesmo que a entrega tenha tirado peças de várias prateleiras: por exemplo, a entrega de 6 tira 3 da prateleira A e 3 da B, e a exclusão põe as 6 na A. Com a alteração, cada prateleira recebe de volta o que saiu dela (A 3, B 3). Se a prateleira não aceita mais o material (inativa, bloqueada ou de outro tipo), a parte dela volta para onde volta hoje. Entregas antigas, feitas antes desta alteração, continuam como hoje.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
