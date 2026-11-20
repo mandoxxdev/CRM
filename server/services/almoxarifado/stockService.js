@@ -646,21 +646,23 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
           LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
           WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > 0 AND s.id != ?
           ORDER BY COALESCE(lc.bloqueada, 0) ASC, s.quantidade DESC, s.id`, [materialId, loteId, saldo.id])
-      : await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+      : await dbAll(db, `SELECT id, quantidade, localizacao_id FROM estoque_saldo_almoxarifado
           WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
           ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
     // Etapa 253 (Fase 5, achado 1): com lote, duas passadas — primeiro so a parte de cada endereco que NAO esta guardada pela caixa viva de
     // uma requisicao (`parteGuardadaDeOutrasPorPar`, todas as requisicoes), depois o resto. Numa passada so, a maior linha (a da caixa
-    // separada) era drenada e a entrega da requisicao era recusada com "a origem da separacao nao serve mais". Sem lote, a passada unica de
-    // sempre (Etapa 51; o mesmo defeito ali e anterior — C548).
+    // separada) era drenada e a entrega da requisicao era recusada com "a origem da separacao nao serve mais".
+    // Etapa 254 (C548, RN-254.01..03): sem lote tambem — o par e (endereco, sem lote), chave "<loc>|" da mesma regua; a ordem dentro de
+    // cada passada e a de sempre (Etapa 51). O separado COM lote num endereco nao protege a linha SEM lote dele (chave diferente).
     let guardadoPorPar = null;
-    if (loteId && positivas.length) {
+    if (positivas.length) {
       // eslint-disable-next-line global-require
       guardadoPorPar = await require('./requisitionService').parteGuardadaDeOutrasPorPar(db, materialId, null);
     }
+    const chaveLote = loteId ? String(Number(loteId)) : '';
     const restam = positivas.map((p) => ({ ...p, resta: Number(p.quantidade) }));
     const passadas = guardadoPorPar
-      ? [(p) => Math.max(0, p.resta - (p.localizacao_id === null ? 0 : (guardadoPorPar.get(`${Number(p.localizacao_id)}|${Number(loteId)}`) || 0))),
+      ? [(p) => Math.max(0, p.resta - (p.localizacao_id === null ? 0 : (guardadoPorPar.get(`${Number(p.localizacao_id)}|${chaveLote}`) || 0))),
         (p) => p.resta]
       : [(p) => p.resta];
     for (const podeTirar of passadas) {
