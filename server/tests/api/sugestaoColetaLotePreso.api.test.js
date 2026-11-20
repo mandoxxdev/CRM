@@ -157,6 +157,31 @@ process.on('exit', (code) => {
     assert.strictEqual(pegar(linha), 'Z250-02|L2|1|true', JSON.stringify(linha.pegar_em));
   });
 
+  // ---------------------------------------------------------------- Fase 5 (assercoes que faltavam)
+  await test('[RN-250.10, Fase 5] lote preso so por inspecao (3 de 4 em inspecao no L1): pedido de 2 -> L2; pedido de 1 -> L1 · 1, e a separacao aceita', async () => {
+    const { m, L1 } = await cenario();
+    const rec = (await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero) VALUES (?)', [`REC-250-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+      quantidade_recebida, lote_id, quantidade_em_inspecao) VALUES (?, ?, 3, 3, ?, 3)`, [rec, m.id, L1]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 3 WHERE id = ?', [m.id]);
+    const dois = await req(m, 2);
+    assert.strictEqual(pegar(itemDaFila(await daFila(dois.R), dois.itens[0])), 'Z250-02|L2|2|true');
+    const um = await req(m, 1);
+    assert.strictEqual(pegar(itemDaFila(await daFila(um.R), um.itens[0])), 'Z250-01|L1|1|true');
+    await requisitionService.separarRequisicao(db, um.R, [{ item_id: um.itens[0], quantidade_separada: 1, localizacao_origem_id: P01.id, lote_id: L1 }], ALMOX);
+  });
+
+  await test('[RN-250.10 + RN-188.01a, Fase 5] item com 1 ja separado de (Z250-01, L1) e depois 2 bloqueadas em L1: a dica e so a planejada, limitada pelo lote (1 de 2, PLANEJADA_NAO_COBRE), e a separacao aceita 1', async () => {
+    const { m, L1 } = await cenario();
+    const { R, itens } = await req(m, 3);
+    await requisitionService.separarRequisicao(db, R, [{ item_id: itens[0], quantidade_separada: 1, localizacao_origem_id: P01.id, lote_id: L1 }], ALMOX);
+    await bloquear(m, 2, L1);
+    const linha = itemDaFila(await daFila(R), itens[0]);
+    assert.strictEqual(pegar(linha), 'Z250-01|L1|1|false', JSON.stringify(linha.pegar_em));
+    assert.strictEqual(linha.pegar_em_aviso, 'PLANEJADA_NAO_COBRE');
+    await requisitionService.separarRequisicao(db, R, [{ item_id: itens[0], quantidade_separada: 1, localizacao_origem_id: P01.id, lote_id: L1 }], ALMOX);
+  });
+
   // ---------------------------------------------------------------- RN-250.14
   await test('[RN-250.14] sem peca presa nada muda: o bloqueio e do OUTRO lote (L2) -> requisicao de 4 -> Z250-01/L1 · 4 (o fisico inteiro do par)', async () => {
     const { m, L2 } = await cenario();
