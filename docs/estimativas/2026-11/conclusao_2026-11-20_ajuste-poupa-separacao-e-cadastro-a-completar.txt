@@ -1,0 +1,8 @@
+*Concluído — ajuste de saldo que respeita a peça separada e material da sobra com cadastro a completar*
+_20/11/2026_
+
+1. Ajuste de saldo sem lote respeita a peça separada para uma requisição — estimado 45 min · realizado 30 min
+2. Material da sobra e da remessa: aviso "cadastro a completar" no Compras — estimado 1h30 · realizado 1h
+
+*Total: estimado 2h15 · realizado 1h30*
+_O item 2 dependia de uma resposta: foi feito pelo caminho que pode ser desfeito (o material continua sendo criado na sobra e na remessa, e chega ao Compras marcado até o cadastro ser salvo)._

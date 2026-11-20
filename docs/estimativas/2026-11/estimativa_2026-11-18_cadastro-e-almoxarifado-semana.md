@@ -42,7 +42,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 24 | Tirar o campo Aplicação — **depende de resposta** | 30 min | tirar um campo | 30 min | fila do Compras, item 7 | `MaterialAlmoxarifadoForm.js:934-938`; `camposLidos.js:34` fica (a coluna `aplicacao` continua) | — | — | — |
 | 25 | Nº de série + nº de controle (etiqueta) obrigatórios — **depende de resposta** | 1h30 | cadastro + regra de obrigatório (legado editável) | 1h30 | pedido 12/11, img4 (não salva) | `FerramentasAlmoxarifado.js:296,306,1048` (`codigo_patrimonio` já obrigatório; `numero_serie` opcional) | — | — | — |
 | 26 | Especificações/Observações — **depende de resposta** | 1h | cadastro | 1h | pedido 12/11, img6 | `MaterialAlmoxarifadoForm.js:939-948`; colunas `especificacoes`, `observacoes` ficam | — | — | — |
-| 27 | Material da sobra/remessa: aviso "cadastro a completar" no Compras — **depende de resposta** | 1h30 | cadastro no Compras + marca na criação | 1h30 | B74 (Compras), Etapa 193 | `SobrasAlmoxarifado.js:320`, `RemessasTerceirosAlmoxarifado.js:314` (POST `/almoxarifado/materiais`, formato restrito) | — | — | — |
+| 27 | Material da sobra/remessa: aviso "cadastro a completar" no Compras — **depende de resposta; feito pelo caminho reversível** | 1h30 | cadastro no Compras + marca na criação | 1h30 | B74 (Compras), Etapa 254 (`2026-11-20-almoxarifado-etapa254-ajuste-poupa-caixa-e-cadastro-a-completar.md`) | `SobrasAlmoxarifado.js:320`, `RemessasTerceirosAlmoxarifado.js:314` (POST `/almoxarifado/materiais`, formato restrito) — **confirmado na Fase 0 da 254** (nada marcava o material; a coluna não existia) | 0,8 h (rateio da Etapa 254: 1,2 h medida no horas.js 20/11, grupo E254 (assunto com "Etapa 254" ou "C548") — os commits citam "item 27", não "cadastro a completar" em todos —, pelos 45 min + 1h30 estimados) | 1h | `67194649`, `9fa64070`, `76646464`, `e49988cc` |
 
 **Correção (18/11, Etapa 238):** a linha 1 dizia "falta trazer `is_epi`" — **estava errado**: a lista de tipos já trazia `is_epi` (`SELECT *`); só o hook
 `useCategoriasMaterial` o descartava. Nenhuma mudança de servidor.
@@ -107,6 +107,11 @@ veio das linhas que a saída já debitava, a frase reaproveitou a conta da entre
 separação sem lote. A revisão do plano achou seis casos (o endereço da série que fica velho depois de transferir, as séries trocadas entre
 as saídas, a frase com o separado de outra requisição, a troca à mão pelo lote, a linha negativa) e a revisão final mais um (a frase com o
 separado de outro item da mesma requisição) — corrigidos com teste. Medido 0,9 h para os três → 30 min + 30 min + 30 min.
+
+**Etapa 254 (item 27, 20/11):** não revisado. Feito sem a resposta da compradora, pelo caminho reversível abaixo (B1593 a B1595; B92 do
+Compras). 30 min abaixo do estimado: a marca reaproveitou a porta e o formulário que já separavam Compras e Almoxarifado. A revisão final
+achou o salvar só com os campos de controle tirando a marca, corrigido com teste. Medido no pacote com o C548
+(`estimativa_2026-11-20_almoxarifado-ajuste-sem-lote-poupa-separacao.md`): 1,2 h → 30 min + 1h.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
