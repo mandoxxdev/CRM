@@ -283,9 +283,11 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await resumo(m), { fisico: 0, soma_lotes: 0, sem_lote_atribuido: 0 });
     await requisitionService.excluirRequisicao(db, R, { ...USERS.ADMIN }, 'e197i', null);
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 2], ['SAIDA', null, 'L1', 1], ['SAIDA', null, 'L2', 3],
-      ['ENTRADA', null, 'L1', 2], ['ENTRADA', null, 'L1', 1], ['ENTRADA', null, 'L2', 3]]);
-    assert.deepStrictEqual(await retrato(m), { linhas: ['WP-01/L1=3', 'WP-01/L2=3'], fisico: 6 },
-      'o lote volta inteiro; o endereco da saida automatica e a padrao (D (51))');
+      ['ENTRADA', 'WB-01', 'L1', 2], ['ENTRADA', 'WB-01', 'L1', 1], ['ENTRADA', null, 'L2', 3]]);
+    // Etapa 259 (RN-259.01): era 'WP-01/L1=3' — a ENTRADA da exclusao ia para a padrao (D (51)). Agora cada saida volta as linhas que
+    // baixou (o registro da 257): o L1 volta a WB-01, de onde saiu; a linha da padrao segue sem destino no livro, como antes.
+    assert.deepStrictEqual(await retrato(m), { linhas: ['WB-01/L1=3', 'WP-01/L2=3'], fisico: 6 },
+      'o lote volta inteiro, ao endereco de onde saiu (Etapa 259)');
     assert.deepStrictEqual(await resumo(m), { fisico: 6, soma_lotes: 6, sem_lote_atribuido: 0 });
     await extratoBate(m);
   });

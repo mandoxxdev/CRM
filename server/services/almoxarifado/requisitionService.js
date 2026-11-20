@@ -3368,6 +3368,74 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
  * `alertService` é aceito e ignorado (Etapa 3, Task 3) — mesmo motivo de entregarRequisicao:
  * stockService.registrarMovimentacao já dispara a checagem de alerta internamente.
  */
+/**
+ * Etapa 259 (D (257) 2, RN-259.01..05, B1607/B1608) — as fatias da exclusao de UMA saida da entrega, pelas linhas que ela baixou.
+ * Antes a exclusao creditava a saida inteira numa ENTRADA so (a origem do livro, se aceita, ou a padrao): padrao A 3, B 5, entrega de 6
+ * (A 0, B 2), excluir -> A 6, B 2. Desde a 257 a saida grava as linhas baixadas (`ajuste_linhas_drenadas_almoxarifado`); aqui cada linha
+ * recebe de volta o que saiu dela (na ordem do claim, ate o liquido — a devolucao parcial tira das ultimas, B1608). Linha que nao existe
+ * mais, de outro material ou lote, sem endereco, ou cujo endereco nao aceita mais o material (inativo, bloqueado, tipo) -> a parte dela vai
+ * para o destino de hoje (`destinoDeHoje`: a origem do livro se aceita, senao a padrao — B1607; a ENTRADA confere endereco, o estorno pelo
+ * livro nao, por isso nao e a B1604). Sem registro (saida anterior a 257, ou o registro falhou): uma fatia, como antes. Fatias com o mesmo
+ * endereco final viram uma (o destino explicito vence o `undefined` da padrao). Com serie: cada fatia leva as suas — primeiro as de
+ * endereco gravado igual ao da fatia, depois as demais na ordem; quantidade nao inteira -> uma fatia so, como antes. So le (o credito e a
+ * ENTRADA do chamador); roda dentro das duas travas da exclusao.
+ */
+async function fatiasDaSaidaPorLinha(db, material, saida, liquido, destinoDeHoje, series) {
+  const comoAntes = [{ quantidade: liquido, destino: destinoDeHoje, series }];
+  const baixadas = await dbAll(db, `SELECT d.saldo_id, SUM(d.quantidade) AS q, MIN(d.id) AS ordem,
+      s.id AS linha, s.material_id, s.lote_id, s.localizacao_id
+    FROM ajuste_linhas_drenadas_almoxarifado d LEFT JOIN estoque_saldo_almoxarifado s ON s.id = d.saldo_id
+    WHERE d.movimentacao_id = ? GROUP BY d.saldo_id ORDER BY ordem`, [saida.id]);
+  if (!baixadas.length) return comoAntes;
+  const chave = (destino) => Number(stockService.resolveLocalizacaoEntrada(material, destino)) || 0;
+  const porChave = new Map();
+  const somar = (destino, q) => {
+    const k = chave(destino);
+    const f = porChave.get(k);
+    if (f) {
+      f.quantidade = Q.qtd(f.quantidade + q);
+      if (destino && !f.destino) f.destino = destino;
+    } else porChave.set(k, { quantidade: Q.qtd(q), destino });
+  };
+  let resto = Q.qtd(liquido);
+  for (const b of baixadas) {
+    const q = Q.qtd(Math.min(Number(b.q) || 0, resto));
+    if (!(q > Q.QTD_FOLGA)) continue;
+    let destino = destinoDeHoje;
+    if (b.linha != null && Number(b.material_id) === Number(material.id) && (b.lote_id || null) === (saida.lote_id || null)
+      && b.localizacao_id != null) {
+      // eslint-disable-next-line no-await-in-loop
+      const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [b.localizacao_id]);
+      // a linha da padrao vai como `undefined` (o motor resolve a padrao): o livro da ENTRADA fica como antes (destino nulo)
+      if (loc && Number(loc.ativo) === 1 && !stockService.motivoRecusaEndereco(loc, material, 'destino')) {
+        destino = Number(b.localizacao_id) === Number(material.localizacao_padrao_id) ? undefined : Number(b.localizacao_id);
+      }
+    }
+    somar(destino, q);
+    resto = Q.qtd(resto - q);
+  }
+  if (resto > Q.QTD_FOLGA) somar(destinoDeHoje, resto);
+  const fatias = [...porChave.entries()].map(([k, f]) => ({ ...f, k }));
+  if (!series) return fatias.map(({ quantidade, destino }) => ({ quantidade, destino }));
+  if (fatias.some((f) => Math.abs(f.quantidade - Math.round(f.quantidade)) > Q.QTD_FOLGA)) return comoAntes;
+  const ender = await dbAll(db, `SELECT numero, localizacao_id FROM series_almoxarifado
+    WHERE material_id = ? AND numero IN (${series.map(() => '?').join(',')})`, [material.id, ...series]);
+  const locDe = new Map(ender.map((x) => [x.numero, Number(x.localizacao_id) || 0]));
+  const livres = [...series].sort();
+  for (const f of fatias) f.series = [];
+  for (const f of fatias) {
+    for (const n of [...livres]) {
+      if (f.series.length >= Math.round(f.quantidade)) break;
+      if (locDe.get(n) === f.k) { f.series.push(n); livres.splice(livres.indexOf(n), 1); }
+    }
+  }
+  for (const f of fatias) {
+    while (f.series.length < Math.round(f.quantidade) && livres.length) f.series.push(livres.shift());
+  }
+  if (livres.length || fatias.some((f) => f.series.length !== Math.round(f.quantidade))) return comoAntes;
+  return fatias.map(({ quantidade, destino, series: s }) => ({ quantidade, destino, series: s }));
+}
+
 // Etapa 120 (Fase 5, revisor 2; B781): tambem sob a trava por MATERIAL dos itens (`comTravaDaRequisicao`), na ordem da
 // separacao e da entrega (requisicao -> material). Ate a 120 a exclusao validava as series da entrega (a guarda da 116, a da
 // C251) FORA da trava do material e so a ENTRADA do estorno entrava nela (pelo motor): uma Entrada que reativava as series e o
@@ -3484,7 +3552,12 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
           // eslint-disable-next-line no-await-in-loop
           await recusaSeVoltaram();
         }
-        partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series, os_id: g.os_id || undefined });
+        // eslint-disable-next-line no-await-in-loop
+        const fatias = await fatiasDaSaidaPorLinha(db, material, g, liquido, destino, series);
+        for (const f of fatias) {
+          partes.push({ material, nome, quantidade: f.quantidade, destino: f.destino, lote_id: g.lote_id || undefined, series: f.series,
+            os_id: g.os_id || undefined });
+        }
       }
     } else {
       // Livro que não soma o entregue (dado antigo): o estorno de antes — líquido do que já foi

@@ -166,9 +166,11 @@ process.on('exit', (code) => {
     // Etapa 197: era `antes` (as saidas sem lote voltavam a linha sem lote da padrao, que zerava). Agora cada saida volta ao LOTE dela
     // (B232), mas a automatica nao tem endereco no livro e a ENTRADA vai para a padrao (D (51), declarado): L1 volta em YP-01, nao em
     // YB-01 — o lote certo, o endereco nao. No mundo com a feature (acima) L1 saiu estrita de YB-01 e volta la.
+    // Etapa 259 (RN-259.01): a frase acima valia ate a 258 (era 'YP-01/L1=3'). Agora a exclusao devolve as linhas que cada saida baixou
+    // (o registro da 257): o L1 volta a YB-01 — o lote e o endereco certos.
     assert.deepStrictEqual(antes, { linhas: ['YB-01/L1=3', 'YP-01/L2=3'], fisico: 6 });
-    assert.deepStrictEqual(await retrato(m), { linhas: ['YP-01/L1=3', 'YP-01/L2=3'], fisico: 6 },
-      'a exclusao devolve por saida: o lote volta, o endereco da automatica e a padrao');
+    assert.deepStrictEqual(await retrato(m), antes,
+      'a exclusao devolve por saida: o lote e o endereco de onde a automatica tirou (Etapa 259)');
   });
 
   // ── Cenario 2 (Fase 2 item 4: requisicao de 7) — sem lote, A 3 + B 3 escolhido de proposito ────────────────────────────────────

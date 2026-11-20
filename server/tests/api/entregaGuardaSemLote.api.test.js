@@ -323,8 +323,11 @@ process.on('exit', (code) => {
     await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]);
     await excluir(R);
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 3], ['ENTRADA', null, null, 3]], 'a ENTRADA sem endereco no livro: o motor credita na padrao');
-    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-B/-=2', 'GZ-P/-=3'], fisico: 5 });
+    // Etapa 259 (RN-259.01): ate a 258 a ENTRADA ia sem endereco e o motor creditava na padrao P (GZ-P 3). Agora a exclusao devolve a
+    // linha que a SAIDA baixou (o registro da 257): GZ-A, de onde saiu. A SAIDA continua sem endereco (o que este controle distingue).
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 3], ['ENTRADA', 'GZ-A', null, 3]], 'a ENTRADA volta a A, de onde a SAIDA tirou');
+    assert.deepStrictEqual((await retrato(m)).linhas.filter((l) => l !== 'GZ-P/-=0'), ['GZ-A/-=3', 'GZ-B/-=2']);
+    assert.strictEqual((await retrato(m)).fisico, 5);
   });
 
   // ── RN-207.08: sorteio com invariantes (o fuzz da 196/197/206, modo G do revisor da 206) ────────────────────────────────────────
