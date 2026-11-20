@@ -124,6 +124,58 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A254T/-=4 B254T/-=0 P254T/-=0', 'a contagem levou a caixa de A');
   });
 
+  // ── RN-254.01 b (Fase 2, achado 1): a caixa NA PROPRIA posicao padrao ────────────────────────────────────────────────────
+  await test('[RN-254.01 b, Fase 2 achado 1] padrao = A, A 4 separadas e B 3, ajuste para 4 -> A 4, B 0; a entrega sai', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    const { R, item } = await separar(m, 4, A.id);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 4 });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    // A linha padrao recebia so o residuo (4 - 3 = 1) e nada era drenado: A 1, B 3, a entrega recusada.
+    assert.strictEqual(await linhas(m), 'A254T/-=4 B254T/-=0', 'a linha padrao (a da caixa) ficou com o residuo');
+    const ent = await entregar(R, item, 4);
+    assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
+  });
+
+  await test('[RN-254.01 b] o mesmo no Ajuste COM lote (Etapa 253): padrao = A, LB 4 separadas em A e LB 3 em B, ajuste para 4 com LB',
+    async () => {
+      const m = await material({ padrao: A.id });
+      await entrar(m, 4, { lote: 'LB' });
+      await entrar(m, 3, { lote: 'LB', localizacao_destino_id: B.id });
+      const LB = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id=? AND codigo=?', [m, 'LB'])).id;
+      const { R, item } = await separar(m, 4, A.id, LB);
+      const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 4, lote_id: LB });
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+      assert.strictEqual(await linhas(m), 'A254T/LB=4 B254T/LB=0', 'a linha padrao do lote (a da caixa) ficou com o residuo');
+      const ent = await entregar(R, item, 4);
+      assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
+    });
+
+  await test('[RN-254.01 b] padrao = A com 6 (2 separadas) e B 3, ajuste para 5: a parte livre de A sai primeiro (A 2, B 3)', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 6);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    await separar(m, 2, A.id);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 5 });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    // 9 -> 5: o residuo da padrao seria 2 (5 - 3), que ainda cobre as 2 separadas — nada a drenar (a ordem da Etapa 51: a padrao absorve).
+    assert.strictEqual(await linhas(m), 'A254T/-=2 B254T/-=3');
+  });
+
+  await test('[RN-254.01 b] ajuste para CIMA com a padrao abaixo da caixa nao move nada entre prateleiras', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    await separar(m, 4, A.id);
+    // A padrao fica abaixo da caixa por um caminho antigo (linha mexida direto) — o ajuste para cima so soma na padrao.
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = 2 WHERE material_id = ? AND localizacao_id = ?', [m, A.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 5 WHERE id = ?', [m]);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 6 });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(await linhas(m), 'A254T/-=3 B254T/-=3', 'o ajuste para cima drenou B');
+  });
+
   // ── RN-254.02: sem outra saida, a caixa e drenada ─────────────────────────────────────────────────────────────────────────
   await test('[RN-254.02] a guarda de retencao continua decidindo SE passa: abaixo da caixa, 400 e nada muda', async () => {
     const m = await material();

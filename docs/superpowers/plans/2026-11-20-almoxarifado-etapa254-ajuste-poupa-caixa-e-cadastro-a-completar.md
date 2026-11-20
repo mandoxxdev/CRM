@@ -32,8 +32,16 @@
   parte de cada prateleira que **não** está separada na caixa viva de uma requisição (`parteGuardadaDeOutrasPorPar`, todas as requisições,
   par (endereço, sem lote)); só depois o resto, na mesma ordem (maior primeiro, depois a mais antiga). Cenário C548: *A* 4 (separadas de *A*)
   e *B* 3, Ajuste para 4 → *A* 4, *B* 0, a entrega da requisição sai (antes: *A* 1, *B* 3, entrega recusada *"… não serve mais"*).
-- **RN-254.02** Sem outra saída, a caixa é drenada (o total manda): *A* 4 separadas e *B* 1, Ajuste para 2 → *B* 0 primeiro, depois *A* 2.
-  A guarda de retenção do material continua decidindo **se** o ajuste passa (não muda).
+- **RN-254.01 b (Fase 2, achado 1)** A caixa **na própria posição padrão** (a Entrada sem destino cai nela — o caso comum): a linha padrão só
+  recebia o resíduo (total − as outras) e nada era drenado enquanto ele ficasse ≥ 0 — padrão *A*, *A* 4 separadas e *B* 3, Ajuste para 4 →
+  *A* 1, *B* 3, entrega recusada. Agora a linha padrão tem um **piso** = a parte dela guardada pela caixa, limitada ao que ela tem agora; a 1ª
+  passada drena a parte livre das outras até o piso, a 2ª (o separado das outras) só até zero. Ajuste para **cima** nunca move nada entre
+  prateleiras. Vale também no ramo com lote (Etapa 253) — a mesma função.
+- **RN-254.02** Sem outra saída, a caixa é drenada (o total manda). **Corrigido na Fase 2 (achado 2):** o exemplo que estava aqui (*A* 4
+  separadas e *B* 1, Ajuste para 2) **não acontece** — a guarda de retenção da Etapa 97 recusa antes (*"Ajuste para 2 UN deixaria o
+  disponível negativo (separada na caixa de requisição: 4, mínimo aceitável: 4 UN)…"*). O caso que alcança: o resto está em linhas **com
+  lote**, que o Ajuste sem lote não drena — *A* 4 separadas, *B* 1 sem lote e 3 do lote *LY*, Ajuste para 5 → *B* 0, *A* 2 (anterior à etapa,
+  a entrega da caixa fica sem as peças; D (254)).
 - **RN-254.03** O separado **com lote** num endereço não protege as linhas **sem lote** desse endereço (o par é (endereço, lote)); sem
   caixa nenhuma, a ordem e o resultado de sempre (Etapa 51), byte a byte. O estorno do AJUSTE sem lote continua sem drenar.
 

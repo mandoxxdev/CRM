@@ -640,41 +640,49 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
   // linha padrao do lote negativa e o endereco dizendo o que nao tem) — as de endereco bloqueado por ultimo, como a saida do lote (Fase 2,
   // achado 6). Sem lote, a ordem e a consulta de sempre (Etapa 51). Devolve as linhas drenadas ([{ id, quantidade }]) para o desfazer
   // do estorno (Fase 2, achado 2) — no rastreador do chamador (`drenadas`), linha a linha, para uma falha no meio nao perder as ja drenadas.
-  if (drenar && novaLinha < -EPS) {
-    const positivas = loteId
-      ? await dbAll(db, `SELECT s.id, s.quantidade, s.localizacao_id FROM estoque_saldo_almoxarifado s
-          LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
-          WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > 0 AND s.id != ?
-          ORDER BY COALESCE(lc.bloqueada, 0) ASC, s.quantidade DESC, s.id`, [materialId, loteId, saldo.id])
-      : await dbAll(db, `SELECT id, quantidade, localizacao_id FROM estoque_saldo_almoxarifado
-          WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
-          ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
-    // Etapa 253 (Fase 5, achado 1): com lote, duas passadas — primeiro so a parte de cada endereco que NAO esta guardada pela caixa viva de
-    // uma requisicao (`parteGuardadaDeOutrasPorPar`, todas as requisicoes), depois o resto. Numa passada so, a maior linha (a da caixa
+  // Etapa 254 (Fase 2, achado 1): a caixa separada pode estar NA PROPRIA linha padrao (a entrada sem destino cai nela — o caso comum). Essa
+  // linha so recebia o residuo (total - as outras) e nada era drenado enquanto ele ficasse >= 0: padrao A 4 separadas e B 3, ajuste para 4
+  // -> A 1, B 3, a entrega recusada. Agora a linha padrao tem um PISO: a parte dela guardada pela caixa, ate o que ela tem agora (o ajuste
+  // para cima nunca move nada entre prateleiras). Sem caixa, o piso e 0 e tudo fica como na Etapa 51.
+  const atualLinha = Number(saldo.quantidade) || 0;
+  if (drenar && (novaLinha < -EPS || (locKey && novaLinha < atualLinha - EPS))) {
+    // Etapa 253 (Fase 5, achado 1): duas passadas — primeiro so a parte de cada endereco que NAO esta guardada pela caixa viva de uma
+    // requisicao (`parteGuardadaDeOutrasPorPar`, todas as requisicoes), depois o resto. Numa passada so, a maior linha (a da caixa
     // separada) era drenada e a entrega da requisicao era recusada com "a origem da separacao nao serve mais".
     // Etapa 254 (C548, RN-254.01..03): sem lote tambem — o par e (endereco, sem lote), chave "<loc>|" da mesma regua; a ordem dentro de
-    // cada passada e a de sempre (Etapa 51). O separado COM lote num endereco nao protege a linha SEM lote dele (chave diferente).
-    let guardadoPorPar = null;
-    if (positivas.length) {
-      // eslint-disable-next-line global-require
-      guardadoPorPar = await require('./requisitionService').parteGuardadaDeOutrasPorPar(db, materialId, null);
-    }
+    // cada passada e a de sempre (Etapa 51). O separado COM lote num endereco nao protege a linha SEM lote dele (chave diferente). A 1a
+    // passada vai ate o piso da linha padrao; a 2a (o que esta separado nas outras) so ate zero — o total manda.
+    // eslint-disable-next-line global-require
+    const guardadoPorPar = await require('./requisitionService').parteGuardadaDeOutrasPorPar(db, materialId, null);
     const chaveLote = loteId ? String(Number(loteId)) : '';
-    const restam = positivas.map((p) => ({ ...p, resta: Number(p.quantidade) }));
-    const passadas = guardadoPorPar
-      ? [(p) => Math.max(0, p.resta - (p.localizacao_id === null ? 0 : (guardadoPorPar.get(`${Number(p.localizacao_id)}|${chaveLote}`) || 0))),
-        (p) => p.resta]
-      : [(p) => p.resta];
-    for (const podeTirar of passadas) {
-      for (const p of restam) {
-        if (novaLinha >= -EPS) break;
-        const tira = Math.min(-novaLinha, podeTirar(p));
-        if (!(tira > 0)) continue;
-        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [tira, p.id]);
-        drenadas.push({ id: p.id, quantidade: tira });
-        p.resta -= tira;
-        novaLinha += tira;
+    const guardado = (locId) => (locId === null || locId === undefined ? 0
+      : (guardadoPorPar.get(`${Number(locId)}|${chaveLote}`) || 0));
+    const piso = Math.max(0, Math.min(guardado(locKey), atualLinha));
+    if (novaLinha < piso - EPS) {
+      const positivas = loteId
+        ? await dbAll(db, `SELECT s.id, s.quantidade, s.localizacao_id FROM estoque_saldo_almoxarifado s
+            LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+            WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > 0 AND s.id != ?
+            ORDER BY COALESCE(lc.bloqueada, 0) ASC, s.quantidade DESC, s.id`, [materialId, loteId, saldo.id])
+        : await dbAll(db, `SELECT id, quantidade, localizacao_id FROM estoque_saldo_almoxarifado
+            WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
+            ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
+      const restam = positivas.map((p) => ({ ...p, resta: Number(p.quantidade) }));
+      const passadas = [
+        { ate: piso, podeTirar: (p) => Math.max(0, p.resta - guardado(p.localizacao_id)) },
+        { ate: 0, podeTirar: (p) => p.resta },
+      ];
+      for (const { ate, podeTirar } of passadas) {
+        for (const p of restam) {
+          if (novaLinha >= ate - EPS) break;
+          const tira = Math.min(ate - novaLinha, podeTirar(p));
+          if (!(tira > 0)) continue;
+          await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [tira, p.id]);
+          drenadas.push({ id: p.id, quantidade: tira });
+          p.resta -= tira;
+          novaLinha += tira;
+        }
       }
     }
   }
