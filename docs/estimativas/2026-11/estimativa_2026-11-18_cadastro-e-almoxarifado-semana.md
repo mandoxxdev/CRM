@@ -27,7 +27,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 9 | Frase do lote das séries só quando o lote tem a peça | 45 min | fatia de tela | 45 min | C539, B1531 | frase de Movimentações lê só a série; o servidor deriva o lote só quando a linha cobre (`stockService.js:1379`) — **confirmado na Fase 0 da 246**; a lista de séries não trazia o saldo do lote (campo novo de leitura) | 0,35 h (rateio da Etapa 246: 0,7 h medida no horas.js, grupo E246="Etapa 246", pelos 45 min + 45 min estimados) | 30 min | `4bf9fe15`, `522ded97`, `509d6902`, `48580e4d` |
 | 10 | Lista de séries da saída avulsa recarrega após recusa | 45 min | fatia de tela | 45 min | C538 (molde: entrega, C537) | Movimentações → Saída/Perda — **confirmado na Fase 0 da 246** (só o Ajuste relia, `MovimentacoesAlmoxarifado.js` `catch` do envio) | 0,35 h (rateio da Etapa 246, como o item 9) | 30 min | `fcc7b076`, `509d6902`, `48580e4d` |
 | 11 | Reserva da liberação repartida por nota | 1h15 | motor/estorno | 1h15 | C524, B1467 (Etapa 247, `2026-11-18-almoxarifado-etapa247-liberar-lote-de-mais-de-uma-nota.md`) | liberação de lote (Etapa 220) + conta do estorno da nota — **confirmado na Fase 0 da 247** (sonda: lote de duas notas → reserva sem marca → os dois estornos recusados) | 1,3 h (horas.js 18/11, grupo C524) | 1h30 | `5ac930cf`, `7305080c`, `493cfeba`, `0e163246`, `b01e30ae` |
-| 12 | Estorno da nota sob a trava (C525 + C534) | 1h30 | trava/estorno | 1h30 | C525, C534, B1506 | a conta do estorno que solta reservas roda fora de `naTravaDoMaterial` | — | — | — |
+| 12 | Estorno da nota sob a trava (C525 + C534) | 1h30 | trava/estorno | 1h30 | C525, C534, B1506 (Etapa 248, `2026-11-18-almoxarifado-etapa248-estorno-da-nota-sob-a-trava.md`) | a conta do estorno que solta reservas roda fora de `naTravaDoMaterial` — **confirmado na Fase 0 da 248** (sonda com gancho: 0/4 — o estorno recusado no meio da liberação do lote; a requisição solta com o lote liberado no meio) | 1,3 h (horas.js 19/11, grupo C525) | 1h30 | `d7da2ad1`, `99a2fabf`, `2bdc900f` |
 | 13 | Busca de entrega na tela Devoluções | 1h15 | tela + servidor (o C477 dizia ~1h30 na régua antiga) | 1h15 | C477, B1367 | `returnService.js:486-495` (páginas de 30, cursor `antes_de`) | — | — | — |
 | 14 | Bloquear material indicando o lote | 1h30 | motor (BLOQUEIO com lote; regra "o lote tem livre para bloquear") | 1h30 | C500, B1419 | `extended.js:1302` (`/materiais/:id/bloquear`); Etapa 209 já grava lote no BLOQUEIO da devolução | — | — | — |
 | 15 | Mensagem própria na liberação pela NC | 30 min | frase | 30 min | C501 | `nonConformityService.js` `executarLiberacao` `:1036` | — | — | — |
@@ -85,6 +85,11 @@ teste. Medido 0,7 h para os dois (os commits do pacote citam "Etapa 246"; o grup
 acharam quatro casos em que o estorno de uma nota continuava recusado (a segunda liberação do mesmo lote, a reserva da OS, a peça em inspeção
 ou reprovada, a mesma nota em dois lotes), corrigidos com teste; e a tela Reservas passou a dizer a nota de cada reserva. Medido 1,3 h → 1h30.
 
+
+**Etapa 248 (item 12, 18/11):** não revisado (a sonda reproduziu os dois defeitos). Entregue no tamanho estimado; a revisão do plano e a
+revisão final acharam três casos vizinhos (a mensagem da liberação e o aviso prometendo a reserva que o estorno soltou, a requisição
+cancelada no meio do estorno fazendo soltar a reserva de outra, e a reserva recriada sumindo da mensagem), corrigidos com teste. Medido
+1,3 h → 1h30.
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
 - **24 Aplicação** (espera o Matheus): esconder o campo do formulário (Compras e consulta do Almoxarifado), sem apagar a coluna nem o
