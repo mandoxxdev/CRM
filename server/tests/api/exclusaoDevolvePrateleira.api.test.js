@@ -424,6 +424,76 @@ const API = '/api/almoxarifado';
       assert.strictEqual(ser, 'S1:P259T S2:A259T S3:B259T S4:B259T');
     });
 
+  // ── Fase 5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-259.04, Fase 5 achado 2] S1 em A, S2 em B (padrao P); S1 devolvida em A; B bloqueada; excluir -> S2 na padrao P, nao em A',
+    async () => {
+      const m = await material({ serie: 1 });
+      await entrar(m, 1, { series: ['S1'], localizacao_destino_id: A.id });
+      await entrar(m, 1, { series: ['S2'], localizacao_destino_id: B.id });
+      const { R, saida } = await entregaPelaSaida(m, 2, { serie_ids: [await sid(m, 'S1'), await sid(m, 'S2')] });
+      const dv = await como('ADMIN').post(`${API}/devolucoes`, { material_id: m, quantidade: 1, motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE',
+        movimentacao_saida_id: saida, localizacao_id: A.id, series: ['S1'] });
+      assert.strictEqual(dv.status, 201, `devolucao de premissa: ${JSON.stringify(dv.body)}`);
+      await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [B.id]);
+      try {
+        await excluir(R);
+      } finally {
+        await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [B.id]);
+      }
+      assert.strictEqual(await linhas(m), 'A259T/-=1 B259T/-=0 P259T/-=1');
+      const s2 = await dbGet(db, `SELECT COALESCE(l.codigo,'-') loc FROM series_almoxarifado s LEFT JOIN localizacoes_almoxarifado l
+        ON l.id = s.localizacao_id WHERE s.material_id = ? AND s.numero = 'S2'`, [m]);
+      assert.strictEqual(s2.loc, 'P259T');
+    });
+
+  await test('[RN-259.03, Fase 5 achado 3] a ordem e a do claim, nao a das linhas: B criada antes da padrao A; devolucao de 2 -> A 3, B 3, P 2',
+    async () => {
+      const m = await material({ padrao: A.id });
+      await entrar(m, 5, { localizacao_destino_id: B.id });
+      await entrar(m, 3);
+      const { R, saida } = await entregaPelaSaida(m, 6);
+      const dv = await como('ADMIN').post(`${API}/devolucoes`, { material_id: m, quantidade: 2, motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE',
+        movimentacao_saida_id: saida, localizacao_id: P.id });
+      assert.strictEqual(dv.status, 201, JSON.stringify(dv.body));
+      await excluir(R);
+      assert.strictEqual(await linhas(m), 'A259T/-=3 B259T/-=3 P259T/-=2');
+    });
+
+  await test('[RN-259.04, Fase 5 achado 4] S1 S2 em A, S3 S4 em B (padrao P); saida das 4; B bloqueada; excluir -> A 2, P 2 (A nao leva 4)',
+    async () => {
+      const m = await material({ serie: 1 });
+      await entrar(m, 2, { series: ['S1', 'S2'], localizacao_destino_id: A.id });
+      await entrar(m, 2, { series: ['S3', 'S4'], localizacao_destino_id: B.id });
+      const ids = [];
+      for (const n of ['S1', 'S2', 'S3', 'S4']) ids.push(await sid(m, n)); // eslint-disable-line no-await-in-loop
+      const { R } = await entregaPelaSaida(m, 4, { serie_ids: ids });
+      await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [B.id]);
+      try {
+        await excluir(R);
+      } finally {
+        await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [B.id]);
+      }
+      assert.strictEqual(await linhas(m), 'A259T/-=2 B259T/-=0 P259T/-=2');
+      const ser = (await dbAll(db, `SELECT s.numero, COALESCE(l.codigo,'-') loc FROM series_almoxarifado s
+        LEFT JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id WHERE s.material_id = ? ORDER BY s.numero`, [m]))
+        .map((x) => `${x.numero}:${x.loc}`).join(' ');
+      assert.strictEqual(ser, 'S1:A259T S2:A259T S3:P259T S4:P259T');
+    });
+
+  await test('[RN-259.04, Fase 5 achado 4] a linha que ja levou as suas series nao leva de novo pela ordem do claim: A 1, B 2 (S2 gravada em A)',
+    async () => {
+      const m = await material({ padrao: A.id, serie: 1 });
+      await entrar(m, 1, { series: ['S1'] });
+      await entrar(m, 2, { series: ['S2', 'S3'], localizacao_destino_id: B.id });
+      await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = ? WHERE material_id = ? AND numero = ?', [A.id, m, 'S2']);
+      const ids = [];
+      for (const n of ['S1', 'S2', 'S3']) ids.push(await sid(m, n)); // eslint-disable-line no-await-in-loop
+      const { R } = await entregaPelaSaida(m, 3, { serie_ids: ids });
+      assert.strictEqual(await linhas(m), 'A259T/-=0 B259T/-=0', 'premissa');
+      await excluir(R);
+      assert.strictEqual(await linhas(m), 'A259T/-=1 B259T/-=2');
+    });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

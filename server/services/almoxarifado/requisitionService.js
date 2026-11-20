@@ -3411,7 +3411,7 @@ async function fatiasDaSaidaPorLinha(db, material, saida, liquido, destinoDeHoje
         destino = aceita === Number(material.localizacao_padrao_id) ? undefined : aceita;
       }
     }
-    linhas.push({ q: Number(b.q) || 0, destino, aceita, dado: 0 });
+    linhas.push({ q: Number(b.q) || 0, destino, aceita, dado: 0, locDaLinha: b.localizacao_id != null ? Number(b.localizacao_id) : null });
   }
   let resto = Q.qtd(liquido);
   // Fase 2 (achado 2): com serie, a serie diz de que prateleira a peca veio — cada linha recebe primeiro as series ENTREGUE desta saida
@@ -3425,10 +3425,13 @@ async function fatiasDaSaidaPorLinha(db, material, saida, liquido, destinoDeHoje
     const porLoc = new Map();
     for (const n of series) porLoc.set(locDe.get(n) || 0, (porLoc.get(locDe.get(n) || 0) || 0) + 1);
     for (const l of linhas) {
-      if (l.aceita == null) continue;
-      const n = Math.min(Math.floor(l.q + Q.QTD_FOLGA), porLoc.get(l.aceita) || 0, Math.floor(resto + Q.QTD_FOLGA));
+      // Fase 5 (achado 2): a linha que nao aceita mais tambem fica com as series que estavam nela — a parte dela vai para o destino de
+      // hoje (B1607), e a serie de B bloqueada nao cai, pela ordem do claim, numa prateleira que aceita (A) de onde ela nao saiu.
+      const k = l.aceita != null ? l.aceita : l.locDaLinha;
+      if (k == null) continue;
+      const n = Math.min(Math.floor(l.q + Q.QTD_FOLGA), porLoc.get(k) || 0, Math.floor(resto + Q.QTD_FOLGA));
       if (n <= 0) continue;
-      l.dado += n; porLoc.set(l.aceita, porLoc.get(l.aceita) - n); resto = Q.qtd(resto - n);
+      l.dado += n; porLoc.set(k, porLoc.get(k) - n); resto = Q.qtd(resto - n);
     }
   }
   for (const l of linhas) {
