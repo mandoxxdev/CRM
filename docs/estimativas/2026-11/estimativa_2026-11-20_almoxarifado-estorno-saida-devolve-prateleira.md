@@ -30,3 +30,9 @@ node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-20 --ate 
 **Etapa 257 (20/11):** não revisada. Medido 0,9 h (~54 min, arredondado para 1h) — 15 min abaixo do estimado: a revisão do plano e a
 revisão final não acharam defeito no código novo (um aviso anterior registrado e dois testes que faltavam), e a tela não mudou. A suíte do
 servidor inteira (~1 h de relógio, sem commit no meio) não entra no horas.js.
+
+**Correção (20/11, Etapa 258):** o `.txt` desta estimativa dizia *"quando uma saída (ou uma entrega de requisição) tira peças de mais de
+uma prateleira e depois é estornada"*; **estava errado** na parte da entrega: a saída da entrega de requisição **não se estorna pelo livro**
+(*"Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)"*); ela grava de quais prateleiras saiu, mas
+quem a desfaz é a exclusão da requisição, que ainda devolve numa posição só (D (257) 2). O `.txt` fica como foi enviado (é o texto que já
+saiu no WhatsApp); a correção fica aqui.
