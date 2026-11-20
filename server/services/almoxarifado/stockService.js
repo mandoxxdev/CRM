@@ -3793,9 +3793,17 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             if (opcoesEstorno.compensacao === true || !(Q.qtd(totalDepois) < Q.qtd(totalAntes) - Q.QTD_FOLGA)) return;
             // Total que ficaria NEGATIVO: quem responde e a guarda de sempre logo abaixo ("o saldo ja foi consumido", Etapa
             // 51) — sem caixa e sem retencao a recusa continua byte a byte a de antes (saidaPorLocalizacao (17)).
-            if (Q.qtd(totalDepois) < -Q.QTD_FOLGA) return;
+            // Etapa 258 (Fase 2, achado 1): so quando o material NAO permite negativo — com negativo permitido (no cadastro ou na
+            // configuracao global) ninguem respondia, e o estorno pulava a retencao e a caixa (Ajuste para 10, Bloqueio 5, Saida 4,
+            // estorno -> total -2 com 5 bloqueados; o Ajuste de ida para o mesmo numero e recusado). Agora a retencao responde.
             const matG = await getMaterial(db, mov.material_id);
-            const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), (await caixaSql.lerCaixa(db, mov.material_id)).caixa);
+            if (Q.qtd(totalDepois) < -Q.QTD_FOLGA && !(matG.permite_saldo_negativo
+              || (await getConfig(db, 'permite_saldo_negativo_global')) === '1')) return;
+            const caixaG = (await caixaSql.lerCaixa(db, mov.material_id)).caixa;
+            // Negativo permitido e nada retido: o total negativo e o que o material aceita — nada a recusar (a conta da retencao,
+            // com retido 0, recusaria qualquer total negativo).
+            if (Q.qtd(totalDepois) < -Q.QTD_FOLGA && !(partesDaRetencao(matG, caixaG).retido > Q.QTD_FOLGA)) return;
+            const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), caixaG);
             if (recusa) throw Object.assign(new Error(`Não é possível estornar: ${recusa}`), { status: 400 });
           };
           if (mov.localizacao_destino_id) {
@@ -3858,6 +3866,20 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             const deltaDoAjuste = mov.saldo_posterior === null || mov.saldo_posterior === undefined ? null
               : Q.qtd(Number(mov.saldo_posterior) - Number(mov.saldo_anterior));
             const novoTotal = deltaDoAjuste === null ? Q.qtd(mov.saldo_anterior) : Q.qtd(totalAgora - deltaDoAjuste);
+            // Etapa 258 (Fase 2, achado 3; RN-258.07, B1606): um ajuste do total (ou de inventario) VIVO feito DEPOIS deste e uma contagem
+            // mais recente — ela ja diz quanto ha. Desfazer a diferenca deste por cima dela inventa (ou some com) pecas: 5, Ajuste para 3,
+            // Ajuste para 7, estorno do primeiro -> 9 (o SET de antes dava 5; a contagem diz 7). Recusa, antes de qualquer efeito; estornado
+            // primeiro o mais recente, este passa. Lido sob a trava do material: nenhum ajuste dele grava no meio.
+            if (opcoesEstorno.compensacao !== true) {
+              const contagemDepois = await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
+                AND COALESCE(cancelado, 0) = 0 AND ((tipo = 'AJUSTE' AND localizacao_destino_id IS NULL) OR tipo = 'AJUSTE_INVENTARIO')
+                ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id]);
+              if (contagemDepois) {
+                throw Object.assign(new Error(`Não é possível estornar: há um ajuste do total deste material feito depois deste `
+                  + `(movimentação #${contagemDepois.id}) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um `
+                  + 'novo ajuste.'), { status: 400 });
+              }
+            }
             // RN-258.02: pela diferenca o total pode ficar negativo (ajuste para cima e o material saiu depois) — a mesma recusa do ramo
             // com localizacao, antes de qualquer efeito (o claim volta pelo catch). Material ou configuracao que permite negativo: passa.
             if (novoTotal < -EPS && opcoesEstorno.compensacao !== true) {

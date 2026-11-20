@@ -192,6 +192,51 @@ const NEGATIVO = 'Não é possível estornar: o saldo já foi consumido (o estor
     assert.strictEqual(await fis(m), 13);
   });
 
+  await test('[RN-258.03, Fase 2 achado 1] material que permite negativo: a retencao continua valendo (recusa, nao total -2 com 5 bloqueados)',
+    async () => {
+      const m = await material({ negativo: 1 });
+      await mov(m, 'ENTRADA', 2);
+      const aj = await mov(m, 'AJUSTE', 10);
+      await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'BLOQUEIO', quantidade: 5, motivo: 'teste 258',
+        justificativa: 'teste 258' });
+      await mov(m, 'SAIDA', 4); // total 6, 5 bloqueados
+      const r = await cancelar(aj);
+      assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+      assert.ok(/^Não é possível estornar: Ajuste para -2 UN deixaria o disponível negativo/.test(r.body.error), r.body.error);
+      assert.strictEqual(await fis(m), 6);
+      assert.ok(await vivo(aj));
+    });
+
+  // ── RN-258.07: um ajuste do total mais recente vale ─────────────────────────────────────────────────────────────────
+  await test('[RN-258.07, Fase 2 achado 3] 5, Ajuste para 3, Ajuste para 7: o estorno do 1o e recusado (daria 9); na ordem inversa, 3 e 5',
+    async () => {
+      const m = await material();
+      await mov(m, 'ENTRADA', 5);
+      const aj1 = await mov(m, 'AJUSTE', 3);
+      const aj2 = await mov(m, 'AJUSTE', 7);
+      const r = await cancelar(aj1);
+      assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(r.body.error, `Não é possível estornar: há um ajuste do total deste material feito depois deste (movimentação #${aj2}) `
+        + '— a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste.');
+      assert.strictEqual(await fis(m), 7);
+      assert.ok(await vivo(aj1));
+      await estornar(aj2);
+      assert.strictEqual(await fis(m), 3);
+      await estornar(aj1);
+      assert.strictEqual(await fis(m), 5);
+      assert.strictEqual(await linhas(m), 'A258T/-=5');
+    });
+
+  await test('[RN-258.07] o ajuste COM localizacao feito depois nao trava (ele conta so a posicao dele)', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 3);
+    await mov(m, 'ENTRADA', 4, { localizacao_destino_id: B.id });
+    const aj = await mov(m, 'AJUSTE', 1); // 7 -> 1: A 0, B 1
+    await mov(m, 'AJUSTE', 2, { localizacao_destino_id: B.id }); // B 2, total 2
+    await estornar(aj);
+    assert.strictEqual(await fis(m), 8);
+  });
+
   // ── RN-258.04: sem lote, drena antes de negativar a padrao ───────────────────────────────────────────────────────────
   await test('[RN-258.04] A 2, B 5, Ajuste para 10, Saida 5 de A, estorno -> total 2, A 0, B 2 (sem drenar: A -3)', async () => {
     const m = await material();
@@ -203,6 +248,22 @@ const NEGATIVO = 'Não é possível estornar: o saldo já foi consumido (o estor
     assert.strictEqual(await fis(m), 2);
     assert.strictEqual(await linhas(m), 'A258T/-=0 B258T/-=2', 'a padrao ficou negativa');
   });
+
+  await test('[C551, documenta] estornar o Ajuste e depois a Saida que veio depois dele: total certo, prateleiras trocadas (A 5, B 2)',
+    async () => {
+      // Achado da Fase 2: o estorno do Ajuste (cenario acima) faz B ceder 3 para a padrao nao ficar negativa; o estorno seguinte da Saida
+      // devolve as 5 a A, de onde ela tirou. Total 7 certo; o certo nas prateleiras seria A 2, B 5 (na ordem inversa — a Saida antes —
+      // da A 2, B 5). Sem o ceder, a padrao ficava -3 no meio. Declarado (C551, B1605); este cenario afirma o comportamento de hoje.
+      const m = await material();
+      await mov(m, 'ENTRADA', 2);
+      await mov(m, 'ENTRADA', 5, { localizacao_destino_id: B.id });
+      const aj = await mov(m, 'AJUSTE', 10);
+      const s = await mov(m, 'SAIDA', 5, { localizacao_origem_id: A.id });
+      await estornar(aj);
+      await estornar(s);
+      assert.strictEqual(await fis(m), 7);
+      assert.strictEqual(await linhas(m), 'A258T/-=5 B258T/-=2');
+    });
 
   // ── RN-258.05: desfazer ──────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-258.05] o livro do estorno falhando (com a drenagem): estado de antes; de novo, sem a falha, certo', async () => {
