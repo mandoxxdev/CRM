@@ -2220,6 +2220,66 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
  * So le; dentro das duas travas da entrega (B1403).
  */
 async function fatiasSemLoteParaOAutomatico(db, materialId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  const base = await claimSemLoteLevaGuarda(db, materialId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem);
+  if (!base) return null;
+  const alvo = Q.qtd(quantidade);
+  const usaveis = base.ordemDoClaim
+    .filter((x) => x.localizacao_id != null && x.lc_id != null && !Number(x.bloqueada) && x.livre > Q.QTD_FOLGA);
+  if (usaveis.reduce((s2, x) => s2 + x.livre, 0) + Q.QTD_FOLGA < alvo) return null; // B1398: nao cobre — como hoje
+  const fatias = [];
+  let falta = alvo;
+  for (const x of usaveis) {
+    if (falta <= Q.QTD_FOLGA) break;
+    const t = Q.qtd(Math.min(falta, x.livre));
+    if (t <= Q.QTD_FOLGA) continue;
+    fatias.push({ localizacao_id: Number(x.localizacao_id), quantidade: t });
+    falta = Q.qtd(falta - t);
+  }
+  return fatias;
+}
+
+/**
+ * Etapa 252 (C493, RN-252.20/21/22; revoga a B1404 na parte do irmao) — as fatias por ENDERECO DA SERIE da parte automatica de item com
+ * serie em material sem lote (series sem lote). So quando a baixa de sempre (uma SAIDA sem endereco) levaria guarda sem lote que conta — a
+ * mesma regua da Etapa 207 (`claimSemLoteLevaGuarda`). Devolve `[{ localizacao_id, serie_ids }]` (enderecos na ordem em que aparecem nas
+ * series) ou null (como hoje): alguma serie com lote ou sem endereco; endereco que nao existe ou bloqueado; o livre (linha sem lote − guarda
+ * que conta) nao cobre as series dele; ou (Fase 2, item 1, C76) o endereco gravado na serie nao e confiavel — mais series EM_ESTOQUE sem lote
+ * ali do que a linha sem lote (a transferencia move a linha e deixa a serie). Antes a serie B1 saia da maior linha (A), levando a peca que
+ * o irmao separou de A e deixando A com 2 linhas e 3 series (o irmao, num clique: "nao serve mais"). So le; dentro das duas travas da entrega.
+ */
+async function fatiasDaSerieSemLote(db, materialId, serieIds, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  if (!serieIds.length) return null;
+  const base = await claimSemLoteLevaGuarda(db, materialId, serieIds.length, saiuDaOrigemPorItem, parteQueFicaPorItem);
+  if (!base) return null;
+  const series = await dbAll(db, `SELECT id, localizacao_id, lote_id FROM series_almoxarifado
+    WHERE material_id = ? AND id IN (${serieIds.map(() => '?').join(',')})`, [materialId, ...serieIds]);
+  if (series.length !== serieIds.length) return null;
+  const locDe = new Map(series.map((x) => [Number(x.id), x]));
+  const grupos = new Map();
+  for (const id of serieIds) {
+    const x = locDe.get(Number(id));
+    if (!x || x.lote_id != null || x.localizacao_id == null) return null;
+    const loc = Number(x.localizacao_id);
+    if (!grupos.has(loc)) grupos.set(loc, []);
+    grupos.get(loc).push(Number(id));
+  }
+  for (const [loc, ids] of grupos) {
+    const linha = base.ordemDoClaim.find((x) => Number(x.localizacao_id) === loc);
+    if (!linha || linha.lc_id == null || Number(linha.bloqueada) || linha.livre + Q.QTD_FOLGA < ids.length) return null;
+    // eslint-disable-next-line no-await-in-loop
+    const n = await dbGet(db, `SELECT COUNT(*) as n FROM series_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS NULL AND status = 'EM_ESTOQUE'`, [materialId, loc]);
+    if (Number(n.n) > Number(linha.quantidade) + Q.QTD_FOLGA) return null;
+  }
+  return [...grupos.entries()].map(([localizacao_id, ids]) => ({ localizacao_id, serie_ids: ids }));
+}
+
+/**
+ * Etapa 207 (B1397/B1406), extraida na Etapa 252 sem mudar o resultado: a guarda sem lote que conta por endereco e a simulacao do claim
+ * de sempre. null = sem guarda que conte, ou o claim de sempre nao a levaria (o chamador baixa como hoje); senao `{ ordemDoClaim }` (linhas
+ * sem lote com saldo, na ordem do claim, cada uma com `livre` = quantidade − guarda que conta no endereco).
+ */
+async function claimSemLoteLevaGuarda(db, materialId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem) {
   const viva = caixaVivaSql('r');
   const guardas = await dbAll(db, `SELECT ir.id, ir.origem_separacao_id as loc_id, ${PARTE_ORIGEM_SQL} as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
@@ -2254,19 +2314,7 @@ async function fatiasSemLoteParaOAutomatico(db, materialId, quantidade, saiuDaOr
     restaDoClaim = Q.qtd(restaDoClaim - take);
   }
   if (!claimLevaGuarda) return null;
-  const usaveis = ordemDoClaim
-    .filter((x) => x.localizacao_id != null && x.lc_id != null && !Number(x.bloqueada) && x.livre > Q.QTD_FOLGA);
-  if (usaveis.reduce((s2, x) => s2 + x.livre, 0) + Q.QTD_FOLGA < alvo) return null; // B1398: nao cobre — como hoje
-  const fatias = [];
-  let falta = alvo;
-  for (const x of usaveis) {
-    if (falta <= Q.QTD_FOLGA) break;
-    const t = Q.qtd(Math.min(falta, x.livre));
-    if (t <= Q.QTD_FOLGA) continue;
-    fatias.push({ localizacao_id: Number(x.localizacao_id), quantidade: t });
-    falta = Q.qtd(falta - t);
-  }
-  return fatias;
+  return { ordemDoClaim };
 }
 
 /**
@@ -2996,13 +3044,24 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // Etapa 197 (RN-197.01/04, B1321): o gatilho da parte automatica pelo lote e o CADASTRO (controle_lote = 1), lido uma vez por item.
     // eslint-disable-next-line no-await-in-loop
     const matLote = await dbGet(db, 'SELECT controle_lote FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
+    // Etapa 252 (Fase 2, item 2): as series que ESTAO na origem do item vao primeiro — os pedacos com origem (estritos, passadas 0/1) tiram
+    // as primeiras N; antes levavam as primeiras da lista onde estivessem (A1 e B1 numa SAIDA de A) e o automatico ficava com a peca de A.
+    // So muda quais series vao em cada SAIDA, nunca as quantidades.
+    let seriesDoItem = [...(seriesPorItem.get(item.id)?.ids || [])];
+    if (seriesDoItem.length > 1 && origemDoItem && origemDoItem.origemId && qtdOrigemItem > Q.QTD_FOLGA) {
+      // eslint-disable-next-line no-await-in-loop
+      const locs = await dbAll(db, `SELECT id FROM series_almoxarifado WHERE localizacao_id = ? AND id IN (${seriesDoItem.map(() => '?').join(',')})`,
+        [origemDoItem.origemId, ...seriesDoItem]);
+      const naOrigem = new Set(locs.map((x) => Number(x.id)));
+      seriesDoItem = [...seriesDoItem.filter((id) => naOrigem.has(Number(id))), ...seriesDoItem.filter((id) => !naOrigem.has(Number(id)))];
+    }
     planos.push({
       controleLote: Number(matLote && matLote.controle_lote) === 1,
       item, qtyEntregar, pedacos, movimentosDoItem: [], entregueAcumulado: getEntregue(item),
       enderecosSaida: new Set(), // Etapa 252 (RN-252.01): os enderecos das linhas que as baixas do item debitaram
       baixadoComOrigem: 0, // Etapa 196 (Fase 2 item 3): o que SAIU de fato pelos pedacos com origem (decrementa a parte no finally)
       // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
-      seriesRestantes: [...(seriesPorItem.get(item.id)?.ids || [])],
+      seriesRestantes: seriesDoItem,
     });
   }
 
@@ -3135,6 +3194,23 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
             // eslint-disable-next-line no-await-in-loop
             await baixarSemLote(plano, baixa, baixa.quantidade);
             continue;
+          }
+          // Etapa 252 (C493, RN-252.20/21/22): com serie SEM lote em material sem controle de lote, a parte automatica sai por endereco da
+          // serie quando a baixa de sempre levaria guarda que conta (e cada endereco cobre as series dele); senao, como hoje.
+          if (!baixa.comOrigem && seriesPorItem.has(item.id) && !seriesPorItem.get(item.id).loteSeries && !plano.controleLote) {
+            const idsDaBaixa = plano.seriesRestantes.slice(0, baixa.quantidade);
+            // eslint-disable-next-line no-await-in-loop
+            const fs = idsDaBaixa.length === Math.round(baixa.quantidade)
+              ? await fatiasDaSerieSemLote(db, item.material_id, idsDaBaixa, saiuDaOrigemPorItem(), parteQueFicaPorItem()) : null;
+            if (fs) {
+              // as series da baixa, agrupadas por endereco (a `baixar` tira as primeiras N de `seriesRestantes`)
+              plano.seriesRestantes.splice(0, idsDaBaixa.length, ...fs.flatMap((f) => f.serie_ids));
+              for (const f of fs) {
+                // eslint-disable-next-line no-await-in-loop
+                await baixar(plano, baixa, f.serie_ids.length, null, f.localizacao_id);
+              }
+              continue;
+            }
           }
           // eslint-disable-next-line no-await-in-loop
           await baixar(plano, baixa, baixa.quantidade, null);
