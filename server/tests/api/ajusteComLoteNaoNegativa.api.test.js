@@ -316,16 +316,32 @@ const MSG_EST = (t, l, f, d) => `Não é possível estornar: o estorno volta o t
   });
 
   // ── RN-253.14: o estorno ──────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-253.14] estorno que deixaria o lote negativo (entrada sem lote depois) -> 400, claim volta, nada muda', async () => {
+  await test('[RN-253.14; RN-258.01] entrada sem lote depois do ajuste do lote: o estorno passa (total 18, LB 5) — ate a 257 era recusado',
+    async () => {
+      // Ate a Etapa 257 este cenario era a recusa do lote (MSG_EST(8, 'LB', 13, -5)): o estorno voltava o total ao valor fixo 8 e a Entrada
+      // de 10 sem lote, feita depois, sumia da conta (C550). Desde a 258 o estorno desfaz a diferenca do ajuste (-2): 16 + 2 = 18, LB 5.
+      const { m, LB } = await montar();
+      const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 6, lote_id: LB });
+      assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+      await entrar(m, 10);
+      assert.strictEqual(await linhas(m), 'P253T/-=13 P253T/LB=3', 'premissa');
+      const r = await cancelar(aj.body.id);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.strictEqual(await fis(m), 18);
+      assert.strictEqual(await linhas(m), 'P253T/-=13 P253T/LB=5');
+    });
+
+  await test('[RN-253.14] estorno que deixaria o lote negativo (o lote saiu depois do ajuste que o subiu) -> 400, claim volta, nada muda', async () => {
     const { m, LB } = await montar();
-    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 6, lote_id: LB });
+    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 10, lote_id: LB }); // LB 7
     assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
-    await entrar(m, 10);
+    const s = await v2({ material_id: m, tipo: 'SAIDA', quantidade: 7, lote_id: LB, localizacao_origem_id: P.id });
+    assert.strictEqual(s.status, 201, JSON.stringify(s.body));
     const antes = await foto(m);
-    assert.strictEqual(antes.linhas, 'P253T/-=13 P253T/LB=3');
+    assert.strictEqual(antes.linhas, 'P253T/-=3 P253T/LB=0');
     const r = await cancelar(aj.body.id);
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
-    assert.strictEqual(r.body.error, MSG_EST(8, 'LB', 13, -5));
+    assert.strictEqual(r.body.error, MSG_EST(1, 'LB', 3, -2));
     assert.deepStrictEqual(await foto(m), antes);
     const mov = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [aj.body.id]);
     assert.strictEqual(Number(mov.cancelado), 0, 'o claim nao voltou');

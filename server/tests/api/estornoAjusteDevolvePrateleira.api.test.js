@@ -193,8 +193,11 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A256T/-=1 B256T/-=3 C256T/-=0 P256T/-=3', 'o estorno do 2o devolveu o registro do 1o');
     est = await cancelar(aj1);
     assert.strictEqual(est.status, 200, JSON.stringify(est.body));
-    assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=3 C256T/-=0 P256T/-=3');
-    assert.strictEqual(await fis(m), 10);
+    // Ate a Etapa 257 o total voltava ao valor fixo 10 (A 4, P 3) e a Entrada de 3 entre os dois Ajustes sumia (C550). Desde a 258 o
+    // estorno desfaz a diferenca (-6): 7 + 6 = 13; A recebe as 4 do registro do aj1, e as 2 que o aj1 tirou da antiga padrao P (residuo,
+    // sem registro) ficam na padrao de agora, C.
+    assert.strictEqual(await linhas(m), 'A256T/-=5 B256T/-=3 C256T/-=2 P256T/-=3');
+    assert.strictEqual(await fis(m), 13);
   });
 
   await test('[RN-256.02, Fase 5] depois do estorno, o estorno de uma transferencia para B (que o C549 recusava) sai', async () => {
@@ -215,7 +218,7 @@ const API = '/api/almoxarifado';
   });
 
   // ── RN-256.03: o limite — a padrao nao desce por causa da devolucao ───────────────────────────────────────────────────────
-  await test('[RN-256.03] Entrada na padrao entre o Ajuste e o estorno: devolve so o que iria a mais para a padrao (A 3, B 2, P 3)',
+  await test('[RN-256.03; RN-258.01] Entrada na padrao entre o Ajuste e o estorno: total 11, devolve tudo (A 5, B 3, P 3; ate a 257: A 3, B 2)',
     async () => {
       const m = await material();
       await entrar(m, 5, { localizacao_destino_id: A.id });
@@ -225,13 +228,14 @@ const API = '/api/almoxarifado';
       await entrar(m, 3); // cai na padrao P
       const est = await cancelar(aj);
       assert.strictEqual(est.status, 200, JSON.stringify(est.body));
-      // O estorno volta o total ao de antes do Ajuste (8, o SET absoluto de sempre). Sem devolver, P ficaria com 8 - 2 = 6; ela tem 3,
-      // entao devolve 3 — a A primeiro (a ordem da drenagem).
-      assert.strictEqual(await fis(m), 8);
-      assert.strictEqual(await linhas(m), 'A256T/-=3 B256T/-=2 P256T/-=3');
+      // Ate a Etapa 257 o estorno voltava o total ao valor fixo 8 (a Entrada de 3 sumia, C550) e a devolucao era parcial (A 3, B 2). Desde
+      // a 258 o total vai pela diferenca (5 + 6 = 11); sem devolver, P ficaria com 11 - 2 = 9; ela tem 3, entao o limite e 6 — exatamente o
+      // que o Ajuste drenou: A 5, B 3.
+      assert.strictEqual(await fis(m), 11);
+      assert.strictEqual(await linhas(m), 'A256T/-=5 B256T/-=3 P256T/-=3');
     });
 
-  await test('[RN-256.03] Entrada noutra prateleira no meio: o residuo nao passa do que a padrao tem -> nada devolvido (como antes)',
+  await test('[RN-256.03; RN-258.01] Entrada noutra prateleira no meio: total 14, devolve tudo (A 5, B 9; ate a 257 nada voltava)',
     async () => {
       const m = await material();
       await entrar(m, 5, { localizacao_destino_id: A.id });
@@ -240,8 +244,10 @@ const API = '/api/almoxarifado';
       await entrar(m, 6, { localizacao_destino_id: B.id }); // B 8, total 8
       const est = await cancelar(aj);
       assert.strictEqual(est.status, 200, JSON.stringify(est.body));
-      // Total volta a 8; sem devolver, P = 8 - 8 = 0 — o que ela ja tem: nada a devolver.
-      assert.strictEqual(await linhas(m), 'A256T/-=0 B256T/-=8 P256T/-=0');
+      // Ate a Etapa 257 o total voltava a 8 (a Entrada de 6 sumia) e nada era devolvido (A 0, B 8). Desde a 258: 8 + 6 = 14; sem devolver,
+      // P = 14 - 8 = 6, limite 6 — A 5 e B 1 voltam.
+      assert.strictEqual(await fis(m), 14);
+      assert.strictEqual(await linhas(m), 'A256T/-=5 B256T/-=9 P256T/-=0');
     });
 
   await test('[RN-256.03, Fase 2 achado 3] padrao NEGATIVA (legado): o limite conta a padrao como 0 — devolve 3 e P fica 0 (nao -2)',
@@ -256,8 +262,9 @@ const API = '/api/almoxarifado';
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 3 WHERE id = ?', [m]);
       const est = await cancelar(aj);
       assert.strictEqual(est.status, 200, JSON.stringify(est.body));
-      // Total 8; sem devolver, P = 8 - 5 = 3. Contando a padrao como -2 o limite seria 5 (A 5, P -2); contando como 0, 3 (A 3, P 0).
-      assert.strictEqual(await linhas(m), 'A256T/-=3 B256T/-=5 P256T/-=0');
+      // Desde a Etapa 258 o total vai pela diferenca: 3 + 6 = 9 (ate a 257, o valor fixo 8). Sem devolver, P = 9 - 5 = 4. Contando a padrao
+      // como -2 o limite seria 6 (A 5, B 1, P -2); contando como 0, 4 (A 4, P 0) — a padrao nao fica negativa.
+      assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=5 P256T/-=0');
     });
 
   // ── RN-256.04: o que nao tem registro ────────────────────────────────────────────────────────────────────────────────────

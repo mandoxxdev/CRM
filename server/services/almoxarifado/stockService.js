@@ -3848,32 +3848,52 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             compensarQuantidadeMaterial = Q.qtd(Number(antesDoSync.quantidade_atual) - Number(atual.quantidade_atual)) || null;
             saldoDepois = atual.quantidade_atual;
           } else {
-            // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
+            // AJUSTE sem localização. Etapa 258 (C550, RN-258.01..04; B1605): o estorno desfaz a DIFERENCA que o ajuste aplicou
+            // (saldo_posterior - saldo_anterior, os dois totais do material), como o ramo com localizacao acima — ate a 257 era um SET
+            // absoluto em saldo_anterior, que apagava do total todo movimento do material feito DEPOIS do ajuste (padrao A 3, B 5, Saida
+            // 6, Ajuste para 1, estorno da Saida, estorno do Ajuste -> total 2 e A -2, o certo 8). Sem movimento depois, o numero e o
+            // mesmo de antes. Livro legado sem saldo_posterior: o SET de antes.
             const atualSemLoc = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
-            await guardaEstornoAjuste(mov.saldo_anterior, Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
+            const totalAgora = Q.qtd(Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
+            const deltaDoAjuste = mov.saldo_posterior === null || mov.saldo_posterior === undefined ? null
+              : Q.qtd(Number(mov.saldo_posterior) - Number(mov.saldo_anterior));
+            const novoTotal = deltaDoAjuste === null ? Q.qtd(mov.saldo_anterior) : Q.qtd(totalAgora - deltaDoAjuste);
+            // RN-258.02: pela diferenca o total pode ficar negativo (ajuste para cima e o material saiu depois) — a mesma recusa do ramo
+            // com localizacao, antes de qualquer efeito (o claim volta pelo catch). Material ou configuracao que permite negativo: passa.
+            if (novoTotal < -EPS && opcoesEstorno.compensacao !== true) {
+              const matN = await getMaterial(db, mov.material_id);
+              if (!(matN.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1')) {
+                throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
+                  { status: 400 });
+              }
+            }
+            await guardaEstornoAjuste(novoTotal, totalAgora);
             // Etapa 253 (C475, RN-253.14): o estorno do ajuste com lote poe a diferenca na linha do lote — a mesma guarda do ajuste de
             // ida (negativo; abaixo do preso quando desce), antes de qualquer efeito; a recusa devolve o claim pelo catch de fora.
             if (mov.lote_id && opcoesEstorno.compensacao !== true) {
               const matL = await getMaterial(db, mov.material_id);
               const permiteNegL = matL.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
               if (!permiteNegL) {
-                const projL = await projecaoDoLoteNoAjuste(db, mov.material_id, mov.lote_id, Q.qtd(mov.saldo_anterior));
-                const recusaL = recusaDoLoteNoAjuste(projL, { novoTotal: Q.qtd(mov.saldo_anterior), unidade: matL.unidade,
+                const projL = await projecaoDoLoteNoAjuste(db, mov.material_id, mov.lote_id, novoTotal);
+                const recusaL = recusaDoLoteNoAjuste(projL, { novoTotal, unidade: matL.unidade,
                   codigo: mov.lote || `#${mov.lote_id}`, estorno: true });
                 if (recusaL) throw Object.assign(new Error(recusaL), { status: 400 });
               }
             }
             await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-              [Q.qtd(mov.saldo_anterior), mov.material_id]);
+              [novoTotal, mov.material_id]);
             // Etapa 118 (C238, RN-03): o desfazer volta o total por delta (o lido antes do SET) e re-sincroniza a linha padrao depois
             // (a ordem do desfazer: total, depois linha). Restaura as linhas exatas quando elas batiam com o total; material sem
             // linha nenhuma sai do desfazer com a linha padrao criada pelo sync, igual ao total (declarado, Fase 2 achado 3).
-            compensarQuantidadeMaterial = Q.qtd((Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0) - Q.qtd(mov.saldo_anterior)) || null;
+            compensarQuantidadeMaterial = Q.qtd(totalAgora - novoTotal) || null;
             compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
-            saldoDepois = Q.qtd(mov.saldo_anterior);
+            saldoDepois = novoTotal;
             // Etapa 253 (RN-253.14; Fase 2, achado 2): com lote, o estorno drena as linhas do lote nos outros enderecos (sem isto, um
             // ajuste para cima seguido de uma transferencia do lote deixava a linha padrao do lote negativa). As drenadas entram no
-            // rastreador que o desfazer devolve ANTES do total e do sync (`compensarLinhasClaim`). Sem lote, como sempre (sem drenar).
+            // rastreador que o desfazer devolve ANTES do total e do sync (`compensarLinhasClaim`). Sem lote nao drenava ate a 257 — com o SET
+            // absoluto o residuo nunca descia abaixo do de antes do ajuste. Etapa 258 (RN-258.04): pela diferenca ele desce (ajuste para cima
+            // e saida da padrao depois: A 2, B 5, Ajuste para 10, Saida 5 de A, estorno -> A -3), entao sem lote tambem drena, como o ajuste
+            // de ida (Etapa 51; o nao separado primeiro, Etapa 254), com as drenadas no mesmo rastreador.
             // Etapa 256 (C549, RN-256.02..05): antes do residuo, devolve as linhas que o ajuste drenou (gravadas na ida), limitado ao que
             // iria a mais para a padrao — dentro do sync, sob a mesma secao. As devolvidas entram no MESMO rastreador (negativas: o
             // desfazer soma), que o desfazer aplica antes de voltar o total e re-sincronizar. Ajuste antigo (sem registro): lista vazia,
@@ -3882,7 +3902,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
               FROM ajuste_linhas_drenadas_almoxarifado WHERE movimentacao_id = ? GROUP BY saldo_id ORDER BY ordem`, [mov.id]);
             compensarLinhasClaim = [];
             await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id,
-              { drenar: Boolean(mov.lote_id), drenadas: compensarLinhasClaim, devolver, devolvidas: compensarLinhasClaim });
+              { drenar: true, drenadas: compensarLinhasClaim, devolver, devolvidas: compensarLinhasClaim });
           }
         } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
           // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao

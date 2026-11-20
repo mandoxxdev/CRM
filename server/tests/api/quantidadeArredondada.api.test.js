@@ -305,7 +305,7 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(absolutas, [
       ['quantidade_atual', 'saldos.total'], ['quantidade', 'Q.qtd(novaLinha)'], ['quantidade', 'parseFloat(quantidade)'],
       ['quantidade_atual', 'saldoPosterior'], ['quantidade_atual', 'saldoPosterior'],
-      ['quantidade_atual', 'Q.qtd(ajusteSerieFisicoAnterior)'], ['quantidade_atual', 'Q.qtd(mov.saldo_anterior)'],
+      ['quantidade_atual', 'Q.qtd(ajusteSerieFisicoAnterior)'], ['quantidade_atual', 'novoTotal'],
     ]);
   });
 
