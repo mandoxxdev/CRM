@@ -15,6 +15,9 @@ import { MemoryRouter } from 'react-router-dom';
 import InspecoesAlmoxarifado from './InspecoesAlmoxarifado';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+// Etapa 249 (RN-249.09): a resposta REAL de `GET /materiais/:id/lotes-para-bloquear`, gravada pelo teste da rota
+// (`server/tests/api/bloquearIndicandoOLote.api.test.js`, CRM_GRAVAR_FIXTURE=1) — regrave quando o servidor mudar.
+import LOTES_PARA_BLOQUEAR from './__fixtures__/lotesParaBloquearDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -450,12 +453,148 @@ describe('InspecoesAlmoxarifado — Lote no Desbloquear (Etapa 209)', () => {
     expect(opcoesLote().map(([v]) => v)).toEqual(['', '9']);
   });
 
-  test('(8) Bloquear não busca o bloqueado por lote nem mostra o campo (B1419)', async () => {
+  // Etapa 249 (MUDANCA DE REGRA, C500): este teste dizia "Bloquear não busca o bloqueado por lote nem mostra o campo (B1419)". O
+  // Bloquear passou a ter o campo Lote — com OUTRA fonte (`/lotes-para-bloquear`, RN-249.10). O que continua: o Bloquear não lê o
+  // bloqueado por lote (é a lista do Desbloquear).
+  test('(8) Bloquear não busca o bloqueado por lote (é a lista do Desbloquear) — Etapa 249: busca os lotes para bloquear', async () => {
     await renderizar();
     await abrirAjuste('Bloquear');
     await escolherMaterial('10');
     expect(chamadasBloqueio()).toEqual([]);
+    expect(api.get.mock.calls.map(([u]) => u)).toContain('/almoxarifado/materiais/10/lotes-para-bloquear');
+  });
+});
+
+/*
+ * Etapa 249 (RN-249.10, C500) — o campo Lote na janela Bloquear Material. Mock só da fronteira HTTP, com a resposta REAL do servidor
+ * (fixture gravada pelo teste da rota): `{ material_id, lotes: [{ lote_id, codigo, saldo, livre }] }`.
+ */
+describe('InspecoesAlmoxarifado — Lote no Bloquear (Etapa 249)', () => {
+  const MATERIAIS = [
+    { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_bloqueada: 0, controle_lote: 1 },
+    { id: 12, codigo: 'MAT-3', nome: 'Arruela', unidade: 'PC', quantidade_bloqueada: 0, controle_lote: 0 },
+  ];
+  let porMaterial;
+  const chamadasLotes = () => api.get.mock.calls.filter(([u]) => /\/lotes-para-bloquear$/.test(u)).map(([u]) => u);
+  const opcoesLote = () => [...campoPorLabel('Lote').options].map((o) => [o.value, o.textContent]);
+  const [LA, LB] = LOTES_PARA_BLOQUEAR.lotes;
+
+  beforeEach(() => {
+    porMaterial = {
+      10: { ...LOTES_PARA_BLOQUEAR, material_id: 10 },
+      12: { material_id: 12, lotes: [] },
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/inspecoes/pendentes') return Promise.resolve({ data: pendentesDoBanco });
+      if (url === '/almoxarifado/estoque') return Promise.resolve({ data: MATERIAIS });
+      const m = url.match(/^\/almoxarifado\/materiais\/(\d+)\/lotes-para-bloquear$/);
+      if (m) {
+        const r = porMaterial[m[1]];
+        return r instanceof Error ? Promise.reject(r) : Promise.resolve({ data: r });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  async function escolherMaterial(id) {
+    await act(async () => {
+      const el = campoPorLabel('Material');
+      Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set.call(el, id);
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  test('(1) a fixture do servidor tem dois lotes com saldo (premissa)', () => {
+    expect(LOTES_PARA_BLOQUEAR.lotes.length).toBeGreaterThanOrEqual(2);
+    expect(Object.keys(LA).sort()).toEqual(['codigo', 'livre', 'lote_id', 'saldo']);
+  });
+
+  test('(2) com lotes: o campo Lote (opcional) com "Sem lote (não indicar)" e o livre de cada lote; o POST leva o lote escolhido', async () => {
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('10');
+    expect(chamadasLotes()).toEqual(['/almoxarifado/materiais/10/lotes-para-bloquear']);
+    expect(opcoesLote()).toEqual([
+      ['', 'Sem lote (não indicar)'],
+      [String(LA.lote_id), `${LA.codigo} — ${LA.livre} livre(s) para bloquear`],
+      [String(LB.lote_id), `${LB.codigo} — ${LB.livre} livre(s) para bloquear`],
+    ]);
+    const rotulo = [...container.querySelectorAll('.almox-modal .almox-field label')].find((l) => l.textContent.startsWith('Lote'));
+    expect(rotulo.querySelector('.required')).toBeNull();
+    preencher(campoPorLabel('Lote'), String(LB.lote_id));
+    preencher(campoPorLabel('Quantidade'), '2');
+    preencher(campoPorLabel('Justificativa'), 'Avaria no lote');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/bloquear', {
+      quantidade: 2, justificativa: 'Avaria no lote', lote_id: LB.lote_id,
+    });
+  });
+
+  test('(2b) Fase 2 achado 7: lote com livre 0 aparece desabilitado (metade positiva: o outro continua habilitado)', async () => {
+    porMaterial[10] = { material_id: 10, lotes: [{ ...LA, livre: 0 }, LB] };
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('10');
+    const opcoes = [...campoPorLabel('Lote').options];
+    expect(opcoes.map((o) => [o.value, o.disabled])).toEqual([['', false], [String(LA.lote_id), true], [String(LB.lote_id), false]]);
+    expect(opcoes[1].textContent).toBe(`${LA.codigo} — 0 livre(s) para bloquear`);
+  });
+
+  test('(3) sem escolher o lote: o POST sai SEM lote_id (como antes) e sem aviso', async () => {
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('10');
+    expect(campoPorLabel('Lote').value).toBe('');
+    preencher(campoPorLabel('Quantidade'), '1');
+    preencher(campoPorLabel('Justificativa'), 'Avaria');
+    await clicarBotaoModal('Confirmar');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/bloquear', { quantidade: 1, justificativa: 'Avaria' });
+  });
+
+  test('(4) `lotes: []` não mostra o campo; GET falhou também não — o POST sai como antes e a recusa do servidor vai literal', async () => {
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('12');
+    expect(chamadasLotes()).toEqual(['/almoxarifado/materiais/12/lotes-para-bloquear']);
     expect(campoPorLabelOuNull('Lote')).toBeNull();
+    porMaterial[10] = new Error('rede');
+    const recusa = 'Saldo livre do lote L1 insuficiente para bloquear: 1 UN';
+    api.post.mockRejectedValue({ response: { data: { error: recusa } } });
+    await escolherMaterial('10');
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    preencher(campoPorLabel('Quantidade'), '2');
+    preencher(campoPorLabel('Justificativa'), 'Avaria');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/bloquear', { quantidade: 2, justificativa: 'Avaria' });
+    expect(toast.error).toHaveBeenCalledWith(recusa);
+  });
+
+  test('(5) trocar de material zera o lote; a resposta atrasada do material anterior é ignorada', async () => {
+    let soltar10;
+    const atrasada = new Promise((resolve) => { soltar10 = resolve; });
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/10/lotes-para-bloquear'
+      ? atrasada.then((data) => ({ data })) : base(url)));
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('10');
+    await escolherMaterial('12');
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    await act(async () => { soltar10({ ...LOTES_PARA_BLOQUEAR, material_id: 10 }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    // metade positiva: escolher o 10 de novo mostra o campo, sem lote escolhido
+    api.get.mockImplementation(base);
+    await escolherMaterial('10');
+    expect(campoPorLabel('Lote').value).toBe('');
+  });
+
+  test('(6) o Desbloquear não busca os lotes para bloquear (a lista dele é o bloqueado por lote)', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    expect(chamadasLotes()).toEqual([]);
   });
 });
 

@@ -127,7 +127,7 @@ retém mais; o desconto do impedido já tira o retido do lote, B1438 — sem dup
   material→lote, (4) o `lote_id` no serviço.
 - [x] **T2** (no mesmo commit da T1: o teste é o mesmo arquivo) — RN-249.20 (C501) no mesmo arquivo de teste (vermelho antes) + motor (`codigo`) + `executarLiberacao`. Controle positivo:
   tirar a tradução.
-- [ ] **T3 (galho)** — tela: RN-249.10 em `InspecoesAlmoxarifado.test.js` (com a fixture), teste (8) da 209 reescrito.
+- [x] **T3 (galho)** (vermelhos 5/5 antes; controle positivo: 4 sabotagens — `lote_id` no POST, opção desabilitada, resposta atrasada, rótulo obrigatório —, cada uma derrubou o seu cenário) — tela: RN-249.10 em `InspecoesAlmoxarifado.test.js` (com a fixture), teste (8) da 209 reescrito.
 - [ ] **T4** — Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
 - [ ] **T5** — fechamento (fechar-etapa sem 7½ e 8).
 
