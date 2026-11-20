@@ -35,8 +35,8 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 17 | Sugestão da fila lê a conta do lote preso | 45 min | fatia (o C517 diz "pequeno") | 45 min | C517 (Etapa 250) | dica "pegar em XB-01, lote L1" da Fila — **confirmado na Fase 0 da 250** (teste vermelho: a dica mandava pegar 2 no lote com 1 livre e a separação recusava) | 0,35 h (rateio da Etapa 250, como o item 16) | 30 min | `69c3f581`, `6dfb6905`, `a0fbec62` |
 | 18 | Ajuste com lote limita a baixa ao saldo do lote | 1h15 | motor (o C475 dizia ~1h30 na régua antiga) | 1h15 | C475, B1357 | ramo de Ajuste do `registrarMovimentacao`; só pela movimentação nova (integração) | — | — | — |
 | 19 | Frase própria para o excesso de dois itens na mesma prateleira | 30 min | frase | 30 min | C497, B1415 | recusa de saldo da entrega (Etapa 208) | — | — | — |
-| 20 | Teto dividido entre itens que disputam o mesmo lote | 1h | fatia de tela (molde: separação, Etapa 127) | 1h | C489, B1395 | detalhe e Fila | — | — | — |
-| 21 | Entregável do detalhe sem a parte de lote impedido/peça presa (C491 + C518) | 1h15 | fatia de tela + leitura | 1h15 | C491, C518 | teto da B1395 soma a parte guardada sem olhar o lote | — | — | — |
+| 20 | Teto dividido entre itens que disputam o mesmo lote | 1h | fatia de tela (molde: separação, Etapa 127) | 1h | C489, B1395 (Etapa 251, `2026-11-19-almoxarifado-etapa251-entregavel-dividido-e-lote-da-separacao.md`) | detalhe e Fila — **confirmado na Fase 0 da 251** (sonda: 3 e 3 no detalhe e na Fila, a entrega dos dois recusada) | 0,49 h (rateio da Etapa 251: 1,1 h medida no horas.js 19/11, grupo E251="Etapa 251" — os commits citam C489 e C491/C518 juntos —, pelos 1h + 1h15 estimados) | 30 min | `9fc00300`, `9877c01c`, `9c66b95c` |
+| 21 | Entregável do detalhe sem a parte de lote impedido/peça presa (C491 + C518) | 1h15 | fatia de tela + leitura | 1h15 | C491, C518 (Etapa 251) | teto da B1395 soma a parte guardada sem olhar o lote — **confirmado na Fase 0 da 251** (C491 só com o resto do material guardado; C518: o número já batia sem lote impedido, o defeito era o um clique) | 0,61 h (rateio da Etapa 251, como o item 20) | 45 min | `9fc00300`, `9877c01c`, `e8a79383`, `256bada6`, `9c66b95c` |
 | 22 | Endereço na troca para o automático | 45 min | fatia | 45 min | C495 | bloco Substituições do detalhe | — | — | — |
 | 23 | Série respeita a peça separada do irmão (material sem lote) | 1h30 | motor; **medido só pela descrição** ("conserto não medido") — reestimar na Fase 0.5 se a sonda mostrar mais | 1h30 | C493, B1404 | teste `[RN-207.02 c]` reproduz | — | — | — |
 | 24 | Tirar o campo Aplicação — **depende de resposta** | 30 min | tirar um campo | 30 min | fila do Compras, item 7 | `MaterialAlmoxarifadoForm.js:934-938`; `camposLidos.js:34` fica (a coluna `aplicacao` continua) | — | — | — |
@@ -97,6 +97,10 @@ do material — corrigidos com teste. Medido 0,9 h para os dois (todos os commit
 **Etapa 250 (itens 16 e 17, 19/11):** não revisados (a medição confirmou os dois). 30 min abaixo do estimado no total: a frase usa números
 que a tela já recebia e a sugestão reaproveitou a conta da separação. A revisão final achou a frase falando da saída automática quando as
 peças saíam do endereço da separação, corrigida com teste. Medido 0,7 h para os dois → 30 min + 30 min.
+**Etapa 251 (itens 20 e 21, 19/11):** não revisados (a sonda confirmou os três defeitos). 1h abaixo do estimado no total: a divisão reaproveitou a
+conta que a janela já fazia para o livre do material e o teto da conferência já existia. A revisão final achou, em duas rodadas, a tela
+oferecendo pelo automático uma quantidade que a entrega recusava (a caixa num lote com peça presa) — corrigida com teste. Medido 1,1 h para
+os dois → 30 min + 45 min.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 

@@ -1,0 +1,7 @@
+*Concluído — Quanto cada item pode entregar quando dividem o mesmo lote, e quando o lote da separação ficou bloqueado*
+_19/11/2026_
+
+20. Quanto cada item pode entregar quando dividem o mesmo lote — estimado 1h · realizado 30 min
+21. Quanto pode ser entregue quando o lote da separação ficou bloqueado — estimado 1h15 · realizado 45 min
+
+*Total: estimado 2h15 · realizado 1h15*
