@@ -1,0 +1,8 @@
+*Concluído — De qual prateleira saiu a troca automática, a mensagem de dois itens na mesma prateleira e a peça com número de série*
+_20/11/2026_
+
+22. Endereço na troca para o automático — estimado 45 min · realizado 30 min
+19. Mensagem quando dois itens disputam a mesma prateleira — estimado 30 min · realizado 30 min
+23. Peça com número de série respeita a separação do outro item — estimado 1h30 · realizado 30 min
+
+*Total: estimado 2h45 · realizado 1h30*
