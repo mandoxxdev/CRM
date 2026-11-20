@@ -97,19 +97,37 @@ const saldoEntregavel = (item) => Math.max(0, Number(item.saldo_entregavel ?? ma
 const entregavelProprio = (item) => Math.min(saldoEntregavel(item),
   Math.max(0, Number(item.saldo_entregavel_proprio ?? saldoEntregavel(item)) || 0));
 const tiraDoLivreNaEntrega = (item, quantidade) => Math.max(0, (Number(quantidade) || 0) - entregavelProprio(item));
-const maxEntregaNaTela = (item, outrosMesmoMaterial = 0) => {
+// Etapa 251 (RN-251.02/03; C489, B1395): com lote impedido no material, o servidor manda o teto do item SOZINHO pela régua da conferência
+// (`saldo_entregavel_lote`) e a parte dele que sai da própria guarda (`saldo_entregavel_lote_proprio`). O resto do teto é o automático do
+// lote, que os irmãos dividem na ordem do pedido (a conferência soma o que cada um tira dele). Antes dois itens no mesmo lote bom abriam 3 e
+// 3 e a entrega recusava os dois juntos. Servidor sem os campos: nada a dividir (a conta de antes).
+const tetoLoteEntrega = (item) => (item.saldo_entregavel_lote == null ? null : Math.max(0, Number(item.saldo_entregavel_lote) || 0));
+const proprioLoteEntrega = (item) => {
+  const teto = tetoLoteEntrega(item);
+  return teto === null ? 0 : Math.min(teto, Math.max(0, Number(item.saldo_entregavel_lote_proprio) || 0));
+};
+const tiraDoLoteNaEntrega = (item, quantidade) => (tetoLoteEntrega(item) === null ? 0
+  : Math.max(0, (Number(quantidade) || 0) - proprioLoteEntrega(item)));
+const maxEntregaNaTela = (item, outrosMesmoMaterial = 0, outrosNoLote = 0) => {
   const proprio = entregavelProprio(item);
-  return Math.min(maxQtdEntrega(item),
+  const semLote = Math.min(maxQtdEntrega(item),
     proprio + Math.max(0, saldoEntregavel(item) - proprio - (Number(outrosMesmoMaterial) || 0)));
+  const teto = tetoLoteEntrega(item);
+  if (teto === null) return semLote;
+  const proprioLote = proprioLoteEntrega(item);
+  return Math.min(semLote, proprioLote + Math.max(0, teto - proprioLote - (Number(outrosNoLote) || 0)));
 };
 // O pré-preenchimento: cada item, na ordem do pedido, com o que sobra do livre depois dos irmãos anteriores. Só os > 0.
 const quantidadesIniciaisEntrega = (itens) => {
   const jaContado = {};
+  const jaNoLote = {}; // Etapa 251 (RN-251.02)
   const qtds = {};
   (itens || []).forEach((item) => {
     const outros = jaContado[item.material_id] || 0;
-    const quantidade = Number(maxEntregaNaTela(item, outros).toFixed(6));
+    const outrosLote = jaNoLote[item.material_id] || 0;
+    const quantidade = Number(maxEntregaNaTela(item, outros, outrosLote).toFixed(6));
     jaContado[item.material_id] = outros + tiraDoLivreNaEntrega(item, quantidade);
+    jaNoLote[item.material_id] = outrosLote + tiraDoLoteNaEntrega(item, quantidade);
     if (quantidade > 0) qtds[item.id] = quantidade;
   });
   return qtds;
@@ -118,6 +136,10 @@ const quantidadesIniciaisEntrega = (itens) => {
 const entregandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
   .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
   .reduce((s, i) => s + tiraDoLivreNaEntrega(i, Math.max(0, parseFloat((quantidades || {})[i.id]) || 0)), 0);
+// Etapa 251 (RN-251.03): o mesmo para o automático do lote — o que passa da parte própria (no lote) de cada irmão.
+const entregandoOutrosDoLote = (itens, item, quantidades) => (itens || [])
+  .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
+  .reduce((s, i) => s + tiraDoLoteNaEntrega(i, Math.max(0, parseFloat((quantidades || {})[i.id]) || 0)), 0);
 // Etapa 195 (C454, RN-195.01/03): recarregar o detalhe com a janela aberta mantém o que estava digitado em cada item que continua na
 // janela (`naJanela` no detalhe que estava na tela E no novo); item que saiu dela volta ao inicial (nada escondido vai no envio), item
 // que entrou ou voltou recebe o inicial (é decidido de novo, como o "Sai de" da 189), item sumido sai. Digitado acima do novo máximo fica
@@ -273,10 +295,23 @@ const planejadaPendenteImpedida = (item, rows, saldosFalharam = false) => {
 const itensEntregaDiretaImpedida = (itens) => {
   const qtds = quantidadesIniciaisEntrega(itens);
   return (itens || []).filter((i) => (parseFloat(qtds[i.id]) || 0) > 0 && temPlanejada(i) && pendentePlanejado(i) > 1e-9
-    && i.lote_separacao_esta_impedido === true);
+    && (i.lote_separacao_esta_impedido === true || i.lote_separacao_nao_cobre === true));
 };
-const fraseEntregaDiretaImpedida = (i) => `${i.material_nome}: separado de ${i.origem_separacao_codigo} — lote ${i.lote_separacao_codigo} `
-  + `(${situacaoDoLote(linhaDoLoteDaSeparacao(i))}). A entrega direta sairia de lá e seria recusada — use "Entregar escolhendo de onde sai…".`;
+// Etapa 251 (RN-251.12; C518): a parte guardada num lote cuja peça presa não a deixa sair (`lote_separacao_nao_cobre` do detalhe) — a entrega
+// de um clique sai da origem da separação e é recusada ("não serve mais"); o caminho é a janela, no automático.
+const fraseEntregaDiretaNaoCobre = (i) => {
+  const parte = pendentePlanejado(i);
+  const pode = Math.max(0, Number(i.lote_separacao_pode_sair) || 0);
+  const un = i.unidade ? ` ${i.unidade}` : '';
+  const separadas = Math.abs(parte - 1) < 1e-9 ? `da 1${un} separada dele` : `das ${r6(parte)}${un} separadas dele`;
+  const sai = pode <= 1e-9 ? 'nenhuma pode sair' : `só ${r6(pode)} ${Math.abs(pode - 1) < 1e-9 ? 'pode' : 'podem'} sair`;
+  return `${i.material_nome}: separado de ${i.origem_separacao_codigo} — lote ${i.lote_separacao_codigo}: ${separadas}, ${sai} (peça presa no `
+    + 'lote). A entrega direta sairia de lá e seria recusada — use "Entregar escolhendo de onde sai…".';
+};
+const fraseEntregaDiretaImpedida = (i) => (i.lote_separacao_esta_impedido !== true && i.lote_separacao_nao_cobre === true
+  ? fraseEntregaDiretaNaoCobre(i)
+  : `${i.material_nome}: separado de ${i.origem_separacao_codigo} — lote ${i.lote_separacao_codigo} `
+  + `(${situacaoDoLote(linhaDoLoteDaSeparacao(i))}). A entrega direta sairia de lá e seria recusada — use "Entregar escolhendo de onde sai…".`);
 // Etapa 98 (T4): a caixa do item na régua do servidor (`Q.qtd`, 6 casas) — o que o "Devolver à prateleira" pode tirar.
 const caixaDoItem = (item) => Math.round(pendenteSeparado(item) * 1e6) / 1e6;
 const MOTIVO_DEVOLUCAO_MAX = 500;
@@ -846,6 +881,12 @@ const RequisicoesList = () => {
       // seria uma troca que o almoxarife não pediu). Vale também acima da parte e com a busca de saldos falha (pelo detalhe).
       if (planejadaPendenteImpedida(item, rows, !!saldosEntregaFalhos[item.material_id])) {
         novas[item.id] = { valor: VALOR_ESCOLHER_ORIGEM, codigo: '', automatico: false };
+        return;
+      }
+      // Etapa 251 (RN-251.12; C518): a parte guardada num lote cuja peça presa não a deixa sair — a planejada seria recusada ("não serve
+      // mais"); a janela abre no automático (o que a recusa ensina), dito ao servidor.
+      if (item.lote_separacao_nao_cobre === true) {
+        novas[item.id] = { valor: '', codigo: '', automatico: true };
         return;
       }
       const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
@@ -2966,7 +3007,7 @@ const RequisicoesList = () => {
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
-                      max={maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega))}
+                      max={maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega), entregandoOutrosDoLote(detalhe.itens, item, quantidadesEntrega))}
                       value={quantidadesEntrega[item.id] ?? ''}
                       onChange={e => setQuantidadesEntrega(q => ({ ...q, [item.id]: e.target.value }))} />
                     <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', textAlign: 'right', marginTop: 2 }}>{item.unidade}</div>
