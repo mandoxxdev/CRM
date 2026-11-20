@@ -176,6 +176,52 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A254T/-=3 B254T/-=3', 'o ajuste para cima drenou B');
   });
 
+  await test('[RN-254.01 b, Fase 5] padrao = A: a caixa COM lote em A nao vira piso da linha SEM lote de A', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4, { lote: 'LX' });
+    await entrar(m, 4);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    const LX = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id=? AND codigo=?', [m, 'LX'])).id;
+    await separar(m, 4, A.id, LX);
+    const r = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 8 });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    // 11 -> 8: a linha padrao sem lote recebe 8 - 7 = 1; a caixa e do lote LX (outra linha) — nada a drenar de B.
+    assert.strictEqual(await linhas(m), 'A254T/-=1 A254T/LX=4 B254T/-=3', 'o piso leu a caixa do lote na linha sem lote');
+  });
+
+  await test('[RN-254.01 b, Fase 5] o estorno do Ajuste COM lote com o residuo >= 0 abaixo do piso tambem drena: a entrega sai', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4, { lote: 'LB' });
+    await entrar(m, 3, { lote: 'LB', localizacao_destino_id: B.id });
+    const LB = (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id=? AND codigo=?', [m, 'LB'])).id;
+    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 10, lote_id: LB });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    assert.strictEqual(await linhas(m), 'A254T/LB=7 B254T/LB=3', 'premissa');
+    const { R, item } = await separar(m, 6, A.id, LB);
+    const est = await como('ADMIN').post(`${API}/movimentacoes/${aj.body.id}/cancelar`, { motivo: 'teste 254' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    // O estorno volta o total para 7: o residuo da padrao (7 - 3 = 4) fica abaixo das 6 separadas dela — tira 2 da parte livre de B.
+    assert.strictEqual(await linhas(m), 'A254T/LB=6 B254T/LB=1', 'o estorno deixou a padrao abaixo da caixa');
+    const ent = await entregar(R, item, 6);
+    assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
+  });
+
+  await test('[D (254), documenta — Fase 5 achado 1] o estorno do Ajuste SEM lote que drenou devolve tudo na posicao padrao', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    await separar(m, 4, A.id);
+    const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 4 });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    assert.strictEqual(await linhas(m), 'A254T/-=4 B254T/-=0');
+    const est = await como('ADMIN').post(`${API}/movimentacoes/${aj.body.id}/cancelar`, { motivo: 'teste 254' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    // O total volta certo (7); as 3 que o Ajuste tirou de B voltam na padrao A — o estorno sem lote nao sabe de onde a baixa saiu (como
+    // desde a Etapa 51, quando o residuo ficava negativo). Declarado: C549, D (254), B1597. Se um dia o estorno devolver a B, mude aqui.
+    assert.strictEqual(await fis(m), 7);
+    assert.strictEqual(await linhas(m), 'A254T/-=7 B254T/-=0');
+  });
+
   // ── RN-254.02: sem outra saida, a caixa e drenada ─────────────────────────────────────────────────────────────────────────
   await test('[RN-254.02] a guarda de retencao continua decidindo SE passa: abaixo da caixa, 400 e nada muda', async () => {
     const m = await material();
