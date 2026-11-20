@@ -216,6 +216,48 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A257T/-=3 B257T/-=5');
   });
 
+  await test('[RN-257.01, Fase 5] os outros tipos de saida (PERDA, AJUSTE_NEGATIVO) gravam e estornam as prateleiras', async () => {
+    for (const tipo of ['PERDA', 'AJUSTE_NEGATIVO']) {
+      const m = await material({ padrao: A.id });
+      await entrar(m, 3);
+      await entrar(m, 5, { localizacao_destino_id: B.id });
+      const r = await v2({ material_id: m, tipo, quantidade: 6 });
+      assert.strictEqual(r.status, 201, `${tipo}: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(await registro(r.body.id), 'A257T/-=3 B257T/-=3', `${tipo}: a ida nao gravou`);
+      await estornar(r.body.id);
+      assert.strictEqual(await linhas(m), 'A257T/-=3 B257T/-=5', `${tipo}: o estorno nao devolveu a B`);
+    }
+  });
+
+  await test('[RN-257.05, Fase 5] a 2a devolucao (B) falhando: a 1a (A) volta, estado de antes; de novo, sem a falha, certo', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 3);
+    await entrar(m, 5, { localizacao_destino_id: B.id });
+    const s = await sair(m, 6);
+    const lb = (await dbGet(db, 'SELECT id FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?', [m, B.id])).id;
+    const original = db.get;
+    let armado = true;
+    db.get = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (armado && /^\s*UPDATE estoque_saldo_almoxarifado/.test(String(sql)) && Array.isArray(params)
+        && Number(params[1]) === lb && Number(params[2]) === m) {
+        armado = false;
+        cb.call({}, new Error('falha forcada 257 na 2a devolucao'));
+        return this;
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r;
+    try { r = await cancelar(s); } finally { db.get = original; }
+    assert.strictEqual(armado, false, 'gancho nao disparou');
+    assert.ok(r.status >= 400, `o estorno passou com a devolucao falhando: ${r.status}`);
+    assert.strictEqual(await linhas(m), 'A257T/-=0 B257T/-=2', 'o desfazer nao tirou a 1a devolucao');
+    assert.strictEqual(await fis(m), 2);
+    await estornar(s);
+    assert.strictEqual(await linhas(m), 'A257T/-=3 B257T/-=5');
+    assert.strictEqual(await fis(m), await soma(m));
+  });
+
   // ── RN-257.03: o que cai no caminho de antes ────────────────────────────────────────────────────────────────────────────
   await test('[RN-257.03] Saida antiga (sem registro): o estorno faz o de antes — tudo na chave (padrao)', async () => {
     const m = await material({ padrao: A.id });
