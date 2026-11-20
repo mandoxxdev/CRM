@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-19 (Etapa 249 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-19 (Etapa 250 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 249 fechada — 2026-11-19.** **Bloquear material indicando o lote, em Inspeções.** A janela
+> **O desenvolvimento parou aqui: Etapa 250 fechada — 2026-11-19.** **A entrega diz as peças presas do lote, e a Fila não sugere o lote que
+> não deixa sair.** Na janela de entrega, com o *Sai de* no automático, aparece *"Peças presas que a entrega automática não leva: lote L1 — 1
+> bloqueada"*; o *"Pegar em"* da Fila de separação só aponta um lote que deixa sair o que falta. **Sem consulta antes do deploy.** **Nenhum
+> clique foi dado** (roteiro na seção da 250). **Onde parou, exatamente:** a **250 está fechada**; a **próxima** são os itens 20 e 21 da
+> estimativa de 18/11 — **quanto cada item pode entregar quando dividem o mesmo lote** (C489) e **quanto pode ser entregue quando o lote da
+> separação ficou bloqueado** (C491/C518) —, detalhados no fim do plano da 250.
+>
+> *(Antes:)* **Etapa 249 fechada — 2026-11-19.** **Bloquear material indicando o lote, em Inspeções.** A janela
 > **Bloquear Material** tem o campo **Lote** (opcional) com quanto cada lote tem livre para bloquear; a peça fica bloqueada no lote, a entrega
 > não a tira e o **Desbloquear** a libera pelo lote. A aceitação da não conformidade que esbarra no *"Sem lote"* consumido ganha frase
 > própria. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 249). **Onde parou, exatamente:** a **249 está
@@ -7374,6 +7381,35 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 250 — A entrega diz as peças presas do lote, e a Fila não sugere o lote que não deixa sair (ENTREGUE — 2026-11-19)
+
+**O que mudou, em uma frase:** a janela de entrega diz quantas peças de cada lote estão presas quando a saída é automática, e a sugestão da
+Fila de separação deixa de mandar pegar num lote cujas peças presas não deixam sair o que falta.
+
+**O problema que ela resolve.** A entrega automática já deixava no lote as peças bloqueadas ou em inspeção e tirava do lote seguinte, sem dizer
+por quê. E a Fila sugeria *"Pegar em XB-01, lote L1"* contando o lote inteiro — o separador ia lá e a separação recusava.
+
+| Antes | Agora |
+|---|---|
+| Entrega no automático: nada sobre o lote com peça presa | *"Peças presas que a entrega automática não leva: lote L1 — 3 bloqueadas."* embaixo do **Sai de** |
+| Fila: *"Pegar em XB-01 — lote L1 · 2"* com 3 das 4 peças do L1 bloqueadas | *"Pegar em XB-02 — lote L2 · 2"*; o pedido de 1 continua no L1 |
+| Rótulo do **Sai de**, separação, entrega automática | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *LOT-250* com **controle por lote**, sem série.
+2. **Movimentações → Entrada**: 4 *LOT-250* lote *L1* (validade mais próxima) em *XB-01*; 4 lote *L2* (validade depois) em *XB-02*.
+3. **Inspeções → Bloquear Material**, *LOT-250*, lote *L1*, 3, *"avaria"*.
+4. Crie e aprove uma requisição de 2 *LOT-250*. **Separação → Fila**. **Confira:** *"Pegar em XB-02 — lote L2 · 2"*.
+5. Outra requisição de 1 *LOT-250*, aprovada. **Confira** na Fila: *"Pegar em XB-01 — lote L1 · 1"*.
+6. Na requisição de 2: **Iniciar Separação** no automático, 2 → confirme. **Entregar escolhendo de onde sai…**. **Confira** embaixo do **Sai de** (no
+   automático): *"Peças presas que a entrega automática não leva: lote L1 — 3 bloqueadas."*. Escolha *XB-02 — lote L2*: a frase some.
+
+**O que esta etapa não cobre:** a janela de separação não ganhou a frase; o alerta de retenção da Fila continua igual; material com número de
+série ou sem controle por lote fica como antes.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 249 — Bloquear material indicando o lote, e a frase da não conformidade (ENTREGUE — 2026-11-19)
 

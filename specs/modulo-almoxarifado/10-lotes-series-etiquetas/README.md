@@ -1,5 +1,8 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 250 (2026-11-19, tela `9c85f727`, Fase 5 `122d7e68`): a janela de entrega diz as peças presas do lote no automático (C514;
+> B1572, B1573).** Ver a seção "Etapa 250", no fim. Continua 🟢.
+
 > **+ Etapa 249 (2026-11-19, `9ef32392`, tela `55b78b37`, Fase 5 `7fd033c9`): bloquear material indicando o lote (C500) e a frase própria
 > da liberação pela não conformidade (C501); B1567–B1571, C546, C547.** O **Bloquear Material** aceita o lote (opcional) com a regra "o lote
 > tem livre para bloquear"; `GET /materiais/:id/lotes-para-bloquear`. Ver a seção "Etapa 249", no fim. Continua 🟢.
@@ -1401,7 +1404,7 @@ Fase 2 e Fase 5). **C466 resolvido inteiro; C503 resolvido.** A 2ª parte usa o 
 - [x] **Fase 5:** o envio de remessa a terceiro pega a trava do material (`enviarRemessa`, claim `enviado_em` + motor + compensação numa
   seção — B1442; sem isso a entrega mandava 2 para "Sem lote atribuído" negativo, reproduzido); quatro cenários determinísticos para regras
   que só o sorteio cobria — `cad6da56` (trava; testes em `e2a43f20`).
-- [ ] **Fora (declarado):** a escolha manual do lote (`Sai de`, C513); aviso na tela (C514); reservas de antes do deploy (C515);
+- [ ] **Fora (declarado):** a escolha manual do lote (`Sai de`, C513); aviso na tela (C514 — *resolvido na Etapa 250*); reservas de antes do deploy (C515);
   reprovação liberada pelo Desbloquear sem lote volta a contar (C516). Antes do deploy: **A114**.
 
 Continua 🟢. Testes: `bloqueadoDoLote.api.test.js` (23), `bloqueioSabeOLote` (RN-217.05/.10), `entregaAutomaticaPeloLote` (RN-217.01 a).
@@ -1582,3 +1585,18 @@ C547; C500 e C501 resolvidas). Itens 14 e 15 da estimativa de 18/11.
   comportamento de hoje); a caixa separada sem lote não sai do livre do lote (B1568); o estorno do DESBLOQUEIO com lote sem a régua (C504).
 
 Testes: `bloquearIndicandoOLote.api.test.js` (19); `InspecoesAlmoxarifado.test.js` (+7, e o (8) da 209 reescrito — mudança de regra). Continua 🟢.
+
+## Etapa 250 — a entrega diz as peças presas do lote (2026-11-19)
+
+Plano: `docs/superpowers/plans/2026-11-19-almoxarifado-etapa250-entrega-e-fila-sabem-do-lote-preso.md`. Fecha o **C514** (corte B1440 da 217).
+Sem mudança de servidor: consome `lote_livre`, `lote_bloqueado`, `lote_inspecao` de `GET /estoque/:id/saldos` (Etapa 218).
+
+- [x] **RN-250.01 / .03** — com o *Sai de* no automático, `#entrega-dica-lote-preso-<item>`: *"Peças presas que a entrega automática não
+  leva: lote L1 — 1 bloqueada; lote L9 — 1 bloqueada, 2 em inspeção."*; um lote uma vez; lote impedido fora; servidor sem os campos, nada —
+  `9c85f727`.
+- [x] **RN-250.02** — escolhido um endereço, a frase some — `9c85f727`.
+- [x] **RN-250.04** — a separação não ganha a frase (B1572) — `9c85f727`.
+- [x] **RN-250.05** (Fase 5, B1573) — com a origem da separação pendente e nada escolhido, só quando a quantidade passa da parte de lá ou o
+  automático foi escolhido de fato — `122d7e68`.
+
+Testes: `RequisicoesEntregaLotePreso.test.js` (6; 3/5 vermelhos antes, o da Fase 5 vermelho antes; 6 sabotagens, todas caem). Continua 🟢.

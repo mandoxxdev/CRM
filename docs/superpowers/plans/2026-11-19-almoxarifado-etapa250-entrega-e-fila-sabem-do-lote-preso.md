@@ -74,13 +74,20 @@ mesmo formato; a separação continua decidindo sob a trava). Fluxo traçado aqu
 
 ## Tasks
 
-- [ ] **T1 (tronco)** — testes RN-250.10..15 em `server/tests/api/sugestaoColetaLotePreso.api.test.js` (vermelhos antes) + `lerDadosDaColeta`
-  + `sugerirColeta`. Controle positivo: tirar o teto do lote; tirar o `planejadoPorLote` do teto; tirar o `sugeridoPorLote`; ligar o teto
-  sem o gatilho de peça presa (não deve derrubar — régua com folga; anotar).
-- [ ] **T2 (galho)** — tela: RN-250.01..04 em `client/src/components/almoxarifado/RequisicoesEntregaLotePreso.test.js` (vermelhos antes)
-  + `RequisicoesList.js`. Controle positivo: frase sem deduplicar; frase com lote impedido; frase com origem escolhida.
-- [ ] **T3** — Fase 5 (um revisor fresco, com sonda executada) e correções com teste próprio.
-- [ ] **T4** — fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T1 (tronco)** `69c3f581` — testes RN-250.10..15 em `server/tests/api/sugestaoColetaLotePreso.api.test.js` (6/8 vermelhos antes) +
+  `lerDadosDaColeta.lotePreso` + `sugerirColeta.livreDe`. Controle positivo: 5 sabotagens (sem o teto, sem o planejado do lote, sem o
+  sugerido aos irmãos, sem o gatilho, saldo no lugar do livre), cada uma derrubou o cenário que a guarda. **Divergência:** o plano previa que
+  ligar o teto sem o gatilho "não derrubaria" — derrubava nada porque faltava o cenário; foi escrito o do legado sobrecomprometido sem peça
+  presa (RN-218.11 c), e a sabotagem do gatilho passou a cair.
+- [x] **T2 (galho)** `9c85f727` — tela: RN-250.01..04 em `RequisicoesEntregaLotePreso.test.js` (3/5 vermelhos antes; os 2 negativos com
+  metade positiva) + `fraseLotePresoNoAutomatico`. Controle positivo: 5 sabotagens (sem deduplicar, com o lote impedido, com origem
+  escolhida, sem a inspeção, sem o plural), cada uma caiu.
+- [x] **T3** — Fase 5 (um revisor fresco, sonda executada, 6/6 cenários separando a quantidade sugerida pela porta real): servidor não
+  refutado. 1 achado real na tela, corrigido com teste vermelho antes: **RN-250.05** (B1573) — com a origem da separação pendente e nada
+  escolhido, a frase falava do automático e as peças saíam da origem da separação (`122d7e68`; sabotagem da condição do automático escolhido
+  derruba). 3 asserções faltando: lote preso só por inspeção e item com planejada num lote que ficou preso — escritas (`6dfb6905`; gatilho
+  só com o retido derruba o da inspeção; sem o teto derruba os dois); material com série — declarado (D (250) 3). 0 ruído.
+- [x] **T4** — fechamento (fechar-etapa sem 7½ e 8).
 
 ## Pontos de atenção
 
@@ -88,3 +95,48 @@ mesmo formato; a separação continua decidindo sob a trava). Fluxo traçado aqu
   dica tem de prever o que a separação aceita (`memoLotesComPecaPresa` usa a mesma).
 - O teto do lote soma o planejado de **todos** os pares do lote (a mesma `planejadoPorLote` das séries) — igual à separação (B1444: outras
   requisições + esta requisição).
+
+## Divergências do plano
+
+- A RN-250.05 não estava no plano (achado da Fase 5, B1573): a frase olhava só "nada escolhido", e nada escolhido com a planejada pendente
+  é a origem da separação, não o automático.
+- O controle positivo do gatilho (T1) estava previsto como "invisível"; com o cenário do legado sobrecomprometido ele cai.
+- Nenhuma linha do `CLAUDE.md` ficou desatualizada (nenhuma trava nem porta de saldo mudou; a fila só lê).
+
+## Verificação (medida, sobre o código final)
+
+- `npm run test:api` sobre o código final (`6dfb6905`): **643/643 arquivos**, rodado sozinho (sem Jest nem build em paralelo), terminou sem morrer.
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
+- Jest da tela: **237 suítes, 3207 testes**; `CI=true react-scripts build`: *Compiled successfully*.
+- Nenhum clique no navegador (F (250)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 1 (Fase 5: a frase com a planejada).
+- Achados: Fase 2 pulada (leitura + tela, motivo acima); Fase 5 — 1 real corrigido com teste vermelho antes + 3 asserções faltando (2
+  escritas, 1 declarada), 0 ruído.
+- Paralelismo: nenhum galho em paralelo; a Fase 5 rodou enquanto o manual era escrito (sem edição de código).
+- Defeito que escapou: (preencher na etapa seguinte). Da 249: nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+Itens 20 e 21 da estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`; 20: 1h, 21: 1h15,
+fatias de tela + leitura). Módulo Almoxarifado, feature 05.
+
+- **Item 20 — quanto cada item pode entregar quando dividem o mesmo lote (C489, B1395).** Com lote impedido, o "entregável" do detalhe e da
+  Fila é o de cada item **sozinho** (`requisitionService.tetoDaEntregaPeloLote` → `cabeDoAutomaticoPeloLote`, anotado pela rota do detalhe e
+  lido pela Fila, `requisitionService.js` ~1147 e ~2274): dois itens do mesmo material que disputam o mesmo lote bom mostram, cada um, o
+  máximo; entregando os dois juntos pelo máximo a conferência recusa sem baixar (*"faltam N un … ou entregue N un a menos"*). Conserto previsto
+  (B1395 descartou na época): dividir o teto entre os irmãos **na tela**, na ordem do pedido, como a separação já faz (Etapa 127,
+  `maxSeparavelNaTela`/`itensDaReq` em `RequisicoesList.js`). **Medir antes:** sonda com dois itens do mesmo material, L1 impedido e L2 3 —
+  o que o detalhe e a janela de entrega mostram e o que a entrega dos dois juntos responde.
+- **Item 21 — quanto pode ser entregue quando o lote da separação ficou bloqueado (C491 + C518).** O teto da B1395 soma a **parte guardada**
+  do item sem olhar o lote dela: item separado de (A, L1) e depois L1 bloqueado/vencido (C491) ou com peça presa que o lote não cobre (C518) —
+  o detalhe e a Fila ainda oferecem a parte, e a entrega de um clique recusa com *"… a origem da separação (A) não serve mais (…) — entregue
+  escolhendo de onde sai"*. Conserto previsto: `tetoDaEntregaPeloLote` não contar a parte cujo lote está impedido, nem o que o lote com peça
+  presa não deixa sair (`memoLotesComPecaPresa`/`situacaoDosLotes` + `guardadoNoLoteDeOutras`, a régua desta etapa e da 218). **Medir:**
+  sonda com a separação de (A, L1) e depois o Bloquear com lote em L1 (Etapa 249) — o entregável do detalhe antes e depois.
+- **Pontos de atenção:** o teto é leitura (sem trava) — a conferência da entrega continua decidindo; a Fila lê a anotação do detalhe; fixture
+  da tela regravada se o formato do detalhe mudar; a régua da entrega e a do bloqueio diferem de propósito (B1568, B1574).
+- **O que já está pronto e não reabre:** a frase das peças presas na entrega e a sugestão da Fila (esta etapa); o *Sai de* com lote (218); o
+  bloqueio com lote (249).
