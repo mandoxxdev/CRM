@@ -2776,8 +2776,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   if (opcoes.comEnderecosDaSaida && tiposSaida.includes(tipo) && saldoLinhasSaidaParaReverter.length) {
     try {
       const ids = saldoLinhasSaidaParaReverter.map((l) => l.id);
-      const rows = await dbAll(db, `SELECT DISTINCT localizacao_id FROM estoque_saldo_almoxarifado
-        WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+      // Fase 2 (item 5): a linha que ficou NEGATIVA (material que permite negativo) nao diz de onde a peca saiu -> null (desconhecido).
+      const rows = await dbAll(db, `SELECT DISTINCT CASE WHEN quantidade < -${Q.QTD_FOLGA} THEN NULL ELSE localizacao_id END AS localizacao_id
+        FROM estoque_saldo_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
       enderecosSaida = rows.map((r) => (r.localizacao_id == null ? null : Number(r.localizacao_id)));
     } catch (endErr) {
       console.warn(`[almoxarifado] enderecos da saida nao lidos (movimentacao ${result.lastID}): ${endErr.message}`);

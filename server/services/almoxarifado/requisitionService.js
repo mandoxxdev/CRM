@@ -3151,7 +3151,8 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         // Etapa 252 (RN-252.01, C495): a troca pelo automatico grava o endereco quando TODAS as baixas do item debitaram linhas de um
         // endereco so (nao nulo). Antes gravava nulo sempre e o detalhe dizia "saiu de automatico" mesmo com a peca saindo toda de B.
         const ends = [...plano.enderecosSaida];
-        const saiuOrigem = s.saiuOrigem || (ends.length === 1 && Number.isInteger(ends[0]) ? ends[0] : null);
+        // Fase 2 (item 4): so a troca AUTOMATICA — a escolhida a mao so pelo lote (sem endereco) continua sem endereco (RN-252.03).
+        const saiuOrigem = s.saiuOrigem || (s.automatica && ends.length === 1 && Number.isInteger(ends[0]) ? ends[0] : null);
         // eslint-disable-next-line no-await-in-loop
         await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
           (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,

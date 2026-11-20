@@ -132,6 +132,29 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(com.enderecos_saida, [B.id]);
   });
 
+  // Fase 2 (item 4): a troca escolhida a mao so pelo LOTE (sem endereco) nao e automatica — continua sem endereco (RN-252.03).
+  await test('[RN-252.01 e] troca a mao so pelo lote (LB, sem endereco): automatica 0 e sem endereco, como antes', async () => {
+    const m = await material({ lote: true });
+    await entrar(m, A.id, 2, 'LA'); await entrar(m, B.id, 5, 'LB');
+    const { R, ids } = await reqDireta([[m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: await loteId(m, 'LA') }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2, lote_id: await loteId(m, 'LB') }]);
+    assert.deepStrictEqual([await saldoEm(m, A.id), await saldoEm(m, B.id)], [2, 3], 'premissa: saiu de B pelo lote');
+    assert.deepStrictEqual(await subs(R), [{ plan: 'TE-A', saiu: null, lote: 'LB', auto: 0, q: 2 }]);
+  });
+
+  // Fase 2 (item 5): com saldo negativo permitido, a linha que ficou negativa nao diz de onde a peca saiu.
+  await test('[RN-252.02 b] o motor: a linha que fica negativa vem como desconhecida (null), nao como o endereco dela', async () => {
+    const c = `E252E-${++seq}`;
+    const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
+        material_critico, custo_unitario, controle_lote, controle_serie, permite_saldo_negativo, localizacao_padrao_id)
+        VALUES (?, ?, 'un', 0, 0, 1, 0, 0.1, 0, 0, 1, ?)`, [c, c, P.id])).lastID;
+    const com = await stockService.registrarMovimentacao(db, ADMIN, { material_id: id, tipo: 'SAIDA', quantidade: 2, motivo: 'e252',
+      justificativa: 'e252' }, { comEnderecosDaSaida: true });
+    assert.strictEqual(Number((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [id])).q), -2, 'premissa');
+    assert.deepStrictEqual(com.enderecos_saida, [null]);
+  });
+
   console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
   terminou = true;
   await close();
