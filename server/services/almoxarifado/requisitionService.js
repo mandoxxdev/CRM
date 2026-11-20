@@ -19,7 +19,7 @@ const reservaDaOs = require('./reservaDaOs');
 // Etapa 117 (C236, B759): a devolucao viva (a entrada nao estornada) — a mesma regua do estorno e da tela de Devolucoes.
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Etapa 205 (B1368): o saldo de lote impedido (modulo so com quantidade e diaLocal — sem ciclo).
-const { loteImpedidoSql, fraseLoteImpedido } = require('./loteImpedido');
+const { loteImpedidoSql, fraseLoteImpedido, predicadoLoteImpedidoSql } = require('./loteImpedido'); // Etapa 251: o lote da separacao impedido no teto
 const { retidoPorLote, situacaoDosLotes } = require('./retidoDoLote'); // Etapa 217 (B1439) / 218 (B1444): o bloqueado do lote
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
@@ -339,7 +339,19 @@ function normalizarItem(item) {
     : { saldo_entregavel: entregavel, saldo_entregavel_proprio: entregavel });
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
   // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
-  const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, teto_entrega_lote: _tetoLoteCru, ...resto } = item; // eslint-disable-line no-unused-vars
+  const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, teto_entrega_lote: _tetoLoteCru, // eslint-disable-line no-unused-vars
+    teto_entrega_lote_proprio: _tetoPropCru, lote_separacao_nao_cobre: _naoCobreCru, lote_separacao_pode_sair: _podeSairCru, // eslint-disable-line no-unused-vars
+    ...resto } = item;
+  // Etapa 251 (RN-251.01; C489): o teto do item sozinho e a parte dele que nao disputa o automatico — a tela divide o resto entre os irmaos
+  // (`maxEntregaNaTela`), como a Fila (`dividirTetoDoLote`). So quando a rota anota o teto (aditivos).
+  const camposTetoLote = Number.isFinite(tetoLote) ? { saldo_entregavel_lote: Q.qtd(tetoLote),
+    saldo_entregavel_lote_proprio: Q.qtd(Math.min(tetoLote, Math.max(0, num(item.teto_entrega_lote_proprio)))) } : {};
+  // Etapa 251 (RN-251.11; C518): a parte guardada num lote com peca presa que nao a deixa sair — a tela apaga o um clique e abre a janela
+  // no automatico. So quando a rota do detalhe o calculou (aditivo).
+  const camposNaoCobre = Object.prototype.hasOwnProperty.call(item, 'lote_separacao_nao_cobre') ? {
+    lote_separacao_nao_cobre: Number(item.lote_separacao_nao_cobre) === 1,
+    ...(Number(item.lote_separacao_nao_cobre) === 1 ? { lote_separacao_pode_sair: Q.qtd(num(item.lote_separacao_pode_sair)) } : {}),
+  } : {};
   return {
     ...resto,
     quantidade_entregue: entregue,
@@ -358,6 +370,8 @@ function normalizarItem(item) {
       lote_separacao_esta_impedido: Number(item.lote_separacao_esta_impedido) === 1,
       lote_separacao_vencido_sem_liberacao: Number(item.lote_separacao_vencido_sem_liberacao) === 1,
     } : {}),
+    ...camposTetoLote,
+    ...camposNaoCobre,
   };
 }
 
@@ -1146,10 +1160,13 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   const dadosColeta = await lerDadosDaColeta(db, itens);
   // Etapa 206 (Fase 5, R1, B1395): o teto do entregavel pela regua da conferencia da entrega (`tetoDaEntregaPeloLote`, o mesmo do
   // detalhe) — so os itens com saldo em lote impedido leem algo a mais.
+  // Etapa 251 (RN-251.10/11): com a regua da origem da separacao (lote impedido ou com peca presa que nao cobre a parte — a parte nao conta).
   const tetosLote = new Map();
+  const lotePresoDaFila = memoLotesComPecaPresa(db);
   for (const i of itens) {
+    if (!(num(i.lote_impedido) > Q.QTD_FOLGA)) continue; // sem lote impedido nao ha teto (nem leitura da origem)
     // eslint-disable-next-line no-await-in-loop
-    const t = await tetoDaEntregaPeloLote(db, i);
+    const t = await tetoDaEntregaPeloLote(db, i, await origemDaSeparacaoNaoServe(db, i, lotePresoDaFila));
     if (t !== null) tetosLote.set(i.id, t);
   }
   const fila = [];
@@ -1199,7 +1216,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
         // Etapa 206 (B1390, RN-206.11): menos o saldo de lote impedido — o numero da porta (a entrega recusa o que so ele cobre).
         entregavel: inativo ? 0 : Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)
-          - num(i.lote_impedido)), tetosLote.has(i.id) ? tetosLote.get(i.id) : Infinity)),
+          - num(i.lote_impedido)), tetosLote.has(i.id) ? tetosLote.get(i.id).teto : Infinity)),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         // Etapa 227 (B1502, RN-227.09): o impedido do material (o numero do extrato) — a tela diz "disponivel 10 (6 em lote impedido)".
         lote_impedido: Q.qtd(Math.max(0, num(i.lote_impedido))),
@@ -1209,6 +1226,13 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
         controle_lote: Number(i.controle_lote) === 1,
       };
     });
+    // Etapa 251 (RN-251.05; C489): os irmaos do mesmo material dividem o automatico do lote, na ordem do pedido (a conta da conferencia e da
+    // tela). Antes cada um mostrava o teto dele sozinho e a entrega dos dois juntos recusava sem baixar.
+    const divididoLote = dividirTetoDoLote(linhas.map((l) => ({ id: l.item_id, material_id: l.material_id, entregavel: l.entregavel,
+      teto: tetosLote.has(l.item_id) ? tetosLote.get(l.item_id).teto : null,
+      proprio: tetosLote.has(l.item_id) ? tetosLote.get(l.item_id).proprio : null })));
+    for (const l of linhas) l.entregavel = divididoLote.get(l.item_id);
+
     const etapas = [];
     if (podeSep && linhas.some((l) => l.separavel > 1e-9)) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'SEPARAR');
     if (podeSep && linhas.some((l) => l.a_separar > 1e-9 && l.separavel <= 1e-9)) etapas.push('AGUARDANDO_SALDO');
@@ -2271,7 +2295,7 @@ async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPo
  * desconta via `lotesParaOAutomatico`): ofereciam 3 e a porta recusava "nada sai deste material". So quando a conferencia pode recusar
  * (B1386: material com controle de lote, sem serie — C486 —, com saldo em lote impedido); fora disso null (o numero de antes). So le.
  */
-async function tetoDaEntregaPeloLote(db, item) {
+async function tetoDaEntregaPeloLote(db, item, origemLida) {
   if (!(num(item.lote_impedido) > Q.QTD_FOLGA)) return null;
   const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
   if (!mat || Number(mat.controle_lote) !== 1 || Number(mat.controle_serie) === 1) return null;
@@ -2280,6 +2304,15 @@ async function tetoDaEntregaPeloLote(db, item) {
   const origemPorItem = new Map();
   const saiu = new Map();
   const fica = new Map();
+  // Etapa 251 (RN-251.10/11; C491, C518): a origem da separacao que a entrega recusa (lote impedido, ou peca presa que nao deixa sair a
+  // parte) nao conta — o caminho que a tela oferece e o automatico (Etapa 231; RN-251.12), em que a guarda do item solta (`parteQueFica` 0
+  // com a caixa inteira) e nada sai da origem. Antes o teto somava a parte e o detalhe oferecia o que a porta recusava (2 com "nada sai").
+  const origem = origemLida !== undefined ? origemLida : await origemDaSeparacaoNaoServe(db, item);
+  if (origem && (origem.impedido || origem.naoCobre)) {
+    fica.set(Number(item.id), 0);
+    const cabeAuto = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, fica);
+    return { teto: Q.qtd(cabeAuto), proprio: 0 };
+  }
   if (parte > Q.QTD_FOLGA) { // o um clique da entrega: a planejada sai inteira (min(qty, parte) = parte) — saiDaOrigem, guarda que fica 0
     origemPorItem.set(item.id, { origemId: Number(item.origem_separacao_id), loteId: item.lote_separacao_id ? Number(item.lote_separacao_id) : null,
       qtdComOrigem: parte });
@@ -2287,17 +2320,80 @@ async function tetoDaEntregaPeloLote(db, item) {
     fica.set(Number(item.id), 0);
   }
   const cabe = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, fica);
-  return Q.qtd(parte + cabe);
+  // Etapa 251 (RN-251.01): `proprio` = a parte que sai da guarda do item e nao disputa o automatico com os irmaos (a tela e a Fila dividem
+  // so o resto — C489).
+  return { teto: Q.qtd(parte + cabe), proprio: parte };
 }
 
-/** Etapa 206 (Fase 5, R1): anota `teto_entrega_lote` nos itens do detalhe (insumo de normalizarItem, nao vai para o JSON). */
+/**
+ * Etapa 251 (RN-251.10/11; C491, C518) — a origem guardada do item (a parte da caixa separada de um endereco com lote) ainda serve para a
+ * entrega de um clique? A mesma regua da porta: `impedido` = o lote bloqueado, reprovado ou vencido sem liberacao (o `checarOrigemItem`; a
+ * regua da 224, a do campo `lote_separacao_esta_impedido`); `naoCobre` = lote com peca presa (o gatilho da 218, `memoLotesComPecaPresa`)
+ * cujo livre menos o guardado das outras requisicoes no lote e a guarda dos irmaos desta requisicao no lote nao cobre a parte (a passada
+ * do lote da entrega, com o item entregando sozinho). null sem parte com lote. So le.
+ */
+async function origemDaSeparacaoNaoServe(db, item, lotePreso = null) {
+  const caixa = Math.max(0, getSeparado(item) - getEntregue(item));
+  const parte = Q.qtd(Math.min(parteDaOrigem(item), caixa));
+  if (!(parte > Q.QTD_FOLGA) || !item.lote_separacao_id) return null;
+  const loteId = Number(item.lote_separacao_id);
+  const imp = await dbGet(db, `SELECT CASE WHEN ${predicadoLoteImpedidoSql('l')} THEN 1 ELSE 0 END as x
+    FROM lotes_almoxarifado l WHERE l.id = ?`, [loteId]);
+  if (imp && Number(imp.x) === 1) return { parte, impedido: true, naoCobre: false, podeSair: null };
+  const sit = await (lotePreso || memoLotesComPecaPresa(db))(item.material_id, loteId);
+  if (!sit) return { parte, impedido: false, naoCobre: false, podeSair: null };
+  const irmaos = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
+    WHERE ir.requisicao_id = ? AND ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ? AND ir.id <> ?`,
+  [item.requisicao_id, item.material_id, loteId, item.id]);
+  const guardaDosIrmaos = irmaos.reduce((acc, g) => acc + guardaQueConta(g, new Map(), null), 0);
+  const guardado = Q.qtd((await guardadoNoLoteDeOutras(db, item.material_id, loteId, item.requisicao_id)) + guardaDosIrmaos);
+  const podeSair = Q.qtd(Math.max(0, sit.livre - guardado));
+  return { parte, impedido: false, naoCobre: podeSair + Q.QTD_FOLGA < parte, podeSair };
+}
+
+/**
+ * Etapa 206 (Fase 5, R1): anota `teto_entrega_lote` nos itens do detalhe (insumo de normalizarItem, nao vai para o JSON). Etapa 251: tambem
+ * `teto_entrega_lote_proprio` (RN-251.01) e `lote_separacao_nao_cobre`/`lote_separacao_pode_sair` (RN-251.11, a tela apaga o um clique).
+ */
 async function anotarTetoDaEntregaPeloLote(db, itens) {
+  const lotePreso = memoLotesComPecaPresa(db);
   for (const item of itens || []) {
     // eslint-disable-next-line no-await-in-loop
-    const t = await tetoDaEntregaPeloLote(db, item);
-    if (t !== null) item.teto_entrega_lote = t;
+    const origem = await origemDaSeparacaoNaoServe(db, item, lotePreso);
+    item.lote_separacao_nao_cobre = origem && origem.naoCobre ? 1 : 0;
+    if (origem && origem.naoCobre) item.lote_separacao_pode_sair = origem.podeSair;
+    // eslint-disable-next-line no-await-in-loop
+    const t = await tetoDaEntregaPeloLote(db, item, origem);
+    if (t !== null) {
+      item.teto_entrega_lote = t.teto;
+      item.teto_entrega_lote_proprio = t.proprio;
+    }
   }
   return itens;
+}
+
+/**
+ * Etapa 251 (RN-251.05; C489) — o entregavel da Fila dividido entre os itens do mesmo material de UMA requisicao, na ordem do pedido, pela
+ * conta da conferencia do automatico (`conferirAutomaticoPeloLote`: a soma do que os itens tiram do automatico cabe no `cabe` do material).
+ * Cada linha `{ id, material_id, entregavel, teto, proprio }` (teto/proprio do `tetoDaEntregaPeloLote`; teto null = sem divisao): o item
+ * leva ate `proprio + max(0, teto − proprio − o que os anteriores tiraram do automatico)` e tira `max(0, levado − proprio)`. A mesma conta
+ * da tela (`maxEntregaNaTela`). Pura. -> Map(id -> entregavel).
+ */
+function dividirTetoDoLote(linhas) {
+  const usado = new Map();
+  const out = new Map();
+  for (const l of linhas || []) {
+    const e = Math.max(0, num(l.entregavel));
+    if (l.teto === null || l.teto === undefined) { out.set(l.id, Q.qtd(e)); continue; }
+    const k = String(l.material_id);
+    const teto = Math.max(0, num(l.teto));
+    const proprio = Math.min(Math.max(0, num(l.proprio)), teto);
+    const livre = Math.max(0, teto - proprio - (usado.get(k) || 0));
+    const q = Q.qtd(Math.min(e, proprio + livre));
+    usado.set(k, (usado.get(k) || 0) + Math.max(0, q - proprio));
+    out.set(l.id, q);
+  }
+  return out;
 }
 
 /**
@@ -3569,6 +3665,7 @@ module.exports = {
   conferirAutomaticoPeloLote, // Etapa 206 (B1383)
   tetoDaEntregaPeloLote, // Etapa 206 (Fase 5, R1)
   anotarTetoDaEntregaPeloLote, // Etapa 206 (Fase 5, R1)
+  dividirTetoDoLote, origemDaSeparacaoNaoServe, // Etapa 251 (RN-251.05, RN-251.10/11)
   maxSeparar,
   maxEntregar,
   entregavelPeloMotor, // Etapa 98 (T3, B509)
