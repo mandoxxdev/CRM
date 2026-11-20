@@ -216,7 +216,7 @@ const NEGATIVO = 'Não é possível estornar: o saldo já foi consumido (o estor
       const aj2 = await mov(m, 'AJUSTE', 7);
       const r = await cancelar(aj1);
       assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
-      assert.strictEqual(r.body.error, `Não é possível estornar: há um ajuste do total deste material feito depois deste (movimentação #${aj2}) `
+      assert.strictEqual(r.body.error, `Não é possível estornar: há um ajuste deste material feito depois deste (movimentação #${aj2}) `
         + '— a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste.');
       assert.strictEqual(await fis(m), 7);
       assert.ok(await vivo(aj1));
@@ -227,14 +227,70 @@ const NEGATIVO = 'Não é possível estornar: o saldo já foi consumido (o estor
       assert.strictEqual(await linhas(m), 'A258T/-=5');
     });
 
-  await test('[RN-258.07] o ajuste COM localizacao feito depois nao trava (ele conta so a posicao dele)', async () => {
+  await test('[RN-258.07] o ajuste COM localizacao feito depois numa posicao que este nao tocou nao trava (ele conta so a dele)', async () => {
     const m = await material();
     await mov(m, 'ENTRADA', 3);
+    const aj = await mov(m, 'AJUSTE', 1); // A 1 (nada drenado)
     await mov(m, 'ENTRADA', 4, { localizacao_destino_id: B.id });
-    const aj = await mov(m, 'AJUSTE', 1); // 7 -> 1: A 0, B 1
-    await mov(m, 'AJUSTE', 2, { localizacao_destino_id: B.id }); // B 2, total 2
+    await mov(m, 'AJUSTE', 2, { localizacao_destino_id: B.id }); // B 2, total 3
     await estornar(aj);
-    assert.strictEqual(await fis(m), 8);
+    assert.strictEqual(await fis(m), 5);
+    assert.strictEqual(await linhas(m), 'A258T/-=3 B258T/-=2');
+  });
+
+  await test('[RN-258.07, Fase 5 achado 1] o ajuste COM localizacao na padrao feito depois trava (12 por cima da contagem de A, 10)', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 5);
+    const aj = await mov(m, 'AJUSTE', 3);
+    const ajA = await mov(m, 'AJUSTE', 10, { localizacao_destino_id: A.id });
+    const r = await cancelar(aj);
+    assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, `Não é possível estornar: há um ajuste deste material feito depois deste (movimentação #${ajA}) `
+      + '— a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste.');
+    assert.strictEqual(await fis(m), 10);
+  });
+
+  await test('[RN-258.07, Fase 5 achado 1] o ajuste COM localizacao numa posicao que este drenou trava (devolveria por cima da contagem)',
+    async () => {
+      const m = await material();
+      await mov(m, 'ENTRADA', 5);
+      await mov(m, 'ENTRADA', 4, { localizacao_destino_id: B.id });
+      const aj = await mov(m, 'AJUSTE', 2); // A 0, B 2 (drenou B 2)
+      await mov(m, 'AJUSTE', 6, { localizacao_destino_id: B.id }); // B 6, total 6
+      const r = await cancelar(aj);
+      assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+      assert.ok(/^Não é possível estornar: há um ajuste deste material feito depois deste/.test(r.body.error), r.body.error);
+      assert.strictEqual(await linhas(m), 'A258T/-=0 B258T/-=6');
+    });
+
+  await test('[RN-258.07, Fase 5 achado 2] a conferencia de inventario feita depois trava, com a mensagem que manda so fazer um novo ajuste',
+    async () => {
+      const m = await material();
+      await mov(m, 'ENTRADA', 5);
+      const aj = await mov(m, 'AJUSTE', 3);
+      const inv = await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE_INVENTARIO', quantidade: 7,
+        motivo: 'teste 258', justificativa: 'teste 258' });
+      assert.strictEqual(await fis(m), 7, 'premissa: o inventario gravou');
+      const r = await cancelar(aj);
+      assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(r.body.error, `Não é possível estornar: há uma conferência de inventário deste material feita depois deste ajuste `
+        + `(movimentação #${inv.id}) — a contagem mais recente vale. Faça um novo ajuste.`);
+      assert.strictEqual(await fis(m), 7);
+    });
+
+  await test('[RN-258.03, Fase 5 achado 2] configuracao global de negativo: a retencao continua valendo', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 2);
+    const aj = await mov(m, 'AJUSTE', 10);
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'BLOQUEIO', quantidade: 5, motivo: 'teste 258',
+      justificativa: 'teste 258' });
+    await mov(m, 'SAIDA', 4);
+    await cfg('permite_saldo_negativo_global', '1');
+    let r;
+    try { r = await cancelar(aj); } finally { await cfg('permite_saldo_negativo_global', '0'); }
+    assert.strictEqual(r.status, 400, `o estorno passou: ${JSON.stringify(r.body)}`);
+    assert.ok(/^Não é possível estornar: Ajuste para -2 UN deixaria o disponível negativo/.test(r.body.error), r.body.error);
+    assert.strictEqual(await fis(m), 6);
   });
 
   // ── RN-258.04: sem lote, drena antes de negativar a padrao ───────────────────────────────────────────────────────────

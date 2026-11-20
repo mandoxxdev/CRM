@@ -3870,12 +3870,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             // mais recente — ela ja diz quanto ha. Desfazer a diferenca deste por cima dela inventa (ou some com) pecas: 5, Ajuste para 3,
             // Ajuste para 7, estorno do primeiro -> 9 (o SET de antes dava 5; a contagem diz 7). Recusa, antes de qualquer efeito; estornado
             // primeiro o mais recente, este passa. Lido sob a trava do material: nenhum ajuste dele grava no meio.
+            // Etapa 258 (Fase 5, achado 1): tambem o Ajuste COM localizacao feito depois numa posicao onde a diferenca deste cai — a
+            // padrao (o residuo) ou uma posicao que este drenou (o registro da 256): A 5, Ajuste para 3, Ajuste de A para 10, estorno do
+            // primeiro -> 12 (a contagem de A diz 10). O de outra posicao nao trava (ele conta so a dele). E o inventario nao se estorna
+            // (Etapa 10): a mensagem dele manda so fazer um novo ajuste (achado 4).
             if (opcoesEstorno.compensacao !== true) {
-              const contagemDepois = await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
-                AND COALESCE(cancelado, 0) = 0 AND ((tipo = 'AJUSTE' AND localizacao_destino_id IS NULL) OR tipo = 'AJUSTE_INVENTARIO')
-                ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id]);
+              const matC = await getMaterial(db, mov.material_id);
+              const contagemDepois = await dbGet(db, `SELECT id, tipo FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
+                AND COALESCE(cancelado, 0) = 0 AND (tipo = 'AJUSTE_INVENTARIO' OR (tipo = 'AJUSTE' AND (localizacao_destino_id IS NULL
+                  OR localizacao_destino_id IS ? OR localizacao_destino_id IN (SELECT cs.localizacao_id
+                    FROM ajuste_linhas_drenadas_almoxarifado cd JOIN estoque_saldo_almoxarifado cs ON cs.id = cd.saldo_id
+                    WHERE cd.movimentacao_id = ? AND cs.localizacao_id IS NOT NULL))))
+                ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id, matC.localizacao_padrao_id || null, mov.id]);
+              if (contagemDepois && contagemDepois.tipo === 'AJUSTE_INVENTARIO') {
+                throw Object.assign(new Error(`Não é possível estornar: há uma conferência de inventário deste material feita depois deste `
+                  + `ajuste (movimentação #${contagemDepois.id}) — a contagem mais recente vale. Faça um novo ajuste.`), { status: 400 });
+              }
               if (contagemDepois) {
-                throw Object.assign(new Error(`Não é possível estornar: há um ajuste do total deste material feito depois deste `
+                throw Object.assign(new Error(`Não é possível estornar: há um ajuste deste material feito depois deste `
                   + `(movimentação #${contagemDepois.id}) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um `
                   + 'novo ajuste.'), { status: 400 });
               }
