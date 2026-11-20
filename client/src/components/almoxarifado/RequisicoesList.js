@@ -174,6 +174,23 @@ const sufixoDoLote = (s) => {
 // as palavras do extrato, no lugar do sufixo da 218 (de um lote impedido nada sai: "podem sair 3" seria falso). Sem o campo: como antes.
 const opcaoImpedida = (s) => situacaoDoLote(s) !== null;
 const sufixoDaOpcao = (s) => (opcaoImpedida(s) ? ` — ${situacaoDoLote(s)}: não sai` : sufixoDoLote(s));
+// Etapa 250 (C514, B1440; RN-250.01/03): com o "Sai de" no automático, quais lotes têm peça presa e quantas — a entrega sai do lote seguinte
+// sem dizer por quê. Os campos da 218 (`lote_bloqueado`, `lote_inspecao`, só com `lote_livre` numérico); um lote em várias prateleiras
+// aparece uma vez; o lote impedido fica fora (a opção dele já diz "não sai"). null sem nada a dizer (ou servidor sem os campos).
+const fraseLotePresoNoAutomatico = (rows) => {
+  const vistos = new Set();
+  const partes = [];
+  for (const s of rows || []) {
+    if (s.lote_id == null || vistos.has(String(s.lote_id)) || loteLivreDaOpcao(s) === null || opcaoImpedida(s)) continue;
+    vistos.add(String(s.lote_id));
+    const bloq = numeroDoServidor(s.lote_bloqueado) ?? 0;
+    const insp = numeroDoServidor(s.lote_inspecao) ?? 0;
+    const presas = [bloq > 1e-9 ? `${r6(bloq)} ${umaPeca(bloq) ? 'bloqueada' : 'bloqueadas'}` : null,
+      insp > 1e-9 ? `${r6(insp)} em inspeção` : null].filter(Boolean);
+    if (presas.length) partes.push(`lote ${s.lote} — ${presas.join(', ')}`);
+  }
+  return partes.length ? `Peças presas que a entrega automática não leva: ${partes.join('; ')}.` : null;
+};
 const rotuloOrigem = (s, propriaNoPar = 0) => {
   const base = `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}`;
   const outras = outrasDaOpcao(s);
@@ -2824,6 +2841,16 @@ const RequisicoesList = () => {
                             ? frasePlanejadaImpedida(item, rows, !!saldosEntregaFalhos[item.material_id]) : null);
                         return frase && (
                           <div id={`entrega-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
+                            {frase}
+                          </div>
+                        );
+                      })()}
+                      {/* Etapa 250 (C514; RN-250.01/02): no automático, as peças presas de cada lote (a entrega não as leva). */}
+                      {(() => {
+                        if (origensEntrega[item.id]?.valor) return null;
+                        const frase = fraseLotePresoNoAutomatico(saldosEntrega[item.material_id]);
+                        return frase && (
+                          <div id={`entrega-dica-lote-preso-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-text-light)' }}>
                             {frase}
                           </div>
                         );
