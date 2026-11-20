@@ -90,6 +90,11 @@ export const opcoesDosFiltros = (fila, filtros) => {
     return ops;
   };
 
+  // Fase 5: dois projetos com o mesmo nome viravam duas opções iguais — o repetido ganha o número, "Linha 2 (#7)".
+  const vezes = new Map();
+  for (const r of projetos.values()) vezes.set(r, (vezes.get(r) || 0) + 1);
+  for (const [id, r] of projetos) if (vezes.get(r) > 1) projetos.set(id, `${r} (#${id})`);
+
   return {
     setor: montar(setores, semSetor, 'Sem setor', f.setor, (v) => v),
     projeto: montar(projetos, semProjeto, 'Sem projeto', f.projeto, (v) => rotuloProjeto(v, null)),

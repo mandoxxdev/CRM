@@ -227,6 +227,36 @@ test('RN-255.09: armazenamento que falha -> a tela abre com "Todos" e filtra nor
   expect(visiveis()).toEqual(['REQ-004']);
 });
 
+test('RN-255.04 (Fase 5): requisição de dois itens — um com endereço, outro aguardando saldo — passa no endereço E em "Sem localização"', async () => {
+  const DUAS = req({
+    id: 9, numero: 'REQ-009', setor: 'Produção',
+    itens: [item({ item_id: 91, separavel: 0 }), item({ item_id: 92, pegar_em: pegar('ALM / B / B-02') })],
+  });
+  api.get.mockResolvedValue({ data: [R1, DUAS] });
+  await montar();
+  await escolher('fila-filtro-local', 'ALM / B');
+  expect(visiveis()).toEqual(['REQ-009']);
+  await escolher('fila-filtro-local', '__sem__');
+  expect(visiveis()).toEqual(['REQ-009']);
+});
+
+test('RN-255.03 (Fase 5): dois projetos com o mesmo nome viram opções distintas, com o número', async () => {
+  const OUTRO = req({ id: 6, numero: 'REQ-006', projeto_id: 12, projeto_nome: 'Linha 2' });
+  api.get.mockResolvedValue({ data: [R1, OUTRO] });
+  await montar();
+  expect(opcoes('fila-filtro-projeto')).toEqual(['Todos', 'Linha 2 (#7)', 'Linha 2 (#12)']);
+  await escolher('fila-filtro-projeto', '12');
+  expect(visiveis()).toEqual(['REQ-006']);
+});
+
+test('RN-255.09 (Fase 5): filtro guardado com tipo errado volta a "Todos"', async () => {
+  window.localStorage.setItem(CHAVE_FILTROS, JSON.stringify({ setor: 5, projeto: ['7'], local: null }));
+  await montar();
+  expect(q('[data-testid="fila-filtro-setor"]').value).toBe('');
+  expect(q('[data-testid="fila-filtro-projeto"]').value).toBe('');
+  expect(visiveis()).toEqual(['REQ-004', 'REQ-001', 'REQ-002', 'REQ-003']);
+});
+
 test('RN-255.03: a barra some na fila vazia e no 403 (a escolha guardada não vira "fila vazia")', async () => {
   window.localStorage.setItem(CHAVE_FILTROS, JSON.stringify({ setor: 'Manutenção', projeto: '', local: '' }));
   api.get.mockResolvedValue({ data: [] });
