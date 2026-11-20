@@ -509,6 +509,30 @@ describe('Compras → Materiais — cadastro a completar', () => {
     expect(container.querySelector('[data-testid="material-cadastro-a-completar"]')).toBeNull();
   });
 
+  test('[RN-254.13, Fase 5] com o filtro ligado e a contagem zerada, o aviso fica com "Ver todos" (a lista não fica presa no filtro)',
+    async () => {
+      const confirmOriginal = window.confirm; window.confirm = jest.fn(() => true);
+      try {
+        let marcados = [RETALHO];
+        const base = api.get.getMockImplementation();
+        api.get.mockImplementation((url, cfg) => (url === '/compras/materiais/cadastro'
+          ? Promise.resolve({ data: cfg?.params?.a_completar === '1' ? marcados : [MATERIAL, ...marcados] }) : base(url, cfg)));
+        api.delete.mockResolvedValue({ data: { success: true } });
+        await renderizar('/compras/materiais');
+        await act(async () => { container.querySelector('[data-testid="alternar-a-completar"]').click(); });
+        await esperar();
+        marcados = [];
+        await act(async () => { container.querySelector('[data-testid="inativar-material-88"]').click(); });
+        await esperar();
+        expect(aviso().textContent).toContain('Nenhum material com o cadastro a completar.');
+        expect(container.querySelector('[data-testid="alternar-a-completar"]').textContent).toBe('Ver todos');
+        await act(async () => { container.querySelector('[data-testid="alternar-a-completar"]').click(); });
+        await esperar();
+        expect(container.textContent).toContain('VLV-001');
+        expect(aviso()).toBeNull();
+      } finally { window.confirm = confirmOriginal; }
+    });
+
   test('[RN-254.13] inativar recarrega a contagem do aviso (o inativo sai da conta)', async () => {
     const confirmOriginal = window.confirm; window.confirm = jest.fn(() => true);
     try {

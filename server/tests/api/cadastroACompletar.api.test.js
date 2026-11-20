@@ -100,6 +100,19 @@ const ALMOXARIFE = { id: 25404, nome: 'Almoxarife 254', role: 'usuario', perfil_
     assert.strictEqual(await marca(m.id), 1, 'reativar tirou a marca');
   });
 
+  await test('[RN-254.11, Fase 5] um PUT do Compras sem campo do cadastro (so os de concorrencia) nao tira a marca', async () => {
+    const m = await criarPeloAlmox(corpoSobra());
+    for (const corpo of [{ controles_lidos: { controle_lote: 0, controle_serie: 0 } }, { campos_lidos: {} }, { familia_lida: null }]) {
+      const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send(corpo));
+      assert.ok(r.status < 500, `${JSON.stringify(corpo)}: ${r.status} ${JSON.stringify(r.body)}`);
+      assert.strictEqual(await marca(m.id), 1, `${JSON.stringify(corpo)} tirou a marca`);
+    }
+    const ok = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${m.id}`)
+      .send({ campos_lidos: {}, nome: m.nome }));
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.strictEqual(await marca(m.id), 0, 'com um campo do cadastro, tira');
+  });
+
   await test('[RN-254.11] salvar recusado (familia inexistente -> 400) nao tira a marca', async () => {
     const m = await criarPeloAlmox(corpoSobra());
     const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${m.id}`)

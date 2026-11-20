@@ -980,8 +980,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
       // Etapa 254 (RN-254.11): salvar o cadastro pelo Compras tira a marca "cadastro a completar" — no MESMO UPDATE (a recusa nao tira).
-      // So reativar (`{ ativo }`, o botao da lista) nao e completar o cadastro: nao tira.
-      const tiraMarca = !!req.portaDoCompras && Object.keys(req.body || {}).some((k) => k !== 'ativo');
+      // So reativar (`{ ativo }`, o botao da lista) nao e completar o cadastro: nao tira. Fase 5: conta so campo DO CADASTRO
+      // (MATERIAL_UPDATE_COLUMNS) — um corpo so com os de concorrencia (`controles_lidos`, `campos_lidos`, `familia_lida`) tirava.
+      const tiraMarca = !!req.portaDoCompras
+        && Object.keys(req.body || {}).some((k) => k !== 'ativo' && MATERIAL_UPDATE_COLUMNS.includes(k));
       const gravar = () => dbRun(db, `UPDATE materiais_almoxarifado SET
         ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},${tiraMarca ? ' cadastro_a_completar = 0,' : ''}
         updated_at = CURRENT_TIMESTAMP
