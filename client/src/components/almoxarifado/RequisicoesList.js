@@ -2845,9 +2845,13 @@ const RequisicoesList = () => {
                           </div>
                         );
                       })()}
-                      {/* Etapa 250 (C514; RN-250.01/02): no automático, as peças presas de cada lote (a entrega não as leva). */}
+                      {/* Etapa 250 (C514; RN-250.01/02): no automático, as peças presas de cada lote (a entrega não as leva). Fase 5
+                          (RN-250.05): sem escolha e com a planejada pendente, o servidor tira da origem da separação — só fala quando
+                          algo sai mesmo no automático (escolhido de fato, item sem planejada, ou acima da parte de lá). */}
                       {(() => {
-                        if (origensEntrega[item.id]?.valor) return null;
+                        const esc = origensEntrega[item.id];
+                        if (esc?.valor) return null;
+                        if (!esc?.automatico && temPlanejada(item) && !(qtdEntregar > pendentePlanejado(item) + 1e-9)) return null;
                         const frase = fraseLotePresoNoAutomatico(saldosEntrega[item.material_id]);
                         return frase && (
                           <div id={`entrega-dica-lote-preso-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-text-light)' }}>

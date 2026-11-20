@@ -159,6 +159,32 @@ describe('Etapa 250: a entrega automática diz as peças presas do lote (C514)',
     expect(fraseEntrega()).toBeNull();
   });
 
+  test('[RN-250.05, Fase 5] com origem da separação: só quando algo sai no automático (acima da parte de lá, ou o automático escolhido)', async () => {
+    // caixa 4 por entregar (separou 5, entregou 1), 3 dela de XB-01/L1: a janela abre sem escolha (o servidor aplica a planejada).
+    requisicao = {
+      ...REQ_BASE, status: 'PARCIALMENTE_ATENDIDA',
+      itens: [{ ...ITEM_BASE, quantidade_solicitada: 6, quantidade_separada: 5, quantidade_entregue: 1, quantidade_atendida: 1,
+        quantidade_entregavel: 4, origem_separacao_id: 2, lote_separacao_id: 7, origem_separacao_codigo: 'XB-01',
+        lote_separacao_codigo: 'L1', quantidade_origem_separacao: 3 }],
+    };
+    await renderizar();
+    await clicar('Completar Entrega');
+    const qtd = container.querySelector('.almox-modal input.almox-count-input');
+    const digitar = (valor) => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      act(() => { setter.call(qtd, valor); qtd.dispatchEvent(new Event('input', { bubbles: true })); });
+    };
+    digitar('4');
+    expect(selectEntrega().value).toBe('');
+    expect(fraseEntrega().textContent).toBe(FRASE); // 3 da planejada, 1 no automático
+    digitar('2');
+    expect(fraseEntrega()).toBeNull(); // tudo sai de XB-01/L1 (a planejada): nada no automático
+    expect(selectEntrega()).not.toBeNull();
+    escolher(selectEntrega(), '2:7');
+    escolher(selectEntrega(), '');
+    expect(fraseEntrega().textContent).toBe(FRASE); // o automático escolhido de fato
+  });
+
   test('[RN-250.04] a separação não ganha a frase (o "Sai de" da separação está lá)', async () => {
     requisicao = APROVADA;
     await renderizar();
