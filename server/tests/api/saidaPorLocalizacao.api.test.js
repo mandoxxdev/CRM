@@ -290,8 +290,14 @@ let seq = 0;
     const m = await material({ lote: 1 }); const A = await loc('A'); const B = await loc('B');
     const L = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'L' });
     await entrada(m, A, 30, L.id); await setLinha(m, B, null, 20); await setFisico(m, 50);
-    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE', quantidade: 5, lote_id: L.id, motivo: 'x', justificativa: 'x' });
+    // Etapa 253 (C475, RN-253.10): o ajuste para 5 deixaria o lote L em -15 e passou a ser recusado (ate a 253 gravava, com a linha do
+    // lote negativa). A regra deste teste (o ajuste de lote nao drena a linha SEM lote) e provada com um ajuste que cabe no lote: 25 ->
+    // o lote fica com 5, tirado da linha do proprio lote em A (o drenar com lote, RN-253.11), e B (sem lote) continua 20.
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE', quantidade: 5, lote_id: L.id,
+      motivo: 'x', justificativa: 'x' }), (e) => e.status === 400 && /deixaria o lote com saldo negativo \(-15 UN\)/.test(e.message));
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'AJUSTE', quantidade: 25, lote_id: L.id, motivo: 'x', justificativa: 'x' });
     assert.strictEqual((await linhas(m)).B, 20, JSON.stringify(await linhas(m)));
+    assert.deepStrictEqual(await linhas(m), { "A/L": 5, B: 20, "NULL/L": 0 });
   });
 
   await test('(21) drenagem do AJUSTE na ordem (maior primeiro) e resto fracionario preservado', async () => {
