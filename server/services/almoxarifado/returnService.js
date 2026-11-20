@@ -5,6 +5,7 @@ const lotService = require('./lotService');
 const { registrarAuditoriaDoAto } = require('./audit');
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
+const diaLocal = require('../diaLocal');
 // Etapa 97 (Fase 5, item 2): as duas pernas da devolucao (QUARENTENA, SUCATA) sob uma trava do material.
 const trava = require('./travaPorMaterial');
 // Etapa 117 (C236, B759): so a devolucao viva (a entrada nao estornada) conta no que ja voltou da saida.
@@ -563,11 +564,43 @@ async function listarDevolucoes(db, filters = {}) {
  */
 const MSG_ANTES_DE_INVALIDO = 'antes_de inválido — informe o id da última entrega da lista';
 const msgEntregaNaoEncontrada = (id) => `Entrega ${id} não encontrada neste material`;
+// Etapa 253 (C477, RN-253.02/05): as recusas da busca.
+const MSG_BUSCA_LONGA = 'Busca muito longa — use até 60 caracteres';
+const msgDataInvalidaNaBusca = (t) => `Data inválida na busca: ${t} — use DD/MM/AAAA`;
+const BUSCA_MAX = 60;
 
-async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId } = {}) {
+/**
+ * Etapa 253 (C477, RN-253.01..05) — o texto da busca de entrega. Ausente, vazio ou so espacos -> null (a resposta de sempre). Data
+ * (DD/MM/AAAA ou AAAA-MM-DD) -> { data: 'AAAA-MM-DD' } (o dia no fuso do negocio, como os relatorios); data impossivel -> 400. Outro
+ * texto -> { texto, os }: o numero da requisicao contem o texto (LIKE com escape: % e _ literais) ou a OS e o numero digitado ("OS 12",
+ * "os12" ou "12" -> os_id 12 — o numero que a tela mostra). Repetido na query chega como array e vira "a,b" (como o `antes_de`).
+ */
+function normalizarBusca(busca) {
+  if (busca === undefined || busca === null) return null;
+  const t = String(busca).trim();
+  if (!t) return null;
+  if (t.length > BUSCA_MAX) throw erro400(MSG_BUSCA_LONGA);
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
+  let ano; let mes; let dia;
+  if (m) { [, dia, mes, ano] = m; } else if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t))) { [, ano, mes, dia] = m; }
+  if (ano) {
+    // Sem `new Date` com fuso: o dia existe se o UTC do proprio dia devolve os mesmos campos (31/02 rola para marco).
+    const d = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+    if (d.getUTCFullYear() !== Number(ano) || d.getUTCMonth() !== Number(mes) - 1 || d.getUTCDate() !== Number(dia)) {
+      throw erro400(msgDataInvalidaNaBusca(t));
+    }
+    return { data: `${ano}-${mes}-${dia}` };
+  }
+  const os = /^(?:os\s*)?(\d+)$/i.exec(t);
+  return { texto: t, os: os ? Number(os[1]) : null };
+}
+
+async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId, busca } = {}) {
   const material = await dbGet(db,
     'SELECT id, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
   if (!material) throw erro400('Material não encontrado');
+  // Etapa 253 (RN-253.05): a busca e julgada antes do cursor.
+  const filtro = normalizarBusca(busca);
 
   // Etapa 204: o cursor. Ausente = undefined, null ou '' (a query `?antes_de=`); repetido chega como array e vira "1,2".
   let cursor = null;
@@ -594,8 +627,14 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId } 
        -- Etapa 178 (C2): a saida de entrega de EPI nao e devolvivel nesta etapa — nao aparece para escolher.
        AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee WHERE ee.movimentacao_id = mv.id)
        ${cursor ? "AND (COALESCE(mv.created_at,'') < ? OR (COALESCE(mv.created_at,'') = ? AND mv.id < ?))" : ''}
+       ${filtro && filtro.data ? 'AND DATE(mv.created_at, ?) = ?' : ''}
+       ${filtro && filtro.texto ? `AND (req.numero LIKE ? ESCAPE '!'${filtro.os !== null ? ' OR mv.os_id = ?' : ''})` : ''}
      ORDER BY COALESCE(mv.created_at,'') DESC, mv.id DESC
-     LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, ...(cursor ? [cursor.c, cursor.c, cursor.id] : []), limite]);
+     LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, ...(cursor ? [cursor.c, cursor.c, cursor.id] : []),
+    ...(filtro && filtro.data ? [diaLocal.modificadorDoFuso(), filtro.data] : []),
+    // o escape e o `!` (nao a barra invertida): % e _ digitados sao literais
+    ...(filtro && filtro.texto ? [`%${filtro.texto.replace(/[!%_]/g, (c) => `!${c}`)}%`, ...(filtro.os !== null ? [filtro.os] : [])] : []),
+    limite]);
 
   const out = [];
   for (const s of saidas) {
@@ -617,6 +656,6 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId } 
 }
 
 module.exports = {
-  MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL, MSG_ANTES_DE_INVALIDO, msgEntregaNaoEncontrada,
+  MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL, MSG_ANTES_DE_INVALIDO, msgEntregaNaoEncontrada, MSG_BUSCA_LONGA, msgDataInvalidaNaBusca,
   registrarDevolucao, listarDevolucoes, listarSaidasElegiveis,
 };

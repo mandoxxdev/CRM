@@ -69,7 +69,10 @@ const formatData = (d) => formatarInstanteDoBanco(d);
 const PAGINA_SAIDAS = 30;
 // temMais: a última página veio cheia; fim: um clique trouxe menos de 30 (inclusive 0); ultimoId: o cursor — o id da
 // última linha da RESPOSTA anterior, não do array sem repetição (Fase 2 da 204).
-const PAGINACAO_VAZIA = { temMais: false, fim: false, carregando: false, ultimoId: null };
+// semResultado (Etapa 253): a busca aplicada voltou vazia na primeira página.
+const PAGINACAO_VAZIA = { temMais: false, fim: false, carregando: false, ultimoId: null, semResultado: false };
+// Etapa 253 (C477, RN-253.06): o parâmetro da busca na URL da lista — vazio quando não há busca aplicada.
+const paramBusca = (busca) => (busca ? `&busca=${encodeURIComponent(busca)}` : '');
 
 const DevolucoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
@@ -81,6 +84,10 @@ const DevolucoesAlmoxarifado = () => {
   // mais" guarda a sua antes do GET e descarta then/catch se ela mudou — senão a resposta atrasada do material anterior
   // (ou do mesmo material numa abertura anterior) entraria na lista atual.
   const geracaoSaidas = useRef(0);
+  // Etapa 253 (C477, RN-253.06): o texto digitado no campo e a busca aplicada (a que a lista usa). Só "Buscar" (ou Enter) aplica;
+  // trocar de material ou abrir a janela limpa as duas.
+  const [buscaTexto, setBuscaTexto] = useState('');
+  const [buscaAplicada, setBuscaAplicada] = useState('');
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -120,7 +127,7 @@ const DevolucoesAlmoxarifado = () => {
     setPaginacao(PAGINACAO_VAZIA);
     if (!form.material_id) { setSaidas([]); return undefined; }
     let cancelado = false;
-    api.get(`/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}`)
+    api.get(`/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}${paramBusca(buscaAplicada)}`)
       .then((res) => {
         if (cancelado) return;
         const linhas = res.data || [];
@@ -129,11 +136,26 @@ const DevolucoesAlmoxarifado = () => {
           ...PAGINACAO_VAZIA,
           temMais: linhas.length >= PAGINA_SAIDAS,
           ultimoId: linhas.length ? linhas[linhas.length - 1].id : null,
+          semResultado: !!buscaAplicada && linhas.length === 0,
         });
       })
-      .catch(() => { if (!cancelado) setSaidas([]); });
+      .catch((err) => {
+        if (cancelado) return;
+        // Etapa 253 (RN-253.06): a recusa da busca (data inválida, longa demais) diz o porquê; a lista fica como estava.
+        if (buscaAplicada) { toast.error(err.response?.data?.error || 'Erro ao buscar entregas'); return; }
+        setSaidas([]);
+      });
     return () => { cancelado = true; };
-  }, [form.material_id]);
+  }, [form.material_id, buscaAplicada]);
+
+  // Etapa 253 (RN-253.06): aplicar a busca recarrega a lista e limpa a entrega escolhida (e as séries dela) — a escolhida pode não
+  // estar no resultado, e o formulário mandaria uma entrega que a pessoa não está vendo.
+  const aplicarBusca = (texto) => {
+    const t = String(texto || '').trim();
+    setBuscaTexto(t);
+    setBuscaAplicada(t);
+    setForm((f) => ({ ...f, movimentacao_saida_id: '', series: [] }));
+  };
 
   // Etapa 204 (C465, B1363): a página seguinte, pelo cursor `antes_de`. As novas entram no fim, sem repetir id; a
   // escolha do campo fica (o `<select>` seleciona por String(s.id) no mesmo array). Falha não apaga a lista (RN-204.08).
@@ -143,7 +165,7 @@ const DevolucoesAlmoxarifado = () => {
     setPaginacao((p) => ({ ...p, carregando: true }));
     try {
       const res = await api.get(
-        `/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}&antes_de=${antes}`);
+        `/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}&antes_de=${antes}${paramBusca(buscaAplicada)}`);
       if (geracao !== geracaoSaidas.current) return;
       const novas = res.data || [];
       setSaidas((atual) => {
@@ -155,6 +177,7 @@ const DevolucoesAlmoxarifado = () => {
         fim: novas.length < PAGINA_SAIDAS,
         carregando: false,
         ultimoId: novas.length ? novas[novas.length - 1].id : antes,
+        semResultado: false,
       });
     } catch (e) {
       if (geracao !== geracaoSaidas.current) return;
@@ -175,6 +198,8 @@ const DevolucoesAlmoxarifado = () => {
   const abrirModal = (e) => {
     if (!bloquearSeNaoPode('movimentar', e)) return;
     setForm(FORM_VAZIO);
+    setBuscaTexto('');
+    setBuscaAplicada('');
     setShowModal(true);
   };
 
@@ -342,7 +367,11 @@ const DevolucoesAlmoxarifado = () => {
                   <div className="almox-field">
                     <label className="almox-label" htmlFor="dev-material">Material<span className="required">*</span></label>
                     <select id="dev-material" className="almox-form-select" value={form.material_id}
-                      onChange={(e) => setForm((f) => ({ ...f, material_id: e.target.value, movimentacao_saida_id: '', lote_id: '', series: [] }))}>
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f, material_id: e.target.value, movimentacao_saida_id: '', lote_id: '', series: [] }));
+                        setBuscaTexto('');
+                        setBuscaAplicada('');
+                      }}>
                       <option value="">Selecionar material...</option>
                       {materiais.map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nome}</option>)}
                     </select>
@@ -350,6 +379,24 @@ const DevolucoesAlmoxarifado = () => {
 
                   <div className="almox-field almox-form-full">
                     <label className="almox-label" htmlFor="dev-saida">Entrega de origem</label>
+                    {form.material_id && (
+                      // Etapa 253 (C477, RN-253.06): a busca da entrega. Enter no campo busca — não envia a devolução.
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                        <input id="dev-busca-entrega" className="almox-input" type="text" maxLength={60}
+                          style={{ flex: '1 1 14rem', minWidth: 0 }}
+                          aria-label="Buscar entrega"
+                          placeholder="Buscar entrega: requisição, OS ou data (DD/MM/AAAA)"
+                          value={buscaTexto}
+                          onChange={(e) => setBuscaTexto(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarBusca(buscaTexto); } }} />
+                        <button type="button" className="btn-almox-secondary" data-testid="dev-buscar-entrega"
+                          onClick={() => aplicarBusca(buscaTexto)}>Buscar</button>
+                        {buscaAplicada && (
+                          <button type="button" className="btn-almox-secondary" data-testid="dev-limpar-busca"
+                            onClick={() => aplicarBusca('')}>Limpar</button>
+                        )}
+                      </div>
+                    )}
                     <select id="dev-saida" className="almox-form-select" value={form.movimentacao_saida_id}
                       onChange={(e) => setForm((f) => ({ ...f, movimentacao_saida_id: e.target.value, series: [] }))}>
                       <option value="">Devolução avulsa (sem entrega registrada)</option>
@@ -363,6 +410,11 @@ const DevolucoesAlmoxarifado = () => {
                         disabled={paginacao.carregando} onClick={carregarMaisAntigas}>
                         {paginacao.carregando ? 'Carregando…' : 'Carregar entregas mais antigas'}
                       </button>
+                    )}
+                    {paginacao.semResultado && (
+                      <small data-testid="dev-busca-vazia" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        Nenhuma entrega deste material para {buscaAplicada}.
+                      </small>
                     )}
                     {paginacao.fim && (
                       <small data-testid="dev-saidas-fim" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>

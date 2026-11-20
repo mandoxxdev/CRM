@@ -1532,7 +1532,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (!materialId) return res.status(400).json({ error: 'material_id é obrigatório' });
       // Etapa 204 (B1363): `antes_de` opcional = a pagina seguinte (cursor). A validacao e do servico; `?limite=` nao
       // existe de proposito (B1366 — a pagina e fixa em 30).
-      res.json(await returnService.listarSaidasElegiveis(db, materialId, { antesDeId: req.query.antes_de }));
+      // Etapa 253 (C477): `busca` opcional (requisicao, OS ou data) — validada no servico; ausente = a resposta de sempre.
+      res.json(await returnService.listarSaidasElegiveis(db, materialId, { antesDeId: req.query.antes_de, busca: req.query.busca }));
     } catch (e) { handleError(res, e); }
   });
 

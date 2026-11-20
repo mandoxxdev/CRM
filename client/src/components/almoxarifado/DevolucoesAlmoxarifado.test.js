@@ -502,3 +502,118 @@ describe('DevolucoesAlmoxarifado — entregas mais antigas (Etapa 204)', () => {
     expect(chamadasAntesDe).toHaveLength(1);
   });
 });
+
+describe('DevolucoesAlmoxarifado — busca da entrega (Etapa 253, C477)', () => {
+  const saida = (id, extra = {}) => ({ ...SAIDA_COM_SALDO, id, requisicao_numero: `REQ-${id}`, ...extra });
+  const pagina = (primeiro, n) => Array.from({ length: n }, (_, i) => saida(primeiro - i));
+  let urls;
+  let resposta; // (url) => Promise
+
+  beforeEach(() => {
+    urls = [];
+    resposta = (url) => {
+      if (url.includes('busca=')) return Promise.resolve({ data: [saida(7, { requisicao_numero: 'REQ-0101' })] });
+      return Promise.resolve({ data: pagina(1000, 30) });
+    };
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url.startsWith('/almoxarifado/devolucoes/saidas-elegiveis')) { urls.push(url); return resposta(url); }
+      return original(url, cfg);
+    });
+  });
+
+  const busca = () => campo('dev-busca-entrega');
+  const botaoBuscar = () => container.querySelector('[data-testid="dev-buscar-entrega"]');
+  const botaoLimpar = () => container.querySelector('[data-testid="dev-limpar-busca"]');
+  const vazia = () => container.querySelector('[data-testid="dev-busca-vazia"]');
+  const maisAntigas = () => container.querySelector('[data-testid="dev-saidas-mais-antigas"]');
+  const idsDaLista = () => [...campo('dev-saida').querySelectorAll('option')].map((o) => o.value).filter(Boolean);
+  async function clicar(el) {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await esperarEfeitos();
+  }
+
+  test('RN-253.06 o campo so aparece com material; Buscar manda a busca, troca a lista e limpa a entrega escolhida', async () => {
+    await abrirModal();
+    expect(busca()).toBeNull();
+    await escolherMaterial(MATERIAL.id);
+    expect(busca().getAttribute('placeholder')).toBe('Buscar entrega: requisição, OS ou data (DD/MM/AAAA)');
+    expect(botaoLimpar()).toBeNull();
+    preencher(campo('dev-saida'), '990');
+    expect(campo('dev-saida').value).toBe('990');
+    // A busca devolve a 990 de novo: sem limpar a escolha, o campo continuaria nela (a asserção abaixo só vale assim).
+    resposta = () => Promise.resolve({ data: [saida(990), saida(7, { requisicao_numero: 'REQ-0101' })] });
+    preencher(busca(), '  REQ-0101 ');
+    await clicar(botaoBuscar());
+    expect(urls[urls.length - 1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=10&busca=REQ-0101');
+    expect(idsDaLista()).toEqual(['990', '7']);
+    expect(campo('dev-saida').value).toBe('');
+    expect(botaoLimpar().textContent).toBe('Limpar');
+    expect(vazia()).toBeNull();
+  });
+
+  test('RN-253.06 Enter no campo busca e NAO envia a devolucao; a data vai codificada', async () => {
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(busca(), '10/03/2026');
+    await act(async () => {
+      busca().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
+    await esperarEfeitos();
+    expect(urls[urls.length - 1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=10&busca=10%2F03%2F2026');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+
+  test('RN-253.06 "Carregar entregas mais antigas" continua dentro da busca', async () => {
+    resposta = (url) => Promise.resolve({ data: url.includes('antes_de=') ? pagina(970, 2) : pagina(1000, 30) });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(busca(), 'REQ');
+    await clicar(botaoBuscar());
+    await clicar(maisAntigas());
+    expect(urls[urls.length - 1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=10&antes_de=971&busca=REQ');
+    expect(idsDaLista()).toHaveLength(32);
+  });
+
+  test('RN-253.06 busca sem resultado diz isso; Limpar volta a lista de sempre', async () => {
+    resposta = (url) => Promise.resolve({ data: url.includes('busca=') ? [] : pagina(1000, 30) });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(busca(), 'OS 77');
+    await clicar(botaoBuscar());
+    expect(vazia().textContent).toBe('Nenhuma entrega deste material para OS 77.');
+    expect(idsDaLista()).toEqual([]);
+    expect(maisAntigas()).toBeNull();
+    await clicar(botaoLimpar());
+    expect(urls[urls.length - 1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=10');
+    expect(idsDaLista()).toHaveLength(30);
+    expect(vazia()).toBeNull();
+    expect(botaoLimpar()).toBeNull();
+    expect(busca().value).toBe('');
+  });
+
+  test('RN-253.06 trocar de material limpa a busca (o novo material vem sem filtro)', async () => {
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(busca(), 'REQ-0101');
+    await clicar(botaoBuscar());
+    await escolherMaterial(MATERIAL_LOTE.id);
+    expect(urls[urls.length - 1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=11');
+    expect(busca().value).toBe('');
+    expect(botaoLimpar()).toBeNull();
+  });
+
+  test('RN-253.06 recusa do servidor: toast com a literal e a lista fica', async () => {
+    const { toast } = require('react-toastify');
+    resposta = (url) => (url.includes('busca=')
+      ? Promise.reject({ response: { data: { error: 'Data inválida na busca: 31/02/2026 — use DD/MM/AAAA' } } })
+      : Promise.resolve({ data: pagina(1000, 30) }));
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(busca(), '31/02/2026');
+    await clicar(botaoBuscar());
+    expect(toast.error).toHaveBeenCalledWith('Data inválida na busca: 31/02/2026 — use DD/MM/AAAA');
+    expect(idsDaLista()).toHaveLength(30);
+  });
+});
