@@ -52,7 +52,7 @@ const API = '/api/almoxarifado';
     await como('ADMIN').post(`${API}/localizacoes`, { codigo, descricao: codigo, almoxarifado_id: alm.body.id, tipo: 'Prateleira' });
     return dbGet(db, 'SELECT id, codigo FROM localizacoes_almoxarifado WHERE codigo = ?', [codigo]);
   };
-  const A = await loc('A256T'); const B = await loc('B256T'); const P = await loc('P256T');
+  const A = await loc('A256T'); const B = await loc('B256T'); const P = await loc('P256T'); const C = await loc('C256T');
   let seq = 0;
   const material = async ({ padrao = P.id } = {}) => {
     const c = `EAJ256-${++seq}`;
@@ -172,6 +172,45 @@ const API = '/api/almoxarifado';
       material_id: m, tipo: 'AJUSTE', quantidade: 4, motivo: 'teste 256', justificativa: 'teste 256' });
     assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=0', 'premissa');
     await stockService.cancelarMovimentacao(db, USERS.ADMIN, aj.id, 'teste 256');
+    assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=3');
+    assert.strictEqual(await fis(m), 7, 'o total nao bate com as linhas (Fase 5)');
+  });
+
+  await test('[RN-256.02, Fase 5] dois Ajustes no mesmo material, estornados do ultimo ao primeiro: cada um devolve o SEU registro', async () => {
+    const m = await material();
+    await entrar(m, 5, { localizacao_destino_id: A.id });
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    await entrar(m, 2); // P 2
+    const aj1 = await ajustar(m, 4); // 10 -> 4: drena A 4 (A 1, B 3, P 0)
+    assert.strictEqual(await linhas(m), 'A256T/-=1 B256T/-=3 P256T/-=0', 'premissa 1');
+    await entrar(m, 3); // P 3, total 7
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [C.id, m]);
+    const aj2 = await ajustar(m, 1); // 7 -> 1, padrao C: drena B 3 e P 3
+    assert.strictEqual(await linhas(m), 'A256T/-=1 B256T/-=0 C256T/-=0 P256T/-=0', 'premissa 2');
+    let est = await cancelar(aj2);
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    // Lendo o registro de outro ajuste (o do aj1, A 4), a A receberia o que o aj2 nunca tirou dela: A 5, B 2, P 0.
+    assert.strictEqual(await linhas(m), 'A256T/-=1 B256T/-=3 C256T/-=0 P256T/-=3', 'o estorno do 2o devolveu o registro do 1o');
+    est = await cancelar(aj1);
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=3 C256T/-=0 P256T/-=3');
+    assert.strictEqual(await fis(m), 10);
+  });
+
+  await test('[RN-256.02, Fase 5] depois do estorno, o estorno de uma transferencia para B (que o C549 recusava) sai', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 4);
+    await entrar(m, 3, { localizacao_destino_id: B.id });
+    const tr = await v2({ material_id: m, tipo: 'TRANSFERENCIA', quantidade: 2, localizacao_origem_id: A.id, localizacao_destino_id: B.id });
+    assert.strictEqual(tr.status, 201, JSON.stringify(tr.body)); // A 2, B 5
+    const aj = await ajustar(m, 1); // 7 -> 1: a padrao A vai a 0 e o drenar tira 4 de B (A 0, B 1)
+    assert.strictEqual(await linhas(m), 'A256T/-=0 B256T/-=1', 'premissa');
+    // Antes da Etapa 256 o estorno dava A 6, B 1 — e o estorno da transferencia (B precisa de 2) era recusado.
+    const est = await cancelar(aj);
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    assert.strictEqual(await linhas(m), 'A256T/-=2 B256T/-=5');
+    const etr = await cancelar(tr.body.id);
+    assert.strictEqual(etr.status, 200, `o estorno da transferencia foi recusado: ${JSON.stringify(etr.body)}`);
     assert.strictEqual(await linhas(m), 'A256T/-=4 B256T/-=3');
   });
 
