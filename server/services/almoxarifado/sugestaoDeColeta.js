@@ -115,12 +115,14 @@ function candidatoSugerivel(linha, { arvore, material, hojeISO }) {
  *  - arvore: Map(id -> localizacao com almoxarifado_codigo/almoxarifado_ativo);
  *  - material: Map(material_id -> { localizacao_padrao_id, proprietario_cliente_id, controle_serie, tipo_material });
  *  - seriesPorLote: Map(chaveLote -> series EM_ESTOQUE), so dos materiais com serie;
+ *  - lotePreso: Map(chaveLote -> livre do lote), so dos lotes com peca presa de material com controle por lote e sem serie (Etapa 250);
  *  - hojeISO: o dia (lotService.isVencido).
  * Saida: { porItem: Map(item_id -> { pegar_em, pegar_em_aviso }), ordem_coleta: [...] }.
  */
-function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, hojeISO }) {
+function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, lotePreso, hojeISO }) {
   const planejado = planejadoPorPar || new Map();
   const series = seriesPorLote || new Map();
+  const presos = lotePreso || new Map();
   const caminhos = new Map(); // memo por localizacao_id (Fase 2, d)
   const caminhoDe = (locId) => {
     if (!caminhos.has(locId)) caminhos.set(locId, caminhoDaLocalizacao(arvore, locId));
@@ -143,6 +145,12 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
       const kl = chaveLote(linha.material_id ?? mat.id, linha.lote_id);
       const teto = num(series.get(kl)) - num(planejadoPorLote.get(kl)) - num(sugeridoPorLote.get(kl));
       livre = Math.min(livre, teto);
+    }
+    // Etapa 250 (C517, RN-250.10..13): lote com peca presa — o teto e o livre do lote (situacaoDosLotes) menos o planejado de todos os
+    // pares do lote e o sugerido aos irmaos nele (o mesmo desconto das series, I3; a separacao confere o lote assim, B1444).
+    const klp = chaveLote(linha.material_id ?? mat.id, linha.lote_id);
+    if (linha.lote_id !== null && linha.lote_id !== undefined && presos.has(klp)) {
+      livre = Math.min(livre, num(presos.get(klp)) - num(planejadoPorLote.get(klp)) - num(sugeridoPorLote.get(klp)));
     }
     return Q.qtd(Math.max(0, livre));
   };

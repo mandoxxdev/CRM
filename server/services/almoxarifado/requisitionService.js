@@ -439,7 +439,7 @@ function dividirSeparavel(itens) {
  * series EM_ESTOQUE por lote, so dos materiais com serie (emenda I3). Sem trava: so le (RN-188.07).
  */
 async function lerDadosDaColeta(db, itens) {
-  const vazio = { candidatosPorMaterial: new Map(), planejadoPorPar: new Map(), arvore: new Map(), material: new Map(),
+  const vazio = { candidatosPorMaterial: new Map(), lotePreso: new Map(), planejadoPorPar: new Map(), arvore: new Map(), material: new Map(),
     seriesPorLote: new Map(), hojeISO: undefined };
   const mats = [...new Set((itens || []).map((i) => Number(i.material_id)))];
   if (!mats.length) return vazio;
@@ -469,6 +469,18 @@ async function lerDadosDaColeta(db, itens) {
   const series = comSerie.length ? await dbAll(db, `SELECT material_id, lote_id, COUNT(*) as n FROM series_almoxarifado
     WHERE status = 'EM_ESTOQUE' AND material_id IN (${comSerie.map(() => '?').join(',')})
     GROUP BY material_id, lote_id`, comSerie) : [];
+  // Etapa 250 (C517, RN-250.10/14): o livre do LOTE com peca presa (retido + inspecao > folga), so em material com controle por lote e
+  // sem serie — o mesmo gatilho e a mesma regua da separacao (`memoLotesComPecaPresa`, `situacaoDosLotes`; a da entrega, nao a do
+  // Bloquear, B1568): a dica preve o que a separacao aceita. Um SELECT por material com lote; so le, sem trava (RN-188.07).
+  const lotePreso = new Map();
+  const comLote = await dbAll(db, `SELECT id FROM materiais_almoxarifado WHERE id IN (${mm}) AND controle_lote = 1
+    AND COALESCE(controle_serie, 0) <> 1`, mats);
+  for (const { id: mid } of comLote) { // eslint-disable-line no-restricted-syntax
+    // eslint-disable-next-line no-await-in-loop
+    for (const [loteId, sit] of await situacaoDosLotes(db, mid)) {
+      if (sit.retido + sit.inspecao > Q.QTD_FOLGA) lotePreso.set(sugestaoDeColeta.chaveLote(mid, loteId), sit.livre);
+    }
+  }
   const candidatosPorMaterial = new Map();
   for (const s of saldos) {
     const k = Number(s.material_id);
@@ -477,6 +489,7 @@ async function lerDadosDaColeta(db, itens) {
   }
   return {
     candidatosPorMaterial,
+    lotePreso,
     planejadoPorPar: new Map(planejados.map((p) => [
       sugestaoDeColeta.chavePar(p.material_id, p.origem_separacao_id, p.lote_separacao_id), Number(p.q) || 0])),
     arvore: new Map(locs.map((l) => [Number(l.id), l])),
