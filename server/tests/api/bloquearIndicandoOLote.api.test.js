@@ -353,6 +353,29 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(Object.keys(fx.lotes[0]).sort(), Object.keys(body.lotes[0]).sort(), 'as chaves do lote na fixture — regrave');
   });
 
+  // Fase 5 achado 1 (sonda p4): o GET so olhava o lote — com bloqueio sem lote no material, prometia L1 4 e o motor recusava pela
+  // guarda do material. Agora o livre de cada lote e limitado pelo bloqueavel do material (bloquear `livre` passa; `livre + 1e-6`, 400).
+  await test('[RN-249.12, Fase 5] L1 4 e L2 4 com 6 bloqueados sem lote: o GET diz 2 em cada lote; bloquear 2 em L1 passa e 2.000001 -> 400', async () => {
+    const { m, L1, L2 } = await cenario();
+    await ok(bloquear(m, 6));
+    assert.deepStrictEqual(await paraBloquear(m), { material_id: m.id, lotes: [
+      { lote_id: L1, codigo: 'L1', saldo: 4, livre: 2 }, { lote_id: L2, codigo: 'L2', saldo: 4, livre: 2 }] });
+    await recusaSemGravar(m, bloquear(m, 2.000001, L1), 'Saldo disponível insuficiente para bloquear: 2 UN');
+    await ok(bloquear(m, 2, L1));
+    assert.deepStrictEqual((await paraBloquear(m)).lotes.map((l) => l.livre), [0, 0]);
+  });
+
+  // Fase 5 achado 2 (sonda p3a, DECLARADO — aviso C): o estorno da ENTRADA do lote nao confere o bloqueado do lote (como a quarentena
+  // da 209, C504). Este teste prende o comportamento de hoje; quando o estorno passar a conferir, ele muda junto com o aviso.
+  await test('[RN-249.05 entrada, declarado] bloquear 4 em L1 (L1 4, L2 4) e estornar a entrada de L1: passa; o livro continua dizendo L1 4', async () => {
+    const { m, L1 } = await cenario();
+    await ok(bloquear(m, 4, L1));
+    const ent = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ENTRADA' AND lote_id = ?", [m.id, L1]);
+    await ok(adm.post(`${API}/movimentacoes/${ent.id}/cancelar`, { motivo: 'estorno 249 entrada' }));
+    assert.deepStrictEqual((await porLote(m)).lotes, [{ lote_id: L1, codigo: 'L1', quantidade: 4 }]);
+    assert.strictEqual(await bloqueada(m), 4);
+  });
+
   await test('[RN-249.09 permissao] sem perfil (PRODUCAO) le o GET (visualizar) e nao bloqueia (ajustar_estoque -> 403)', async () => {
     const { m, L1 } = await cenario();
     const g = await como('S').get(`${API}/materiais/${m.id}/lotes-para-bloquear`);

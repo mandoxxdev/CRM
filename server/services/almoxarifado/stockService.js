@@ -1796,7 +1796,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // bloqueava 10 com fisico 4 (P6) e levava a caixa. Bloqueavel = fisico nao retido menos a caixa, SEM contar o
       // reservado (disponivel + reservado - caixa): a qualidade continua retendo material reservado — o GESTOR bloqueia
       // mas nao libera reserva de requisicao. O BLOQUEIO sem a opcao (devolucao para quarentena) fica como era.
-      const bloqueavel = Q.qtdSql(`${disponivelSql()} + COALESCE(quantidade_reservada,0) - ${caixaSql.caixaSemReservaSql('materiais_almoxarifado.id')}`);
+      const bloqueavel = caixaSql.bloqueavelAvulsoSql(); // Etapa 249 (Fase 5): a mesma expressao do livre por lote da tela
       const recusaDoMaterial = async () => {
         const b = await dbGet(db, `SELECT ${bloqueavel} AS n FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
         return Object.assign(new Error(`Saldo disponível insuficiente para bloquear: ${livreMostrado(b && b.n)} ${material.unidade}`

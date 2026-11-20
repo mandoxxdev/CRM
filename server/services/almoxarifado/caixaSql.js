@@ -47,6 +47,16 @@ function caixaSemReservaSql(materialExpr, exclusao = '') {
  * tabela unica: a subconsulta correlaciona por `materiais_almoxarifado.id` (medido no controle da s4 da Fase 0).
  * Pode ser negativo (legado: caixa maior que o disponivel) — quem mostra o numero usa `max(0, …)`.
  */
+/**
+ * Etapa 249 (Fase 5, achado 1) — o BLOQUEAVEL do bloqueio avulso (Etapa 97, B496; forma da Fase 2, I-5): disponivel + reservado − caixa
+ * sem reserva, arredondado. Movido do ramo BLOQUEIO do motor para o motor e `lotService.lotesParaBloquear` lerem a mesma expressao (o
+ * livre de cada lote na tela e limitado por ele). Sem alias (UPDATE de tabela unica) ou com alias.
+ */
+function bloqueavelAvulsoSql(alias = '') {
+  const col = (c) => (alias ? `${alias}.${c}` : c);
+  return Q.qtdSql(`${disponivelSql(alias)} + COALESCE(${col('quantidade_reservada')},0) - ${caixaSemReservaSql(alias ? `${alias}.id` : 'materiais_almoxarifado.id')}`);
+}
+
 function livreDeCaixaSql(alias = '') {
   return Q.qtdSql(`${disponivelSql(alias)} - ${caixaSemReservaSql(alias ? `${alias}.id` : 'materiais_almoxarifado.id')}`);
 }
@@ -145,4 +155,4 @@ async function lerCaixaComReserva(db, materialId) {
   return Q.qtd(Math.max(0, (Number(linha && linha.total) || 0) - semReserva));
 }
 
-module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, lerCaixaComReserva, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };
+module.exports = { caixaSemReservaSql, livreDeCaixaSql, bloqueavelAvulsoSql, lerCaixa, lerCaixaComReserva, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };

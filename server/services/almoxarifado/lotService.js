@@ -723,7 +723,10 @@ async function resumoLotesDoMaterial(db, materialId) {
  */
 async function lotesParaBloquear(db, materialId) {
   const rdl = require('./retidoDoLote');
-  const mat = await dbGet(db, 'SELECT id, controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  // Fase 5 (achado 1): o livre de cada lote e limitado pelo BLOQUEAVEL do material (a guarda do motor vem antes da do lote) — sem isto, com
+  // bloqueio sem lote no material o GET prometia o lote inteiro e o motor recusava pela guarda do material.
+  const mat = await dbGet(db, `SELECT id, controle_lote, controle_serie, ${require('./caixaSql').bloqueavelAvulsoSql('lpb_mat')} AS bloqueavel
+    FROM materiais_almoxarifado lpb_mat WHERE lpb_mat.id = ?`, [materialId]);
   if (!mat) return null;
   const material_id = Number(mat.id);
   if (Number(mat.controle_lote) !== 1 || Number(mat.controle_serie) === 1) return { material_id, lotes: [] };
@@ -740,7 +743,9 @@ async function lotesParaBloquear(db, materialId) {
     const saldo = Q.qtd(Number(l.saldo) || 0);
     if (saldo <= Q.QTD_FOLGA) continue;
     const guardado = await guardadoNoLoteDeOutras(db, material_id, l.lote_id, null);
-    lotes.push({ lote_id: Number(l.lote_id), codigo: l.codigo, saldo, livre: Q.qtd(Math.max(0, (Number(l.bruto) || 0) - guardado)) });
+    const doLote = Math.max(0, (Number(l.bruto) || 0) - guardado);
+    lotes.push({ lote_id: Number(l.lote_id), codigo: l.codigo, saldo,
+      livre: Q.qtd(Math.max(0, Math.min(doLote, Number(mat.bloqueavel) || 0))) });
   }
   return { material_id, lotes };
 }

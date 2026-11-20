@@ -128,7 +128,7 @@ retém mais; o desconto do impedido já tira o retido do lote, B1438 — sem dup
 - [x] **T2** (no mesmo commit da T1: o teste é o mesmo arquivo) — RN-249.20 (C501) no mesmo arquivo de teste (vermelho antes) + motor (`codigo`) + `executarLiberacao`. Controle positivo:
   tirar a tradução.
 - [x] **T3 (galho)** (vermelhos 5/5 antes; controle positivo: 4 sabotagens — `lote_id` no POST, opção desabilitada, resposta atrasada, rótulo obrigatório —, cada uma derrubou o seu cenário) — tela: RN-249.10 em `InspecoesAlmoxarifado.test.js` (com a fixture), teste (8) da 209 reescrito.
-- [ ] **T4** — Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
+- [x] **T4** — Fase 5 (revisor adversarial fresco com sonda executada, 19/11): 3 achados reais, 0 ruído. (1) o GET prometia o lote inteiro com bloqueio sem lote no material e o motor recusava pela guarda do material (sonda p4) → **RN-249.12**: o livre de cada lote é limitado pelo bloqueável do material (`caixaSql.bloqueavelAvulsoSql`, a mesma expressão do motor), teste vermelho antes, sabotagem do limite derruba. (2) o estorno da ENTRADA do lote passa com o lote inteiro bloqueado nele (sonda p3a) → declarado (aviso C, teste prende o comportamento). (3) a caixa separada sem lote não sai do livre do lote (sonda p1b) → declarado (letra B, como o bloqueio sem lote desde a 97). Não quebrou: corrida bloquear × separar (0/20), burlar pela v2, fracionado, permissão, reentrada. Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
 - [ ] **T5** — fechamento (fechar-etapa sem 7½ e 8).
 
 ## Pontos de atenção
