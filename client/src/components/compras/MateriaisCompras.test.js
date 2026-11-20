@@ -18,8 +18,9 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
-import MateriaisCompras, { AVISO_SEM_ACESSO } from './MateriaisCompras';
-import MaterialAlmoxarifadoForm from '../almoxarifado/MaterialAlmoxarifadoForm';
+import MateriaisCompras, { AVISO_SEM_ACESSO, avisoCadastroACompletar } from './MateriaisCompras';
+import MaterialAlmoxarifadoForm, { AVISO_FORM_CADASTRO_A_COMPLETAR } from '../almoxarifado/MaterialAlmoxarifadoForm';
+import { TabelaMateriais } from '../almoxarifado/TabelaMateriais';
 import { ROTAS_COMPRAS, AVISO_CADASTRO_NO_COMPRAS } from '../almoxarifado/rotasCadastroMaterial';
 import { MaterialVer, EditarMaterialVirouVer, NovoMaterialVirouLista } from '../almoxarifado/MaterialSoConsulta';
 import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
@@ -281,7 +282,8 @@ describe('Compras → Materiais — Inativar e Reativar (RN-193.04)', () => {
     });
   });
   afterEach(() => { window.confirm = confirmOriginal; });
-  const listas = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais/cadastro').length;
+  // Etapa 254: a contagem do aviso "cadastro a completar" (`a_completar=1`) tambem chama a lista — aqui contam so as recargas da lista.
+  const listas = () => api.get.mock.calls.filter(([u, cfg]) => u === '/compras/materiais/cadastro' && !cfg?.params?.a_completar).length;
   const filtrarInativos = async () => {
     const select = container.querySelector('[data-testid="filtro-situacao"]');
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual(
@@ -415,5 +417,122 @@ describe('Almoxarifado → Materiais: a ficha "Ver" e os caminhos antigos (RN-19
     expect(chamadas.length).toBeGreaterThan(0);
     for (const [, cfg] of chamadas) expect(cfg.params).not.toHaveProperty('com_lote_impedido');
     expect(container.textContent).toContain('VLV-001');
+  });
+});
+
+// Etapa 254 (item 27, RN-254.13/.14): o material criado pelo Almoxarifado (sobra/remessa) vem marcado "cadastro a completar".
+describe('Compras → Materiais — cadastro a completar', () => {
+  const RETALHO = { id: 88, codigo: 'VLV-009', nome: 'Retalho de valvula', familia_id: 5, familia_nome: 'Valvulas', unidade: 'PC',
+    categoria: 'Valvulas', quantidade_atual: 0, cadastro_a_completar: 1 };
+  const REMESSA = { ...RETALHO, id: 89, codigo: 'VLV-010', nome: 'Resultado da remessa' };
+  const comMarcados = (marcados, contagem = marcados) => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/compras/materiais/cadastro' && cfg?.params?.a_completar === '1') return Promise.resolve({ data: contagem });
+      if (url === '/compras/materiais/cadastro') return Promise.resolve({ data: [MATERIAL, ...marcados] });
+      if (url === '/compras/materiais/cadastro/88') return Promise.resolve({ data: RETALHO });
+      return base(url, cfg);
+    });
+  };
+  const aviso = () => container.querySelector('[data-testid="aviso-cadastro-a-completar"]');
+  const nome = () => container.querySelector('input[placeholder="Nome completo do material"]');
+
+  test('[RN-254.13] com marcados: o aviso com a contagem (plural), o selo só nos marcados', async () => {
+    comMarcados([RETALHO, REMESSA]);
+    await renderizar('/compras/materiais');
+    expect(api.get).toHaveBeenCalledWith('/compras/materiais/cadastro', { params: { a_completar: '1' } });
+    expect(aviso().textContent).toContain(avisoCadastroACompletar(2));
+    expect(avisoCadastroACompletar(2)).toBe('2 materiais criados pelo Almoxarifado (sobra ou remessa a terceiros) com o cadastro a '
+      + 'completar: NCM, custo, fornecedor e o resto do cadastro. Abra e salve para tirar o aviso.');
+    expect(avisoCadastroACompletar(1).startsWith('1 material criado pelo Almoxarifado ')).toBe(true);
+    expect(container.querySelector('[data-testid="selo-a-completar-88"]').textContent).toContain('Cadastro a completar');
+    expect(container.querySelector('[data-testid="selo-a-completar-89"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="selo-a-completar-77"]')).toBeNull();
+    expect(container.textContent).toContain('VLV-001');
+    expect(urlsDoAlmoxarifado()).toEqual([]);
+  });
+
+  test('[RN-254.13] sem marcados: nem aviso nem selo (a lista aparece)', async () => {
+    await renderizar('/compras/materiais');
+    expect(container.textContent).toContain('VLV-001');
+    expect(aviso()).toBeNull();
+    expect(container.querySelector('[data-testid^="selo-a-completar-"]')).toBeNull();
+  });
+
+  test('[RN-254.13] a contagem conta pela marca da resposta (um material sem marca não conta)', async () => {
+    comMarcados([RETALHO], [RETALHO, MATERIAL]);
+    await renderizar('/compras/materiais');
+    expect(aviso().textContent).toContain(avisoCadastroACompletar(1));
+  });
+
+  test('[RN-254.13] "Ver só esses" filtra a lista (a_completar=1); "Ver todos" volta', async () => {
+    comMarcados([RETALHO]);
+    await renderizar('/compras/materiais');
+    const botao = () => container.querySelector('[data-testid="alternar-a-completar"]');
+    expect(botao().textContent).toBe('Ver só esses');
+    await act(async () => { botao().click(); });
+    await esperar();
+    const ultima = () => { const c = api.get.mock.calls.filter(([u]) => u === '/compras/materiais/cadastro'); return c[c.length - 1][1]; };
+    expect(ultima()).toEqual({ params: { a_completar: '1' } });
+    expect(container.textContent).not.toContain('VLV-001');
+    expect(container.textContent).toContain('VLV-009');
+    expect(botao().textContent).toBe('Ver todos');
+    await act(async () => { botao().click(); });
+    await esperar();
+    expect(ultima()).toEqual({ params: {} });
+    expect(container.textContent).toContain('VLV-001');
+  });
+
+  test('[RN-254.13] a tabela só mostra o selo quando pedem (a lista do Almoxarifado não pede)', async () => {
+    await act(async () => { root.render(<TabelaMateriais materiais={[RETALHO]} loading={false} renderAcoes={() => null} />); });
+    expect(container.textContent).toContain('VLV-009');
+    expect(container.querySelector('[data-testid="selo-a-completar-88"]')).toBeNull();
+    await act(async () => {
+      root.render(<TabelaMateriais materiais={[RETALHO]} loading={false} renderAcoes={() => null} mostrarCadastroACompletar />);
+    });
+    expect(container.querySelector('[data-testid="selo-a-completar-88"]')).not.toBeNull();
+  });
+
+  test('[RN-254.14] o formulário do Compras avisa no material marcado', async () => {
+    comMarcados([RETALHO]);
+    await renderizar('/compras/materiais/editar/88');
+    expect(nome().value).toBe('Retalho de valvula');
+    expect(container.querySelector('[data-testid="material-cadastro-a-completar"]').textContent).toBe(AVISO_FORM_CADASTRO_A_COMPLETAR);
+    expect(AVISO_FORM_CADASTRO_A_COMPLETAR).toBe('Cadastro a completar: este material foi criado pelo Almoxarifado (sobra ou remessa a '
+      + 'terceiros) só com código, nome, unidade e família. Complete o cadastro e salve — ao salvar, o aviso sai.');
+  });
+
+  test('[RN-254.14] o formulário do Compras não avisa no material sem a marca', async () => {
+    comMarcados([RETALHO]);
+    await renderizar('/compras/materiais/editar/77');
+    expect(nome().value).toBe('Valvula gaveta');
+    expect(container.querySelector('[data-testid="material-cadastro-a-completar"]')).toBeNull();
+  });
+
+  test('[RN-254.13] inativar recarrega a contagem do aviso (o inativo sai da conta)', async () => {
+    const confirmOriginal = window.confirm; window.confirm = jest.fn(() => true);
+    try {
+      let marcados = [RETALHO, REMESSA];
+      const base = api.get.getMockImplementation();
+      api.get.mockImplementation((url, cfg) => (url === '/compras/materiais/cadastro'
+        ? Promise.resolve({ data: cfg?.params?.a_completar === '1' ? marcados : [MATERIAL, ...marcados] }) : base(url, cfg)));
+      api.delete.mockResolvedValue({ data: { success: true } });
+      await renderizar('/compras/materiais');
+      expect(aviso().textContent).toContain(avisoCadastroACompletar(2));
+      marcados = [REMESSA];
+      await act(async () => { container.querySelector('[data-testid="inativar-material-88"]').click(); });
+      await esperar();
+      expect(api.delete).toHaveBeenCalledWith('/compras/materiais/cadastro/88');
+      expect(aviso().textContent).toContain(avisoCadastroACompletar(1));
+    } finally { window.confirm = confirmOriginal; }
+  });
+
+  test('[RN-254.14] a ficha "Ver" do Almoxarifado não mostra o aviso (só o Compras completa)', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/materiais/77'
+      ? Promise.resolve({ data: { ...MATERIAL, cadastro_a_completar: 1 } }) : base(url, cfg)));
+    await renderizar('/almoxarifado/materiais/ver/77');
+    expect(nome().value).toBe('Valvula gaveta');
+    expect(container.querySelector('[data-testid="material-cadastro-a-completar"]')).toBeNull();
   });
 });

@@ -16,22 +16,31 @@
  *
  * Quem decide é o servidor; `minhas-permissoes` (da porta do Compras) só esconde os botões e explica por que a lista não
  * aparece para quem não cadastra material.
+ *
+ * Etapa 254 (item 27, RN-254.13): o material criado pelo Almoxarifado (sobra e remessa a terceiros, só código, nome, unidade e família)
+ * vem marcado "cadastro a completar". A tela conta os marcados (um GET com `a_completar=1`, ao abrir e depois de inativar/reativar),
+ * mostra o aviso com "Ver só esses" / "Ver todos" e o selo ao lado do nome; salvar o cadastro tira a marca (servidor).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiEdit, FiPlus, FiRefreshCw, FiPackage, FiTrash2, FiRotateCcw } from 'react-icons/fi';
+import { FiEdit, FiPlus, FiRefreshCw, FiPackage, FiTrash2, FiRotateCcw, FiAlertTriangle } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { ROTAS_COMPRAS } from '../almoxarifado/rotasCadastroMaterial';
-import { FiltrosMateriais, TabelaMateriais, estaInativo, paramsDaBusca } from '../almoxarifado/TabelaMateriais';
+import { FiltrosMateriais, TabelaMateriais, estaInativo, paramsDaBusca, estaACompletar } from '../almoxarifado/TabelaMateriais';
 import '../almoxarifado/Almoxarifado.css';
 
 // Etapa 193 (RN-193.03): quem cadastra é SÓ o administrador do módulo Compras (cadastro de usuário) e os administradores do
 // sistema — os perfis do Almoxarifado deixaram de entrar, e o aviso deixou de citá-los.
 export const AVISO_SEM_ACESSO = 'Seu acesso não permite cadastrar material. Peça a um administrador do sistema para marcar '
   + 'você como administrador do módulo Compras.';
+
+// Etapa 254 (RN-254.13): o aviso da lista — singular e plural escritos por inteiro.
+export const avisoCadastroACompletar = (n) => `${n} ${n === 1 ? 'material criado' : 'materiais criados'} pelo Almoxarifado `
+  + '(sobra ou remessa a terceiros) com o cadastro a completar: NCM, custo, fornecedor e o resto do cadastro. '
+  + 'Abra e salve para tirar o aviso.';
 
 const MateriaisCompras = () => {
   const navigate = useNavigate();
@@ -45,6 +54,9 @@ const MateriaisCompras = () => {
   const [familiaFilter, setFamiliaFilter] = useState('');
   // RN-193.04: '' = ativos (como sempre); 'inativo' = só os inativos — o mesmo `status` da lista do Almoxarifado.
   const [statusFilter, setStatusFilter] = useState('');
+  // RN-254.13: `aCompletar` liga o filtro (`a_completar=1`); `qtdACompletar` é a contagem do aviso (só os ativos marcados).
+  const [aCompletar, setACompletar] = useState(false);
+  const [qtdACompletar, setQtdACompletar] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const pedidoRef = useRef(0);
 
@@ -62,6 +74,7 @@ const MateriaisCompras = () => {
     setCarregando(true);
     try {
       const params = paramsDaBusca({ search, categoria, familiaFilter, statusFilter }, familias);
+      if (aCompletar) params.a_completar = '1';
       const res = await api.get(ROTAS_COMPRAS.api.lista, { params });
       if (meu !== pedidoRef.current) return;
       setMateriais(Array.isArray(res.data) ? res.data : []);
@@ -74,6 +87,21 @@ const MateriaisCompras = () => {
     }
   };
 
+  // RN-254.13: a contagem do aviso — conta pela marca da resposta (o servidor já filtra; a conta não confia só nisso). Falha = sem aviso.
+  const contarACompletar = async () => {
+    try {
+      const res = await api.get(ROTAS_COMPRAS.api.lista, { params: { a_completar: '1' } });
+      setQtdACompletar((Array.isArray(res.data) ? res.data : []).filter(estaACompletar).length);
+    } catch (err) {
+      setQtdACompletar(0);
+    }
+  };
+  useEffect(() => {
+    if (carregandoPermissoes || !podeVer) return;
+    contarACompletar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoPermissoes, podeVer]);
+
   // Etapa 38 (RN-38.05) no Almoxarifado: com filtro de família, a chegada da lista de famílias reagenda a busca (é dela que sai a
   // subfamília); sem filtro, a chave fica constante.
   const familiasKey = familiaFilter ? familias.length : 0;
@@ -82,7 +110,7 @@ const MateriaisCompras = () => {
     const t = setTimeout(carregar, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, categoria, familiaFilter, statusFilter, familiasKey, carregandoPermissoes, podeVer]);
+  }, [search, categoria, familiaFilter, statusFilter, aCompletar, familiasKey, carregandoPermissoes, podeVer]);
 
   // RN-193.04: inativar e reativar mudaram do Almoxarifado para cá (as mesmas regras no servidor: o 400 diz o saldo que prende).
   const inativar = async (m) => {
@@ -91,6 +119,7 @@ const MateriaisCompras = () => {
       await api.delete(ROTAS_COMPRAS.api.inativar(m.id));
       toast.success('Material inativado');
       carregar();
+      contarACompletar();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Erro ao inativar material');
     }
@@ -101,6 +130,7 @@ const MateriaisCompras = () => {
       await api.put(ROTAS_COMPRAS.api.material(m.id), { ativo: 1 });
       toast.success('Material reativado');
       carregar();
+      contarACompletar();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Erro ao reativar material');
     }
@@ -115,7 +145,7 @@ const MateriaisCompras = () => {
         </div>
         {podeVer && (
           <div className="almox-header-actions">
-            <button type="button" className="btn-almox-secondary" onClick={carregar}>
+            <button type="button" className="btn-almox-secondary" onClick={() => { carregar(); contarACompletar(); }}>
               <FiRefreshCw size={13} /> Atualizar
             </button>
             <Link to={ROTAS_COMPRAS.tela.novo} className="btn-almox-primary"
@@ -134,16 +164,31 @@ const MateriaisCompras = () => {
         </div>
       ) : (
         <>
+          {(qtdACompletar > 0 || aCompletar) && (
+            <div className="almox-empty" data-testid="aviso-cadastro-a-completar" role="note"
+              style={{ padding: '10px 14px', marginBottom: 16, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+                flexWrap: 'wrap', color: 'var(--gmp-warning)' }}>
+              <FiAlertTriangle size={16} />
+              <span style={{ flex: 1, minWidth: 220 }}>
+                {qtdACompletar > 0 ? avisoCadastroACompletar(qtdACompletar) : 'Nenhum material com o cadastro a completar.'}
+              </span>
+              <button type="button" className="btn-almox-secondary" data-testid="alternar-a-completar"
+                onClick={() => setACompletar((v) => !v)}>
+                {aCompletar ? 'Ver todos' : 'Ver só esses'}
+              </button>
+            </div>
+          )}
           <FiltrosMateriais
             search={search} onSearch={setSearch}
             categoria={categoria} onCategoria={setCategoria} categorias={categorias}
             familiaFilter={familiaFilter} onFamilia={setFamiliaFilter} familias={familias}
             statusFilter={statusFilter} onStatus={setStatusFilter}
-            onLimpar={() => { setSearch(''); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); }}
+            onLimpar={() => { setSearch(''); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); setACompletar(false); }}
           />
           <TabelaMateriais
             materiais={materiais}
             loading={carregando}
+            mostrarCadastroACompletar
             renderAcoes={(m) => (
               <>
                 <button type="button" className="almox-btn-icon primary" title="Edita o cadastro deste material"

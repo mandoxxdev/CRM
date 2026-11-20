@@ -68,6 +68,10 @@ export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de 
 // usa as portas dele e esconde foto, saldo inicial e os atalhos para Configuracoes do Almoxarifado.
 // Etapa 193 (RN-193.01): `rotas.somenteLeitura` (ROTAS_ALMOXARIFADO_CONSULTA) e a ficha "Ver" do Almoxarifado — o MESMO formulario,
 // com tudo desligado (`<fieldset disabled>`), sem Salvar e sem enviar foto: o cadastro e feito em Compras -> Materiais.
+// Etapa 254 (RN-254.14): o aviso do formulário de edição pelo Compras para o material marcado "cadastro a completar".
+export const AVISO_FORM_CADASTRO_A_COMPLETAR = 'Cadastro a completar: este material foi criado pelo Almoxarifado (sobra ou remessa '
+  + 'a terceiros) só com código, nome, unidade e família. Complete o cadastro e salve — ao salvar, o aviso sai.';
+
 const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   const somenteLeitura = !!rotas.somenteLeitura;
   const { user } = useAuth();
@@ -105,6 +109,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   const [familiaGravadaId, setFamiliaGravadaId] = useState('');
   // Fase 5 (X6): o nome do dono gravado (do detalhe), para mostrar sem pedir a lista de clientes (desde a 193, so na consulta).
   const [donoNome, setDonoNome] = useState(null);
+  // Etapa 254 (RN-254.14): o material criado pelo Almoxarifado (sobra/remessa) que ainda não foi completado — o aviso só no Compras.
+  const [cadastroACompletar, setCadastroACompletar] = useState(false);
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
   const [localizacaoInativa, setLocalizacaoInativa] = useState(null);
@@ -397,6 +403,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
       setTipoMaterialIdGravado(m.tipo_material_id ? Number(m.tipo_material_id) : null);
       setDonoNome(m.proprietario_cliente_nome || null);
+      setCadastroACompletar(Number(m.cadastro_a_completar) === 1);
       controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
       familiaLidaRef.current = {
         familia_id: m.familia_id ? Number(m.familia_id) : null,
@@ -692,6 +699,13 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
         <div className="almox-empty" data-testid="material-somente-leitura" role="note"
           style={{ padding: '10px 14px', marginBottom: 16, textAlign: 'left' }}>
           {AVISO_CADASTRO_NO_COMPRAS}
+        </div>
+      )}
+
+      {isEdit && cadastroACompletar && rotas.modulo === 'compras' && !somenteLeitura && (
+        <div className="almox-empty" data-testid="material-cadastro-a-completar" role="note"
+          style={{ padding: '10px 14px', marginBottom: 16, textAlign: 'left', color: 'var(--gmp-warning)' }}>
+          {AVISO_FORM_CADASTRO_A_COMPLETAR}
         </div>
       )}
 

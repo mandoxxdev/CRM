@@ -119,8 +119,17 @@ export function FiltrosMateriais({
   );
 }
 
-/** A tabela: Foto, Código, Material, Família, Categoria, Quantidade, Localização, Status e Ações (`renderAcoes(m)`). */
-export function TabelaMateriais({ materiais, loading, renderAcoes }) {
+/** Etapa 254 (RN-254.13): o selo do material criado pelo Almoxarifado (sobra ou remessa) que o Compras ainda não completou. */
+export const SELO_CADASTRO_A_COMPLETAR = 'Cadastro a completar';
+export const DICA_CADASTRO_A_COMPLETAR = 'Criado pelo Almoxarifado (sobra ou remessa a terceiros) só com código, nome, unidade e família. '
+  + 'Abra, complete o cadastro e salve.';
+export const estaACompletar = (m) => Number(m?.cadastro_a_completar) === 1;
+
+/**
+ * A tabela: Foto, Código, Material, Família, Categoria, Quantidade, Localização, Status e Ações (`renderAcoes(m)`).
+ * `mostrarCadastroACompletar` (Etapa 254, RN-254.13): só o Compras liga — o selo ao lado do nome.
+ */
+export function TabelaMateriais({ materiais, loading, renderAcoes, mostrarCadastroACompletar = false }) {
   return (
     <div className="almox-table-container">
       {loading ? (
@@ -171,6 +180,12 @@ export function TabelaMateriais({ materiais, loading, renderAcoes }) {
                           Fica ao lado do NOME, e não do código, porque é o nome que o
                           almoxarife lê ao procurar a chapa. */}
                       <SeloProprietario material={m} />
+                      {mostrarCadastroACompletar && estaACompletar(m) && (
+                        <span className="almox-badge almox-badge-baixo" data-testid={`selo-a-completar-${m.id}`}
+                          title={DICA_CADASTRO_A_COMPLETAR} style={{ marginLeft: 6, fontSize: '0.65rem' }}>
+                          <FiAlertTriangle size={10} /> {SELO_CADASTRO_A_COMPLETAR}
+                        </span>
+                      )}
                     </div>
                     {m.fornecedor_principal && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.fornecedor_principal}</div>
