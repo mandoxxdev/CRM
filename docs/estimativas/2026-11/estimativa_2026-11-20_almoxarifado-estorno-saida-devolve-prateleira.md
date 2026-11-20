@@ -19,10 +19,14 @@ esta tem a mesma forma com um pouco mais de casos (lote, série, entrega): **1h1
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Estornar uma saída devolve as peças às prateleiras de onde saíram | 1h15 | motor/estorno (E256 C549 0,8 h) | 1h15 | Etapa 257 (`2026-11-20-almoxarifado-etapa257-estorno-saida-devolve-prateleira.md`) | — | — | — | — |
+| 1 | Estornar uma saída devolve as peças às prateleiras de onde saíram | 1h15 | motor/estorno (E256 C549 0,8 h) | 1h15 | Etapa 257 (`2026-11-20-almoxarifado-etapa257-estorno-saida-devolve-prateleira.md`) | fatia do almoxarifado no motor | 0,9 h (horas.js 20/11, grupo "Etapa 257|estorno da saida") | 1h | `e5e4f699`, `3a2d5aed`, `9fda71f7`, `9476a64b`, `d259dcc0`, `bea218b7` |
 
 ## Medição no fechamento
 
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-20 --ate 2026-11-21 --grupos "Estorno da saida=Etapa 257|estorno da saida"
 ```
+
+**Etapa 257 (20/11):** não revisada. Medido 0,9 h (~54 min, arredondado para 1h) — 15 min abaixo do estimado: a revisão do plano e a
+revisão final não acharam defeito no código novo (um aviso anterior registrado e dois testes que faltavam), e a tela não mudou. A suíte do
+servidor inteira (~1 h de relógio, sem commit no meio) não entra no horas.js.

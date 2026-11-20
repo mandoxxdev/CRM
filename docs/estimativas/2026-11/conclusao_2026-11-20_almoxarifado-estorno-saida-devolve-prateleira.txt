@@ -1,0 +1,6 @@
+*Concluído — estorno de uma saída devolve às prateleiras de onde saiu*
+_20/11/2026_
+
+1. Estornar uma saída devolve as peças às prateleiras de onde saíram — estimado 1h15 · realizado 1h
+
+*Total: estimado 1h15 · realizado 1h*
