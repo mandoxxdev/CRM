@@ -57,10 +57,13 @@ que drenaria do mesmo jeito. Reversível: o cálculo do novo total e o `drenar` 
   drenadas voltam, dentro da seção; estado idêntico ao de antes; o estorno de novo, sem a falha, dá o RN-258.01.
 - **RN-258.07** (Fase 2, achado 3; **B1606**) Um ajuste do total vivo **feito depois** deste — `AJUSTE` sem localização ou
   `AJUSTE_INVENTARIO`, não cancelado, do mesmo material, id maior — é uma contagem mais recente: o estorno é **recusado** (400) *"Não é
-  possível estornar: há um ajuste do total deste material feito depois deste (movimentação #⟨id⟩) — a contagem mais recente vale. Estorne
+  possível estornar: há um ajuste deste material feito depois deste (movimentação #⟨id⟩) — a contagem mais recente vale. Estorne
   primeiro o ajuste mais recente ou faça um novo ajuste."*, antes de qualquer efeito. Cenário: 5, Ajuste para 3, Ajuste para 7, estorno do 1º
-  → recusa (pela diferença daria 9; o SET de antes, 5; a contagem diz 7); estornado o 2º (3), o 1º passa (5). O Ajuste **com** localização
-  feito depois não trava (ele conta só a posição dele).
+  → recusa (pela diferença daria 9; o SET de antes, 5; a contagem diz 7); estornado o 2º (3), o 1º passa (5). **Fase 5 (achados 1 e 4):**
+  também o `AJUSTE` **com** localização feito depois **na posição padrão ou numa posição que este drenou** (o registro da 256) — *A* 5,
+  Ajuste para 3, Ajuste de *A* para 10, estorno do 1º → 12 por cima da contagem de *A*; o de outra posição não trava. Com
+  `AJUSTE_INVENTARIO` depois (que não se estorna), a literal é *"Não é possível estornar: há uma conferência de inventário deste material
+  feita depois deste ajuste (movimentação #⟨id⟩) — a contagem mais recente vale. Faça um novo ajuste."*
 - **RN-258.06** O que não muda: o AJUSTE **com** localização; o `AJUSTE_INVENTARIO` (não estorna); a devolução às prateleiras da 256 (o
   `devolver`, limitado pelo resíduo); a mensagem de recusa do lote; o Ajuste de ida.
 
@@ -116,5 +119,69 @@ e total que não batia com as linhas saem iguais à base.
   mais recente, a guarda saindo cedo em todo negativo, sem a dispensa do retido 0, contagem que conta o ajuste com localização, contagem
   que conta o cancelado — cada uma derruba o seu cenário (a S12 escrita errada na 1ª vez, parênteses desbalanceados: exit 1 com 0 cenários;
   refeita).
-- [ ] **T4** Fase 2 (revisor fresco) e Fase 5 (adversarial com sonda executada e falha forçada).
-- [ ] **T5** fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T4** Fase 5 — revisor fresco, adversarial, sondas executadas numa cópia de `server/` (commit "Fase 5"). Achados reais:
+  (1) **[importante]** a contagem por posição feita depois não travava: *A* 5, Ajuste para 3, Ajuste de *A* para 10, estorno → 12; *A* 5,
+  *B* 4, Ajuste para 2 (drena *B*), Ajuste de *B* para 6, estorno → 13 (*B* 8 por cima da contagem 6). → **consertado**: a RN-258.07 conta o
+  `AJUSTE` com localização na padrão ou numa posição do registro de drenadas. (2) **[importante, cobertura]** duas sabotagens passavam:
+  tirar o `AJUSTE_INVENTARIO` da consulta e tirar a configuração global da guarda de retenção → **cenários novos** (S19, S20). (3) **[menor,
+  anterior]** o estorno do Ajuste **com** localização não olha o Ajuste do total feito depois (5 → *A* 3 → total 7 → estorno = 9) → declarado
+  (D (258)). (4) **[menor]** com o inventário a mensagem mandava estornar o que não se estorna → **mensagem própria**. (5) **[ruído]** o SET do
+  livro sem `saldo_posterior` é inalcançável (coluna `NOT NULL`) — fica como defesa. Tentado e não quebrou: fracionário (0,3/0,1/0,2), lote
+  em duas prateleiras, caixa separada (drena o não separado; recusa M8 quando o total fica abaixo da caixa), dois Ajustes nas duas ordens
+  com Entrada no meio, falha forçada no `movimento_estorno_id`, na 1ª e na 2ª linha drenada e na escrita final da padrão (estado idêntico, o
+  estorno de novo certo), concorrência (Saída, Entrada e Ajuste do material disparados do contexto do teste com o estorno parado: esperaram a
+  trava; final igual ao serial), a recusa nova não barra nada legítimo (`AJUSTE` só nasce da movimentação do usuário; `AJUSTE_INVENTARIO`
+  só da conclusão da conferência). Sabotagens S16-S20 (sem a padrão, sem as drenadas, mensagem genérica do inventário, sem o inventário,
+  guarda sem a configuração global): cada uma derruba o seu cenário. Teste da etapa: 22.
+- [x] **T5** fechamento (fechar-etapa sem 7½ e 8) — o commit de fechamento. Primeiro boot: **não se aplica** (nenhuma tabela nem coluna).
+
+## Divergências do plano
+
+- O plano previa só o cálculo pela diferença, a recusa do negativo e o drenar sem lote. A Fase 2 acrescentou a guarda de retenção no
+  material que permite negativo (RN-258.03) e a recusa da contagem mais recente (RN-258.07, B1606); a Fase 5 estendeu a RN-258.07 ao Ajuste
+  com localização na padrão ou nas drenadas e deu ao inventário a mensagem própria.
+- O plano não listava a consequência sobre a 256: a devolução "parcial" da RN-256.03 com movimento no meio era o total errado — com a
+  diferença, o limite da devolução é exatamente o que o Ajuste drenou, e a devolução fica inteira (quatro cenários viraram). E o RN-253.14
+  (Entrada sem lote depois do Ajuste do lote) deixou de ser recusa.
+- O drenar sem lote ficou com um custo declarado (C551): a ordem dos estornos decide as prateleiras.
+- **CLAUDE.md:** nenhuma linha ficou errada — a seção das travas não descreve o cálculo do estorno do Ajuste; a leitura nova (o livro e o
+  registro de drenadas) roda dentro da seção do material que ela já descreve.
+
+## Próxima tarefa detalhada
+
+1. **Itens 24, 25 e 26 da estimativa de 18/11 — continuam esperando resposta da empresa.** Caminho reversível de cada um no plano da 253.
+   **Não comece sem a resposta.**
+2. **Sem resposta, o próximo do almoxarifado: a exclusão da requisição devolver às prateleiras de onde a entrega tirou** (D (257) 2).
+   **Medido (20/11, leitura):** `requisitionService` ~3401 monta `partes` por saída da entrega com `localizacao_destino_id = origem da saída (se
+   aceita) ou padrão` e credita por uma ENTRADA própria (não pelo estorno do livro). O registro das linhas que a entrega baixou já existe desde
+   a 257 (`ajuste_linhas_drenadas_almoxarifado` por `movimentacao_id` da SAÍDA da entrega). Caminho: na exclusão, para cada saída com registro,
+   uma ENTRADA por linha registrada (posição da linha, a quantidade dela) em vez de uma só; sem registro, como hoje. Pontos de atenção: a
+   ENTRADA tem a validação de endereço (ativa, não bloqueada, tipo permitido) que o estorno não tem — decidir se a prateleira bloqueada recebe
+   (como a B1604) ou cai na padrão (reversível; letra B); a exclusão roda sob `comTravaDaRequisicao` (trava por requisição → por material; a
+   ENTRADA do motor passa direto por `naTravaDoMaterial`); séries (a C251 e a guarda da 116) e lote (a linha registrada tem o lote); o
+   desfazer da exclusão (B447/B452: a gravação que perde depois de mexer em estoque **não** tenta de novo). Molde de teste:
+   `estornoSaidaDevolvePrateleira.api.test.js` (a entrega) e `exclusaoSerieQueVoltou.api.test.js`. Motor/trava: Fase 2 e Fase 5, ~1h15.
+3. Depois: o C551 (a ordem dos estornos troca as prateleiras) só se aparecer na operação; o estorno do Ajuste com localização olhar o Ajuste
+   do total feito depois (D (258) 5, simétrico da RN-258.07); outras 🟡 medidas nos planos da 254 e 255 (agrupamento da Fila — B1600; dupla
+   aprovação do Ajuste — espera decisão; lista de separação e kits — fora da estimativa).
+- **O que já está pronto e não reabre:** o estorno do Ajuste sem localização pela diferença, com as recusas (negativo, contagem mais recente,
+  retenção também com negativo permitido) e o drenar sem lote; o registro e a devolução do AJUSTE (256) e da Saída (257).
+
+## Verificação (medida)
+
+- `npm run test:api` (rodado **sozinho**, `NODE_OPTIONS=--max-old-space-size=4096`, sem sabotagem rodando): **655/655 arquivos de teste OK**
+  sobre `1663f022` (o mais lento: `entregaGuardaSemLote`, 103,1 s); antes, sobre `3dc41e84`, também 655/655.
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0 (sobre `1663f022`).
+- Jest da tela (`--maxWorkers=2`): **240 suítes, 3248 testes**, verdes; `CI=true react-scripts build`: *Compiled successfully* (nenhum arquivo da
+  tela mudou; rodados sobre `8f0ce1f5`).
+- `estornoAjusteForaDeOrdem` 22/22; os 42 arquivos de `tests/api` com ajuste, inventário e estorno, um a um, depois do T4: 0 vermelhos.
+- Primeiro boot: não se aplica (nenhuma tabela nem coluna nova). Nenhum clique no navegador (F (258)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (T1; Fase 2 — retenção e contagem mais recente; Fase 5 — a contagem por posição e o inventário).
+- Achados: Fase 2 — 3 importantes (2 consertados, 1 declarado C551), 1 menor (declarado), testes que mudam confirmados; Fase 5 — 1 importante
+  no código novo (consertado), 1 de cobertura (2 cenários), 1 menor anterior (declarado), 1 menor de mensagem (consertado), 1 ruído.
+- Paralelismo: o revisor da Fase 2 rodou enquanto o T1 era escrito (o T1 já tinha feito a mesma mudança; sem retrabalho); o da Fase 5 em
+  cópia enquanto a suíte rodava.
+- Defeito que escapou: (preencher na etapa seguinte). Da 257: o C550 já era conhecido (declarado na Fase 2 dela) — nenhum novo.
