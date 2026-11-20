@@ -1,0 +1,9 @@
+*Planejamento — filtros na Fila de separação*
+_20/11/2026_
+
+*1. Fila de separação com filtro por setor, projeto e localização*
+Hoje a Fila de separação mostra todas as requisições juntas, sem como recortar: quem cuida de um setor, de um projeto ou de um corredor do galpão precisa ler a lista inteira para achar o seu trabalho. Com a alteração, a Fila ganha três filtros no topo (setor, projeto e localização de onde pegar) e cada requisição passa a mostrar o projeto. A lista filtrada mantém a mesma ordem de urgência, e a lista de coleta impressa sai só com o que está na tela.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
