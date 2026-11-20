@@ -12,7 +12,14 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 253 fechada — 2026-11-20.** **A busca da entrega na tela Devoluções e o Ajuste com lote que não
+> **O desenvolvimento parou aqui: Etapa 254 fechada — 2026-11-20.** **O Ajuste sem lote que não tira da prateleira separada e o material
+> da sobra/remessa com "cadastro a completar".** O Ajuste do total tira primeiro o que não está separado numa requisição (inclusive na
+> posição padrão), e a entrega deixa de ser recusada; o material que a sobra e a remessa criam aparece no **Compras → Materiais** com aviso,
+> filtro e selo até o Compras salvar. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 254). **Onde parou,
+> exatamente:** a **254 está fechada**; os itens 24 a 26 da estimativa de 18/11 **esperam resposta**; sem ela, a próxima é a Fila de
+> separação filtrada por setor, projeto e localização (detalhada no fim do plano da 254).
+>
+> *(Antes:)* **Etapa 253 fechada — 2026-11-20.** **A busca da entrega na tela Devoluções e o Ajuste com lote que não
 > deixa o lote negativo.** A janela **Nova devolução** tem o campo **Buscar entrega** (requisição, OS ou data); o Ajuste que indica o lote,
 > pela integração, é recusado quando deixaria o lote negativo ou abaixo do que está preso nele, e o estorno dele também. **Sem consulta
 > antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 253). **Onde parou, exatamente:** a **253 está fechada**; a fila da
@@ -7403,6 +7410,44 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 254 — O Ajuste sem lote que não tira da prateleira separada e o material da sobra/remessa com "cadastro a completar" (ENTREGUE — 2026-11-20)
+
+**O que mudou, em uma frase:** o Ajuste do total deixa de baixar a prateleira onde estão as peças separadas para uma requisição; e o material
+que a sobra e a remessa criam aparece no Compras marcado para completar o cadastro.
+
+**O problema que ela resolve.** O Ajuste para baixo tirava primeiro da prateleira com mais peças — muitas vezes a da peça separada (na posição
+padrão, onde cai toda Entrada sem destino): depois a entrega era recusada com *"a origem da separação (A) não serve mais"*. E o material do
+retalho ou da remessa chegava ao Compras sem NCM, custo nem fornecedor, sem ninguém saber que faltava completar.
+
+| Antes | Agora |
+|---|---|
+| Posição padrão *A* com 4 separadas, *B* 3; Ajuste para 4: *A* 1, *B* 3, a entrega recusada | *A* 4, *B* 0; a entrega sai |
+| Material do retalho/remessa igual aos outros no Compras | Aviso, **Ver só esses** e o selo **Cadastro a completar**; salvar tira |
+| Ajuste sem nada separado; Ajuste para cima; material do próprio Compras | **Igual** |
+
+**Roteiro de teste manual (≈8 min) — o Ajuste:**
+
+1. Entre como **Administrador do almoxarifado**. Material *AJS-254* sem lote nem série, com posição padrão *A*.
+2. **Movimentações → Entrada**: 4 sem destino (vão para *A*); 3 em *B*.
+3. Requisição de 4 *AJS-254*, aprovada; **Iniciar Separação** com **Sai de** = *A*, 4 → confirme.
+4. **Movimentações → Ajuste** do total para 4 → **Confira:** *"Movimentação registrada!"*. Comece uma **Saída** do material: o **Sai de** mostra
+   *A* com 4 e *B* com 0 (antes: *A* 1 e *B* 3). Cancele a Saída.
+5. Entregue a requisição → **Confira:** sai sem recusa.
+6. (Opcional) Estorne o Ajuste antes da entrega: o total volta a 7, com 7 em *A* e 0 em *B* — o estorno devolve na posição padrão (C549).
+
+**Roteiro — cadastro a completar (≈5 min):**
+
+1. **Sobras e Retalhos → Gerar retalho** → **Criar material do retalho**, nome *Retalho 254* → **Criar**.
+2. Entre como administrador do Compras. **Compras → Materiais** → **Confira** o aviso *"1 material criado pelo Almoxarifado (sobra ou remessa
+   a terceiros) com o cadastro a completar: …"* e o selo **Cadastro a completar**. **Ver só esses** → só ele.
+3. Lápis → **Confira** o aviso *"Cadastro a completar: este material foi criado pelo Almoxarifado …"*. Preencha o NCM → **Salvar** →
+   **Confira:** o aviso e o selo sumiram.
+
+**O que esta etapa não cobre:** o estorno do Ajuste sem lote devolve na posição padrão; sem outra peça sem lote para tirar, a prateleira
+separada é baixada; o material criado antes da etapa não é marcado; tirar a marca não exige campo; o Almoxarifado continua criando o material.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 253 — A busca da entrega na tela Devoluções e o Ajuste com lote que não deixa o lote negativo (ENTREGUE — 2026-11-20)
 

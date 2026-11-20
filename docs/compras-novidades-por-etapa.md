@@ -5,7 +5,8 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** **2026-10-30 — Etapa 193 entregue** (`19c69056` a `262c6bd5`, na `main`): o **cadastro de
+> **Onde o desenvolvimento está:** **2026-11-20 — Etapa 254 entregue:** o material criado pela sobra e pela remessa a terceiros chega ao
+> **Compras → Materiais** marcado *cadastro a completar*, com aviso, filtro e selo, até o Compras salvar (B92). Antes: **2026-10-30 — Etapa 193 entregue** (`19c69056` a `262c6bd5`, na `main`): o **cadastro de
 > material passa a ser só do Compras** (o Almoxarifado consulta) e cada **item do pedido ganha a sua OS** (texto, só justificativa —
 > substitui o plano de 25 h de várias OS). A12, B74–B81, C (lote/série com saldo sem tela). Antes: **2026-10-30 — Etapa 192 entregue** (`ad99f567` a `3a293902`, na `main`): **CPF** e
 > **maiúsculas** no fornecedor, **OS digitada** e **NCM preenchido** no pedido, **Compras → Materiais** para o administrador do Compras
@@ -624,6 +625,12 @@
   classificado perderia o CA); mostrar os campos sempre que já houver CA gravado (o pedido é que não ocupem espaço). Consequência: um
   EPI cadastrado com o tipo errado não mostra o CA; corrigido o tipo, o campo volta com o valor. **Reversível:** mostrar sempre é tirar
   uma condição da tela.
+- **B92 — 20/11/2026 (Etapa 254): o material da sobra e da remessa continua sendo criado pelo Almoxarifado, mas chega ao Compras marcado
+  "cadastro a completar".** O pedido (item 27 da estimativa de 18/11) esperava a compradora; seguido o caminho reversível. A marca nasce na
+  criação pelo Almoxarifado e sai em qualquer salvar do cadastro pelo Compras (só reativar ou inativar não tiram); material antigo não é
+  marcado. **Descartado:** tirar a criação desses fluxos (o almoxarife não registraria o retalho na hora — B74); exigir NCM ou custo para
+  tirar a marca (mudaria o que o cadastro exige). Detalhe e decisões vizinhas: **B1593** a **B1595** em `docs/almoxarifado-novidades-por-etapa.md`.
+  **Reversível.**
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -803,6 +810,52 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 254 — Material da sobra e da remessa com "cadastro a completar" (2026-11-20)
+
+**Em uma frase.** O material que a sobra (retalho) e a remessa a terceiros criam pelo Almoxarifado — só com código, nome, unidade e família —
+chegava ao Compras igual a qualquer outro, sem NCM, custo nem fornecedor. Agora ele aparece marcado, com aviso e filtro, até o Compras
+salvar o cadastro (B92).
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais**, no topo: *"1 material criado pelo Almoxarifado (sobra ou remessa a terceiros) com o cadastro a completar: NCM,
+  custo, fornecedor e o resto do cadastro. Abra e salve para tirar o aviso."* (no plural com mais de um) e o botão **Ver só esses** / **Ver
+  todos**. Na linha do material, o selo **Cadastro a completar** ao lado do nome.
+- No formulário (lápis) do material marcado: *"Cadastro a completar: este material foi criado pelo Almoxarifado (sobra ou remessa a
+  terceiros) só com código, nome, unidade e família. Complete o cadastro e salve — ao salvar, o aviso sai."*
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Material do retalho ou da remessa igual aos outros na lista | Aviso no topo, filtro **Ver só esses** e selo na linha |
+| — | Salvar o cadastro tira a marca; reativar ou inativar não |
+| Material cadastrado pelo Compras; a lista do Almoxarifado | **Igual** (sem marca, sem selo) |
+
+### As regras, com o cenário exato
+
+1. **Almoxarifado → Sobras e Retalhos → Gerar retalho → Criar material do retalho** (ou **Remessas a Terceiros → Criar material
+   resultante**) → o material é criado e marcado.
+2. **Compras → Materiais** → o aviso com a contagem; **Ver só esses** → só os marcados; **Ver todos** → a lista inteira.
+3. Lápis → o aviso do formulário; **Salvar** → de volta à lista, sem aviso nem selo para ele.
+4. **Inativar** o marcado → sai da contagem; **Reativar** → volta (a marca continua).
+5. Material antigo, de antes desta etapa, não é marcado.
+
+### Roteiro de teste manual (clicável)
+
+1. Entre como almoxarife. **Sobras e Retalhos → Gerar retalho**, escolha um material de origem com família → **Criar material do retalho**,
+   nome *Retalho 254* → **Criar**.
+2. Entre como administrador do Compras. **Compras → Materiais**: **Confira** o aviso *"1 material criado pelo Almoxarifado …"* e o selo
+   **Cadastro a completar** em *Retalho 254*.
+3. **Ver só esses** → só ele. Lápis → **Confira** o aviso do formulário. Preencha o NCM → **Salvar**. **Confira:** o aviso e o selo sumiram.
+4. O material da remessa nasce sem categoria: o formulário pede *"Selecione a categoria do material"* antes de salvar.
+
+### O que a etapa NÃO cobre
+
+- O Almoxarifado continua criando o material (tirar a criação espera a compradora — B92).
+- Tirar a marca não exige campo nenhum: qualquer salvar do cadastro tira.
+- Material criado antes desta etapa não é marcado.
 
 ## Etapa 238 — Explicação do CA; Nº e Validade do CA só para EPI (2026-11-18)
 

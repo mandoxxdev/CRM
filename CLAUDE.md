@@ -200,6 +200,9 @@ e o portão do Compras (`portaCompras`); no Almoxarifado a mesma informação ap
 
 - Feature nova de cadastro **nasce no Compras**. Não crie aba, botão ou rota de gravação de cadastro no Almoxarifado.
 - O que ainda contraria a regra (13/11/2026): a sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (Etapa 193, formato restrito) — a rever.
+  **Desde a Etapa 254 (20/11/2026)** esse material nasce marcado *cadastro a completar* (`materiais_almoxarifado.cadastro_a_completar`) e
+  aparece com aviso, filtro e selo em **Compras → Materiais** até o Compras salvar o cadastro (B1593 a B1595). A criação pelo Almoxarifado
+  continua (esta linha dizia só "a rever"; o caminho reversível foi seguido sem resposta) — tirá-la ainda espera a compradora.
 - Configurações **físicas** do almoxarifado (localizações, setores e áreas, perfis, regras de aprovação, motivos de
   movimentação) **não** são cadastro de compras e ficam no Almoxarifado.
 

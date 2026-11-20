@@ -55,8 +55,8 @@
 - **RN-254.12** `GET .../materiais` (as duas portas) aceita `a_completar=1` (texto exato): só os marcados, com os outros filtros. Sem ele, a
   resposta de sempre (com a coluna nova em `m.*`).
 - **RN-254.13** Tela **Compras → Materiais**: com pelo menos um material ativo marcado, o aviso
-  *"⟨N⟩ material(is) criado(s) pelo Almoxarifado (sobra ou remessa a terceiros) com o cadastro a completar: NCM, custo, fornecedor e o
-  resto do cadastro. Abra e salve para tirar o aviso."* e o botão **Ver só esses** / **Ver todos**; na tabela, o selo *Cadastro a completar*
+  *"⟨N⟩ materiais criados pelo Almoxarifado (sobra ou remessa a terceiros) com o cadastro a completar: NCM, custo, fornecedor e o
+  resto do cadastro. Abra e salve para tirar o aviso."* (com 1: *"1 material criado pelo Almoxarifado …"* — Fase 2, achado 4) e o botão **Ver só esses** / **Ver todos**; na tabela, o selo *Cadastro a completar*
   ao lado do nome (só no Compras: a lista do Almoxarifado não mostra). Sem marcados, nada aparece.
 - **RN-254.14** Formulário de edição pelo Compras de um material marcado: o aviso
   *"Cadastro a completar: este material foi criado pelo Almoxarifado (sobra ou remessa a terceiros) só com código, nome, unidade e família.
@@ -82,11 +82,95 @@
   além de `ativo`), filtro na lista. Tela: `MateriaisCompras` (contagem por `GET` com `a_completar=1`, aviso, botão, filtro), `TabelaMateriais`
   (prop `mostrarCadastroACompletar`), `MaterialAlmoxarifadoForm` (aviso quando `rotas.modulo === 'compras'`).
 
+## Fase 2 — revisão do plano
+
+Um agente fresco, sondas executadas (scratchpad). **2 importantes, 3 menores, 1 ruído — todos aceitos:**
+
+1. **[importante] A caixa na própria posição padrão** (a Entrada sem destino cai nela — o caso comum) continuava drenada: a linha padrão
+   recebe só o resíduo e o drenar só entrava com resíduo negativo. → **RN-254.01 b** (o piso da linha padrão), `0db2b143`.
+2. **[importante] O exemplo do RN-254.02 não acontecia** (a guarda de retenção da Etapa 97 recusa antes). → o RN corrigido, dizendo que
+   estava errado; o teste afirma a recusa e o caso real (o resto num lote).
+3. **[menor]** a contagem da tela colidiria com o mock dos testes antigos (a lista inteira para qualquer parâmetro) → a contagem conta pela
+   marca da resposta; o teste do Inativar passou a não contar a chamada da contagem.
+4. **[menor]** a literal "material(is)" → singular e plural escritos (acima); `a_completar` com outro valor não filtra (testado); a chave de
+   reversão e o PUT do Almoxarifado → B1595.
+5. **[menor]** a remessa nasce sem categoria (o servidor grava *OUTROS*) → no roteiro; inativar → reativar volta ao aviso → testado.
+6. **[ruído]** ~20 testes antigos criam material pelo POST do Almoxarifado e passam a gravar a marca — nenhum compara a linha inteira.
+
+Pergunta 3: T2/T3 independentes do T1 (arquivos e regras separados); a Fase 2 avisou que as sabotagens do T1 contaminariam uma suíte
+rodando junto — foram rodadas em sequência (e a rodada do `test:api` que coincidiu com elas foi descartada, abaixo).
+
 ## Tasks
 
-- [ ] **T1 (tronco, motor)** C548 — teste `ajusteSemLotePoupaCaixa.api.test.js` vermelho, o conserto, sabotagens.
-- [ ] **T2 (galho)** item 27 servidor — `cadastroACompletar.api.test.js` (sobra/remessa marcam pela rota; o Compras não; o PUT do Compras
-  tira; reativar não tira; recusa não tira; o filtro; a chave de reversão).
-- [ ] **T3 (galho)** item 27 tela — `MateriaisCompras.test.js` (aviso, contagem, botão, selo) e o aviso do formulário.
-- [ ] **T4** integração: criar pela rota da sobra → lista do Compras com `a_completar=1` → PUT pelo Compras → some do filtro (no T2).
-- [ ] **T5** Fase 5 (o T1 toca o motor) e fechamento.
+- [x] **T1 (tronco, motor)** C548 — `b5b8c4f1`: o ramo sem lote com as duas passadas (chave `"<loc>|"`). Fase 2 — `0db2b143`: o piso da
+  linha padrão. `ajusteSemLotePoupaCaixa.api.test.js` (12; 6 vermelhos no código de antes da etapa, 2 no de `b5b8c4f1`). Sabotagens (9: o
+  código de antes, o do T1, piso zero, entrada só com resíduo negativo, piso sem olhar o que a padrão tem — as duas metades juntas: cada uma
+  sozinha é coberta pela outra —, sem a 2ª passada, chave sem lote, chave de lote vazia, 1ª passada sem descontar a caixa): cada uma derruba o
+  seu cenário.
+- [x] **T2 (galho)** item 27 servidor — `67194649`: coluna, `createMaterial` com a opção, a rota (marca, tira, filtro).
+  `cadastroACompletar.api.test.js` (9; 9 vermelhos antes). 8 sabotagens, cada uma derruba o seu.
+- [x] **T3 (galho)** item 27 tela — `9fa64070`: `TabelaMateriais` (selo, só quando pedem), `MateriaisCompras` (contagem, aviso, Ver só
+  esses/Ver todos), `MaterialAlmoxarifadoForm` (aviso no Compras). 8 testes novos no `MateriaisCompras.test.js`; 12 sabotagens, cada uma
+  derruba o seu.
+- [x] **T4** integração — no T2 (`[integracao] sobra cria -> filtro do Compras mostra -> o Compras salva -> sai do filtro`).
+- [x] **T5** Fase 5 — dois revisores frescos (motor; cadastro), sondas executadas:
+  - **Cadastro (`76646464`):** 1 menor real — um PUT do Compras só com os campos de concorrência tirava a marca (reproduzido) → só campo do
+    cadastro (`MATERIAL_UPDATE_COLUMNS`) tira; +1 teste do servidor, +1 da tela (filtro ligado com zero marcados). Ruído: o salvar sem
+    preencher nada tira (é a regra, B1595); a chave de reversão (B1595); o filtro se desliga ao voltar do formulário.
+  - **Motor (`6271cda5`):** 1 **importante** — o estorno do Ajuste sem lote que drenou devolve tudo na posição padrão (*A* 7, *B* 0; antes da
+    etapa, nesse caso, o Ajuste não drenava e o estorno era exato). Era assim desde a Etapa 51 com resíduo negativo; o piso o leva ao caso
+    comum. **Decidido (B1597):** manter a ida e declarar (C549, D (254)), com teste *[documenta]*; gravar de onde a baixa saiu é escopo maior.
+    1 menor consequência (o estorno de uma transferência para a prateleira drenada é recusado, limpo). 3 buracos de teste → 2 testes novos
+    (a caixa com lote na padrão; o estorno com lote abaixo do piso), o terceiro é ruído (inalcançável pela guarda de retenção).
+- [x] **T6** fechamento (fechar-etapa sem 7½ e 8).
+
+## Divergências do plano
+
+- O plano olhou as linhas **drenadas**, não a que recebe o resíduo: a caixa na posição padrão ficou de fora (Fase 2, achado 1). Achado de
+  plano: no drenar, a linha padrão também é uma prateleira com caixa.
+- O RN-254.02 trazia um exemplo que a guarda de retenção recusa — escrito sem rodar (Fase 2, achado 2).
+- O piso foi medido na ida, não no **estorno** (Fase 5): nenhum teste do plano estornava o Ajuste. Ficou declarado (B1597).
+- **CLAUDE.md:** a linha "a sobra e a remessa a terceiros ainda criam material pelo Almoxarifado — a rever" ficou incompleta e foi corrigida
+  (o material nasce marcado; a criação continua). A seção das travas não muda: a leitura da caixa e o drenar continuam na seção do material.
+
+## Verificação (medida sobre o código final, `6271cda5`)
+
+- `npm run test:api` (rodado **sozinho**, `NODE_OPTIONS=--max-old-space-size=4096`): **651/651 arquivos de teste OK** (o mais lento:
+  `propostaSalvarGrava`, 72,4 s). Uma rodada anterior foi **descartada**: coincidiu com os harnesses de sabotagem, que trocavam o
+  `stockService.js` e a rota no meio dela (a Fase 2 tinha avisado) — parada e repetida depois do último commit de código.
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0 (rodados antes da Fase 5, que não tocou nesses
+  caminhos; os testes novos e alterados da Fase 5 rodaram sozinhos: `ajusteSemLotePoupaCaixa` 15/15, `cadastroACompletar` 10/10).
+- Jest da tela (`--maxWorkers=2`): **239 suítes, 3234 testes**, verdes; `CI=true react-scripts build`: *Compiled successfully*.
+- Nenhum clique no navegador (F (254)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (Fase 2: 1 — o piso; Fase 5: 2 — a marca e os testes do motor).
+- Achados: Fase 2 — 5 reais (2 importantes, 3 menores), 1 ruído; Fase 5 — 2 reais (1 importante declarado, 1 menor), 1 consequência
+  declarada, 2 buracos de teste, 4 ruídos.
+- Paralelismo: T1 (motor) e T2/T3 (cadastro) em sequência, na mesma árvore (as sabotagens não podiam rodar juntas); os dois revisores da
+  Fase 5 em paralelo, sem retrabalho.
+- Defeito que escapou: (preencher na etapa seguinte). Da 253: o drenar com lote não poupava a caixa **na posição padrão** — achado aqui
+  (RN-254.01 b; a 253 só testou com a padrão *P* sem caixa).
+
+## Próxima tarefa detalhada
+
+1. **Itens 24, 25 e 26 da estimativa de 18/11 — esperam resposta da empresa** (mudam o que o cadastro mostra ou exige; o André pediu para
+   não fazer sem resposta). O caminho reversível de cada um continua o do plano da 253 (seção "Próxima tarefa detalhada"): 24 esconder o
+   campo Aplicação sem apagar a coluna (30 min); 25 *"Nº de controle (etiqueta)"* e série obrigatória na tela **Ferramentas** (1h30); 26 tirar
+   Especificações Técnicas e Observações Gerais, mostrando só os que têm texto (1h). Lugar: **Compras → Materiais** (o formulário é o mesmo),
+   testes `tests/api/compras*.api.test.js` e `client/src/components/compras/`; documento `docs/compras-novidades-por-etapa.md`. **Não comece
+   sem a resposta.**
+2. **Sem resposta, o próximo do almoxarifado: a Fila de separação agrupada/filtrada por setor, projeto e localização** — o item `[ ]`
+   *"Agrupamento por projeto / setor / localização"* da feature 05 (🟡; `specs/modulo-almoxarifado/05-separacao-picking/README.md:90`).
+   **Medido (20/11):** `FilaSeparacao.js` só mostra o setor junto do solicitante (`:128`) e não tem filtro nem agrupamento (`grep -i agrup`
+   → 0; conferido contra `setor` → acha). Fatia de tela + leitura (~1h, a medir na Fase 0.5): filtro por setor (e projeto, se a requisição o
+   trouxer — medir o contrato de `GET /api/almoxarifado/fila-separacao` (`FilaSeparacao.js:245`) antes) e por localização da sugestão; sem mexer em motor.
+   As outras 🟡 medidas: a **dupla aprovação do Ajuste** (06, `[ ]` em `06-aprovacoes/README.md:111`) não existe (`grep "dupla aprova"` só acha
+   o sucateamento) — muda o que o almoxarife faz, espera decisão; lista de separação como entidade e kits (05) estão fora da estimativa de
+   18/11; 16, 21, 22 e 25 dependem da empresa.
+3. **O C549** (o estorno do Ajuste sem lote que devolve na posição padrão), se pedirem: gravar as linhas drenadas por movimento (tabela ou
+   coluna nova, migration no padrão `safeAlter`) e o estorno sem lote devolvê-las antes do resíduo, sob a mesma seção da trava, com o desfazer
+   (`compensarLinhasClaim`) — motor, Fase 2 e Fase 5, ~1h30.
+- **O que já está pronto e não reabre:** o Ajuste que poupa a prateleira separada (com e sem lote, ida e estorno com lote) e o cadastro a
+  completar (marca, aviso, filtro, selo).

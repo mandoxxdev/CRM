@@ -602,3 +602,17 @@ Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava n
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
 
 - [x] **RN-161.11 (C400)** — o QR (`?material_id=`) mostra só o material da etiqueta (o código continua na busca, e um filtro por id corta o *MAT-0010* que a busca parcial de *MAT-001* traria); soma com os outros filtros; mexer na busca ou *Limpar filtros* solta; editar o material volta sem o filtro; o inativo não é achado (de antes) — `3acfec05`.
+
+## Etapa 254 — o material da sobra e da remessa com "cadastro a completar" (item 27 da estimativa de 18/11) (2026-11-20)
+
+Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa254-ajuste-poupa-caixa-e-cadastro-a-completar.md`. Pedido que **esperava resposta** da compradora; seguido o caminho reversível (B1593). O status da feature não muda (🟡).
+
+- [x] **RN-254.10** — `POST /api/almoxarifado/materiais` (sobra e remessa) grava `cadastro_a_completar = 1`; a porta do Compras grava 0; com
+  `ALMOX_CADASTRO_MATERIAL=liberado`, 0 — `67194649`.
+- [x] **RN-254.11** — o `PUT` do Compras com campo do cadastro tira a marca no mesmo `UPDATE`; reativar, inativar, recusa e os campos de
+  concorrência sozinhos não tiram — `67194649`, Fase 5 `76646464`.
+- [x] **RN-254.12** — `a_completar=1` na lista (as duas portas) — `67194649`.
+- [x] **RN-254.13 / .14** — Compras → Materiais: aviso com a contagem, **Ver só esses** / **Ver todos**, selo; aviso no formulário do Compras —
+  `9fa64070`, `76646464`.
+- [ ] **Tirar a criação de material da sobra e da remessa** — fora de propósito (B1593, B74 do Compras): espera a compradora.
+- [ ] **Marcar o material antigo** — fora (B1594): não há registro de quais vieram da sobra.

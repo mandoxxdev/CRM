@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-20):** **Etapa 253 fechada** (**a busca da entrega na tela Devoluções e o Ajuste com lote que não
+> **Onde o desenvolvimento está (2026-11-20):** **Etapa 254 fechada** (**o Ajuste sem lote que não tira da prateleira separada e o material da
+> sobra/remessa com "cadastro a completar"** — o Ajuste do total tira primeiro o que não está separado numa requisição, inclusive na posição
+> padrão, e a entrega deixa de ser recusada (**C548**); o material que a sobra e a remessa criam aparece no **Compras → Materiais** com aviso,
+> filtro e selo até o Compras salvar o cadastro (item 27 da estimativa de 18/11, que esperava resposta — caminho reversível). Decisões
+> **B1593** a **B1597**; aviso novo **C549** (o estorno do Ajuste sem lote devolve na posição padrão); limitação **D (254)**; verificação **F (254)**;
+> sem consulta antes do deploy).
+> **Próxima:** os itens 24 a 26 da estimativa de 18/11 **esperam resposta** (mudam o que o cadastro mostra ou exige); depois, a feature 🟡 de
+> maior valor do mapa — detalhado no fim do plano da 254.
+> *(Antes, 2026-11-20:)* **Etapa 253 fechada** (**a busca da entrega na tela Devoluções e o Ajuste com lote que não
 > deixa o lote negativo** — o campo **Buscar entrega** acha a entrega por requisição, OS ou data (**C477**); o Ajuste que indica o lote, pela
 > integração, é recusado quando deixaria o lote negativo ou abaixo do que está preso nele, com o mínimo aceitável, e o estorno também
 > (**C475**). Itens 13 e 18 da estimativa de 18/11; decisões **B1586** a **B1592**; limitação **D (253)**; verificação **F (253)**; sem
@@ -4850,7 +4858,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15593,6 +15601,41 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1593 (NOVA, da Etapa 254; decisão do agente; o item 27 da estimativa de 18/11 esperava resposta) — o material da sobra e da remessa
+continua sendo criado pelo Almoxarifado, mas nasce marcado "cadastro a completar".** Pela regra "cadastro é do Compras", o Almoxarifado não
+deveria cadastrar; a sobra (retalho) e a remessa a terceiros ainda criam o material que a operação precisa, só com código, nome, unidade,
+família, subfamília, categoria e dono (Etapa 193). Agora esse material aparece no **Compras → Materiais** com aviso, filtro **Ver só esses** e o
+selo **Cadastro a completar**, até alguém do Compras salvar o cadastro. Com a chave que devolve o cadastro ao Almoxarifado
+(`ALMOX_CADASTRO_MATERIAL=liberado`, Etapa 193) ligada, não marca — o Almoxarifado volta a cadastrar tudo. **Descartado:** tirar a criação
+desses fluxos (o almoxarife não registraria o retalho na hora — a B74 do Compras já tinha descartado); avisar só no Almoxarifado (quem
+completa é o Compras). **Reversível:** a marca é uma coluna que só a tela do Compras lê. `67194649`, `9fa64070`.
+
+**B1594 (NOVA, da Etapa 254; decisão do agente) — o material criado antes desta etapa não ganha a marca.** Não há registro de quais materiais
+vieram da sobra ou da remessa. **Descartado:** marcar os que estão sem NCM, custo ou fornecedor (marcaria material antigo cadastrado pelo
+próprio Compras); marcar pela auditoria de criação feita por usuário do Almoxarifado (antes da Etapa 193 o Almoxarifado cadastrava tudo).
+**Reversível:** uma consulta pode marcar à mão os que o Compras apontar. `67194649`.
+
+**B1595 (NOVA, da Etapa 254; decisão do agente) — qualquer salvar do cadastro pelo Compras tira a marca; só reativar ou inativar não.** A
+marca sai no mesmo salvar (uma recusa — família inválida, cadastro mudado por outra pessoa — não tira), sem exigir que o NCM, o custo ou o
+fornecedor estejam preenchidos. **Descartado:** exigir campos para tirar a marca (mudaria o que o cadastro exige — como os itens 24 a 26,
+espera a compradora); tirar ao vincular um fornecedor na aba de fornecedores do material (não é o salvar do cadastro). Com a chave da Etapa
+193 ligada, o salvar pelo Almoxarifado também não tira (a marca é do Compras). **Reversível.** `67194649`.
+
+**B1596 (NOVA, da Etapa 254; decisão do agente) — o Ajuste sem lote, para baixo, baixa por último a prateleira separada para uma requisição,
+inclusive a posição padrão.** O Ajuste tira primeiro a parte de cada prateleira que não está separada; a posição padrão (que recebe a diferença
+do total) fica com pelo menos o que está separado dela; só quando não há outra peça **sem lote** para tirar a separada é baixada (o total
+manda). O mesmo vale para o Ajuste com lote (Etapa 253) e para a conclusão da contagem. **Descartado:** recusar o Ajuste quando ele teria de
+tirar da prateleira separada (a guarda de retenção já decide se o Ajuste passa — seria uma segunda régua); tirar das linhas com lote no Ajuste
+sem lote (o histórico do Ajuste sem lote não diz lote, e o estorno não saberia devolver). **Reversível.** `b5b8c4f1`, `0db2b143`.
+
+**B1597 (NOVA, da Etapa 254, revisão final; decisão do agente) — o estorno do Ajuste sem lote continua devolvendo na posição padrão.** Com a
+B1596 o Ajuste sem lote baixa outras prateleiras com mais frequência (o caso comum: a peça separada na posição padrão), e o estorno dele —
+que não sabe de onde a baixa saiu — põe a quantidade de volta na posição padrão: posição padrão *A* com 4 separadas e *B* 3, Ajuste para
+4 (*A* 4, *B* 0), estorno → *A* 7, *B* 0, total 7 certo (**C549**). **Escolhido:** manter a baixa que destrava a entrega (o estorno de um
+Ajuste é raro; a entrega recusada era o caso comum). **Descartado:** gravar no histórico de onde a baixa saiu para o estorno devolver no
+mesmo lugar (registro novo no histórico — o mesmo escopo que a B1590 descartou); voltar à baixa da Etapa 51 quando a peça separada está na
+posição padrão (a entrega voltaria a ser recusada). **Reversível.** `6271cda5`.
+
 **B1586 (NOVA, da Etapa 253; decisão do agente) — a busca casa a OS pelo número que a tela mostra.** A lista de entregas mostra *"OS 12"*
 com o número interno da OS; a busca *12* ou *OS 12* casa esse mesmo número (e também o número da requisição que contém *12*). **Descartado:**
 casar o número do cadastro de OS (`numero_os`, ex. *OS-2026-0012*) — a tela não o mostra, e a busca acharia linhas sem dizer por quê.
@@ -20003,6 +20046,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entrega da requisição é recusada com *"a origem da separação (A) não serve mais …"*. **O que fazer:** entregar escolhendo de onde sai, ou
      ajustar pela prateleira (Ajuste com localização). O Ajuste **com lote** já não faz isso (Etapa 253: tira primeiro o que não está separado).
      Conserto: as mesmas duas passadas no Ajuste sem lote (~45 min, motor).
+     *(**Resolvido na Etapa 254** — `b5b8c4f1`, `0db2b143`: o Ajuste sem lote tira primeiro o que não está separado, e a posição padrão fica com
+     pelo menos o que está separado dela — o caso mais comum, que a revisão do plano achou — **B1596**; sem outra peça sem lote, a separada é
+     baixada, **D (254)**.)*
+549. **NOVO (da Etapa 254, revisão final; já era assim desde a Etapa 51, agora mais frequente) — o estorno de um Ajuste sem lote que baixou
+     outra prateleira devolve tudo na posição padrão.** O Ajuste sem localização não diz onde o material sumiu; para baixar, ele tira das
+     prateleiras (primeiro o que não está separado — Etapa 254). O estorno volta o total certo, mas põe a diferença na posição padrão. Medido:
+     posição padrão *A* com 4 separadas numa requisição e *B* com 3; Ajuste para 4 → *A* 4, *B* 0; **Estornar** → *A* 7, *B* 0 (as 3 de *B*
+     aparecem em *A*). Depois disso, o estorno de uma transferência para *B* pode ser recusado (*"o destino não tem mais o saldo transferido"*).
+     **O que fazer:** depois de estornar um Ajuste, conferir as prateleiras e acertar com um Ajuste com localização (pela integração) ou uma
+     Transferência. Conserto: gravar de onde a baixa saiu (registro novo no histórico — **B1597**).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -21359,6 +21412,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(254) O Ajuste sem lote que poupa a prateleira separada e o cadastro a completar, o que ficou de fora.** (1) O Ajuste sem lote só baixa
+  prateleiras **sem lote**: quando o resto do material está num lote, a prateleira separada é baixada mesmo assim (o total manda) e a entrega
+  dela fica sem as peças — *A* 4 separadas, *B* 1 sem lote e 3 do lote *LY*, Ajuste para 5 → *A* 2 (anterior). (2) O estorno do Ajuste sem
+  lote devolve na posição padrão (**C549**, **B1597**). (3) Só o material criado pela sobra ou remessa **depois** da etapa ganha a marca
+  *cadastro a completar* (**B1594**); tirar a marca não exige campo nenhum (**B1595**); o Almoxarifado continua criando o material (**B1593**).
 - **(253) A busca da entrega e o Ajuste com lote, o que ficou de fora.** (1) A busca casa a OS pelo número que a tela mostra, não pelo do
   cadastro de OS (**B1586**); a `busca` repetida na chamada vira o texto "a,b". (2) O estorno de um Ajuste que tirou de outra prateleira do lote
   devolve o lote na posição padrão, não na prateleira de onde saiu (**B1590**) — uma transferência do lote a partir daquela prateleira pode
@@ -22963,6 +23021,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(254) Nenhum clique foi dado.** O Ajuste foi provado pelas rotas reais (Movimentações v2, separação, entrega, estorno) em
+`ajusteSemLotePoupaCaixa`; o cadastro a completar pelas rotas reais da sobra/remessa e do Compras em `cadastroACompletar` e pela tela nos
+testes de `MateriaisCompras`. Vale 5 minutos: as partes 1 e 2 do roteiro da seção da 254.
 
 **(253) Nenhum clique foi dado.** A busca foi provada pela rota real em `devolucaoBuscaEntrega` e pela tela nos testes de
 `DevolucoesAlmoxarifado`; o Ajuste com lote e o estorno pelas rotas reais em `ajusteComLoteNaoNegativa` (o Ajuste com lote só existe pela
@@ -44004,12 +44066,71 @@ volta no total certo — na posição padrão, mesmo que a baixa tenha saído de
   sem lote no Ajuste (**B1592**).
 - O estorno de um Ajuste que tirou de outra prateleira devolve o lote na posição padrão, não na prateleira de onde saiu (**D (253)**).
 
+## Etapa 254 — O Ajuste sem lote que não tira da prateleira separada e o material da sobra/remessa com "cadastro a completar" (2026-11-20)
+
+Duas correções. O **Ajuste de saldo** que baixa o total sem dizer a prateleira tirava primeiro da prateleira com mais peças — e ela podia ser
+justamente a das peças já separadas para uma requisição: a entrega dessa requisição era recusada depois, porque a prateleira da separação
+não tinha mais as peças (**C548**). O caso mais comum era o da peça separada na **posição padrão** do material, onde cai toda Entrada sem
+destino. Agora o ajuste tira primeiro o que não está separado. E o material que a **sobra** (retalho) e a **remessa a terceiros** criam pelo
+Almoxarifado — só com código, nome, unidade e família — chegava ao **Compras → Materiais** igual a qualquer outro, sem NCM, custo nem
+fornecedor, e ninguém sabia que faltava completar (item 27 da estimativa de 18/11; contraria a regra "cadastro é do Compras"). Agora ele nasce
+marcado **Cadastro a completar**, com aviso e filtro no Compras até alguém de lá salvar o cadastro. Decisões do agente: **B1593** a **B1597**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Posição padrão *A* com 4 peças separadas numa requisição, *B* com 3; Ajuste do total para 4: *A* 1, *B* 3; a entrega recusada com *"a origem da separação (A) não serve mais …"* | *A* 4, *B* 0; a entrega sai |
+| *A* com 4 separadas e *B* com 3, padrão *P*; Ajuste para 4: *A* 1, *B* 3, a entrega recusada | *A* 4, *B* 0; a entrega sai |
+| A conclusão da contagem (ajuste de inventário sem lote) fazia o mesmo | Igual ao Ajuste: o separado fica |
+| Ajuste para baixo sem nada separado; Ajuste para cima; Ajuste com localização; a recusa *"… deixaria o disponível negativo (separada na caixa de requisição: …)"* | **Igual** |
+| Material criado na **Sobra** (*Criar material do retalho*) ou na **Remessa** (*Criar material resultante*): no Compras, igual aos outros | No **Compras → Materiais**: aviso *"1 material criado pelo Almoxarifado (sobra ou remessa a terceiros) com o cadastro a completar: …"*, botão **Ver só esses** e o selo **Cadastro a completar** ao lado do nome; no formulário, o aviso de completar |
+| — | Salvar o cadastro pelo Compras tira a marca; só reativar não tira |
+| Material criado pelo próprio Compras; a lista do Almoxarifado | **Igual** (sem marca, sem selo) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado** (parte 1) e um **administrador do módulo Compras** (parte 2).
+
+**1. O Ajuste sem lote poupa a prateleira separada (RN-254.01 a .03).** Material *AJS-254* sem lote nem série, posição padrão *A*. **Entrada** de
+4 sem destino (vai para *A*) e **Entrada** de 3 em *B*. Requisição de 4, aprovada, **Separar** escolhendo *A*. **Movimentações → Ajuste** do
+total para 4 → grava; numa **Saída** avulsa do material, o **Sai de** mostra *A* com 4 e *B* com 0 (antes: *A* 1 e *B* 3; cancele a Saída). **Entregar** a requisição →
+sai. Com *A* de 5 e 2 separadas, *B* 3, Ajuste para 4 → a parte livre de *A* sai primeiro: *A* 2, *B* 2. Ajuste abaixo do separado → a recusa
+de sempre: *"Ajuste para 2 UN deixaria o disponível negativo (separada na caixa de requisição: 4, mínimo aceitável: 4 UN). Resolva a retenção
+antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* Quando o resto do material está num lote (o Ajuste sem lote
+não tira de lote), a prateleira separada é baixada — o total manda (**D (254)**).
+
+**2. Cadastro a completar (RN-254.10 a .14).** **Sobras e Retalhos → Gerar retalho** → **Criar material do retalho** com o nome *Retalho
+254* → o material é criado como sempre. **Compras → Materiais**: no topo, *"1 material criado pelo Almoxarifado (sobra ou remessa a
+terceiros) com o cadastro a completar: NCM, custo, fornecedor e o resto do cadastro. Abra e salve para tirar o aviso."* e o botão **Ver só
+esses** (a lista fica só com ele; **Ver todos** volta); na linha, o selo **Cadastro a completar**. Lápis → no topo do formulário: *"Cadastro a
+completar: este material foi criado pelo Almoxarifado (sobra ou remessa a terceiros) só com código, nome, unidade e família. Complete o
+cadastro e salve — ao salvar, o aviso sai."* Preencha o NCM e **Salvar** → de volta à lista, o aviso e o selo sumiram. O mesmo com **Remessas
+a Terceiros → Registrar retorno → Criar material resultante** (esse nasce sem categoria: o formulário pede *"Selecione a categoria do
+material"* antes de salvar). **Inativar** e **Reativar** não tiram a marca (o inativo sai da contagem e volta ao ser reativado).
+
+### O que esta etapa NÃO cobre
+
+- Material criado pela sobra ou remessa **antes** desta etapa não ganha a marca (não há como saber quais foram) (**B1594**).
+- Tirar a marca não exige campo nenhum: qualquer salvar do cadastro pelo Compras tira (**B1595**). O Almoxarifado continua criando o material
+  (a regra "cadastro é do Compras" ainda é contrariada; tirar a criação espera resposta — **B1593**).
+- O Ajuste sem lote não tira de linhas com lote; sem outra prateleira sem lote, a separada é baixada (**D (254)**). O estorno do Ajuste sem
+  lote devolve na posição padrão, mesmo quando o Ajuste baixou outra prateleira (**C549**, **B1597**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 254 entregue (2026-11-20):** **o Ajuste sem lote que não tira da prateleira separada** (**C548** resolvido) e **o material da
+  sobra/remessa com "cadastro a completar" no Compras** (item 27 da estimativa de 18/11, pelo caminho reversível). A criação continua no
+  Almoxarifado, marcada (**B1593**); material antigo sem marca (**B1594**); qualquer salvar do Compras tira (**B1595**); o Ajuste baixa por
+  último a prateleira separada, com piso na posição padrão (**B1596**); o estorno do Ajuste sem lote continua na posição padrão (**B1597**).
+  Commits `b5b8c4f1`, `0db2b143` (Fase 2), `67194649`, `9fa64070`, Fase 5 `76646464` e `6271cda5`, e o fechamento. Aviso novo **C549**.
+  **O que é seu:** as **B1593** a **B1597** (reversíveis); a limitação **(254)** em D e a verificação **(254)** em F. Sem consulta antes do
+  deploy. **Próxima:** os itens 24 a 26 (esperam resposta) e a feature 🟡 de maior valor do mapa (plano da 254).
 
 - **Etapa 253 entregue (2026-11-20):** **a busca da entrega na tela Devoluções** e **o Ajuste com lote que não deixa o lote negativo**
   (itens 13 e 18 da estimativa de 18/11; **C477** e **C475** resolvidos). A busca casa o que a tela mostra (**B1586**) e só ao clicar,

@@ -930,3 +930,18 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas
 
 - [x] **RN-161.02 (C396)** — a lista de Movimentações: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
 - [x] **RN-161.06 (C397, B1025, B1026)** — `GET /almoxarifado/movimentacoes?data_inicio&data_fim` compara o dia de Brasília do `created_at` (`DATE(m.created_at, '-180 minutes')`, `services/diaLocal.js`); a lista, o modal de estorno e o Extrato do material mostram a hora de Brasília — `6885caf9`, `db960831`. Nenhuma porta do motor mudou.
+
+## Etapa 254 — o Ajuste sem lote, para baixo, poupa a prateleira separada (C548) (2026-11-20)
+
+Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa254-ajuste-poupa-caixa-e-cadastro-a-completar.md`. O status da feature não muda (🟢).
+
+- [x] **RN-254.01 (C548, B1596)** — o drenar do Ajuste/Ajuste de inventário sem localização e **sem lote** tira primeiro a parte de cada
+  prateleira que não está separada na caixa viva de uma requisição (`parteGuardadaDeOutrasPorPar`, chave `"<loc>|"`), depois o resto —
+  `b5b8c4f1`.
+- [x] **RN-254.01 b (Fase 2)** — a linha padrão (a que recebe o resíduo) tem um piso: a parte dela guardada pela caixa, até o que ela tem
+  agora; vale também no ramo com lote (Etapa 253) e no estorno do Ajuste com lote — `0db2b143`, testes da Fase 5 `6271cda5`.
+- [x] **RN-254.02 / .03** — sem outra peça sem lote, a separada é baixada (o total manda); a guarda de retenção decide se passa; a caixa com
+  lote não protege a linha sem lote; sem caixa, a Etapa 51 byte a byte — `b5b8c4f1`, `0db2b143`. **O RN-254.02 do plano trazia um exemplo
+  que a guarda de retenção recusa — estava errado; corrigido na Fase 2.**
+- [ ] **O estorno do Ajuste sem lote devolver à prateleira de onde a baixa saiu** — fora de propósito (**B1597**, **C549**): não há registro
+  de onde saiu; o teste `[D (254), documenta]` afirma o estado (*A* 7, *B* 0).
