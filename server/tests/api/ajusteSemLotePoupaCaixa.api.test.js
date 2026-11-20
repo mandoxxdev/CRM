@@ -206,7 +206,7 @@ const API = '/api/almoxarifado';
     assert.strictEqual(ent.status, 200, `a entrega foi recusada: ${JSON.stringify(ent.body)}`);
   });
 
-  await test('[D (254), documenta — Fase 5 achado 1] o estorno do Ajuste SEM lote que drenou devolve tudo na posicao padrao', async () => {
+  await test('[C549, Etapa 256] o estorno do Ajuste SEM lote que drenou devolve a B o que tirou de B (era "documenta": tudo na padrao)', async () => {
     const m = await material({ padrao: A.id });
     await entrar(m, 4);
     await entrar(m, 3, { localizacao_destino_id: B.id });
@@ -216,10 +216,11 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A254T/-=4 B254T/-=0');
     const est = await como('ADMIN').post(`${API}/movimentacoes/${aj.body.id}/cancelar`, { motivo: 'teste 254' });
     assert.strictEqual(est.status, 200, JSON.stringify(est.body));
-    // O total volta certo (7); as 3 que o Ajuste tirou de B voltam na padrao A — o estorno sem lote nao sabe de onde a baixa saiu (como
-    // desde a Etapa 51, quando o residuo ficava negativo). Declarado: C549, D (254), B1597. Se um dia o estorno devolver a B, mude aqui.
+    // O total volta certo (7). Ate a Etapa 254 as 3 que o Ajuste tirou de B voltavam na padrao A (A 7, B 0 — C549, B1597, este cenario
+    // afirmava isso como "documenta"). Desde a Etapa 256 a ida grava de onde tirou e o estorno devolve a B (RN-256.02;
+    // estornoAjusteDevolvePrateleira.api.test.js).
     assert.strictEqual(await fis(m), 7);
-    assert.strictEqual(await linhas(m), 'A254T/-=7 B254T/-=0');
+    assert.strictEqual(await linhas(m), 'A254T/-=4 B254T/-=3');
   });
 
   // ── RN-254.02: sem outra saida, a caixa e drenada ─────────────────────────────────────────────────────────────────────────

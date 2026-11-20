@@ -331,13 +331,15 @@ const MSG_EST = (t, l, f, d) => `Não é possível estornar: o estorno volta o t
     assert.strictEqual(Number(mov.cancelado), 0, 'o claim nao voltou');
   });
 
-  await test('[RN-253.14] estorno que cabe depois do drenar: o lote volta ao total certo (na linha padrao, nao em A — declarado)', async () => {
+  await test('[RN-253.14; RN-256.02] estorno que cabe depois do drenar: o lote volta ao total certo, em A (de onde o ajuste tirou)', async () => {
     const { m, LB } = await montar({ onde: A.id });
     const aj = await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 4, lote_id: LB });
     assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
     const r = await cancelar(aj.body.id);
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    assert.strictEqual(await linhas(m), 'A253T/LB=1 P253T/-=3 P253T/LB=4');
+    // Ate a Etapa 255 as 4 voltavam na linha padrao do lote (A 1, P/LB 4 — declarado aqui); desde a 256 o estorno devolve a A, de onde o
+    // ajuste as drenou (C549, RN-256.02).
+    assert.strictEqual(await linhas(m), 'A253T/LB=5 P253T/-=3 P253T/LB=0');
     assert.strictEqual(await fis(m), 8);
   });
 

@@ -620,7 +620,7 @@ async function absorverNegativosSemLote(db, materialId, { excluirId = null } = {
  * outras linhas conhecidas. Isso preserva quantidade já distribuída em localizações/lotes reais,
  * em vez de sobrescrever cegamente com o total inteiro.
  */
-async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false, drenadas = [] } = {}) {
+async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false, drenadas = [], devolver = [], devolvidas = null } = {}) {
   const material = await getMaterial(db, materialId);
   const locKey = material.localizacao_padrao_id || null;
   const materialQty = material.quantidade_atual || 0;
@@ -645,6 +645,26 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
   // -> A 1, B 3, a entrega recusada. Agora a linha padrao tem um PISO: a parte dela guardada pela caixa, ate o que ela tem agora (o ajuste
   // para cima nunca move nada entre prateleiras). Sem caixa, o piso e 0 e tudo fica como na Etapa 51.
   const atualLinha = Number(saldo.quantidade) || 0;
+  // Etapa 256 (C549, RN-256.02..05): o estorno do AJUSTE sem localizacao devolve primeiro as linhas que o ajuste drenou (gravadas na
+  // ida, `ajuste_linhas_drenadas_almoxarifado`), na ordem da drenagem, ate o drenado de cada uma — limitado ao que, sem a devolucao, iria
+  // A MAIS para a linha padrao (o residuo menos o que ela tem agora): a devolucao nunca faz a padrao descer. Sem isto o residuo inteiro
+  // caia na padrao: padrao A 4 separadas e B 3, ajuste para 4 (A 4, B 0), estorno -> A 7, B 0. A linha que e hoje a propria padrao
+  // (o endereco padrao mudou) ou que nao existe mais e pulada (a parte dela fica no residuo). Cada devolucao entra no rastreador do
+  // chamador (`devolvidas`, formato do `compensarLinhasClaim`: o desfazer SOMA a quantidade, aqui negativa) logo depois de aplicada.
+  // Padrao NEGATIVA (legado, ou material que permite negativo — Fase 2, achado 3): o limite conta a padrao como 0, senao a devolucao a
+  // mantinha negativa (P -2, residuo 3, 6 drenadas: devolvia 5 e P ficava -2; agora devolve 3 e P fica 0). Roda ANTES do drenar: depois
+  // dela a padrao tem pelo menos o que tinha (ou 0), o piso nunca passa disso, e o drenar do estorno com lote nao reage a ela.
+  const padraoAgora = Math.max(0, atualLinha);
+  for (const d of devolver) {
+    if (Number(d.id) === Number(saldo.id)) continue;
+    const tira = Q.qtd(Math.min(Number(d.quantidade) || 0, novaLinha - padraoAgora));
+    if (!(tira > EPS)) continue;
+    const r = await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND material_id = ?`, [tira, d.id, materialId]);
+    if (!r.changes) continue;
+    if (devolvidas) devolvidas.push({ id: d.id, quantidade: -tira });
+    novaLinha -= tira;
+  }
   if (drenar && (novaLinha < -EPS || (locKey && novaLinha < atualLinha - EPS))) {
     // Etapa 253 (Fase 5, achado 1): duas passadas — primeiro so a parte de cada endereco que NAO esta guardada pela caixa viva de uma
     // requisicao (`parteGuardadaDeOutrasPorPar`, todas as requisicoes), depois o resto. Numa passada so, a maior linha (a da caixa
@@ -2064,6 +2084,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   }
 
   let saldoAnteriorReal = saldoAnterior;
+  let drenadasDoAjuste = []; // Etapa 256 (RN-256.01): [{ id, quantidade }] que o AJUSTE sem localizacao drenou
   // `seriesAfetadas` (Etapa 6b): populada só quando a entrada cria/reativa série. Escopo aberto
   // aqui (fora do try) de propósito — o catch abaixo precisa dela para compensar; para qualquer
   // tipo que não seja entrada com série ela permanece [] e a compensação vira no-op.
@@ -2597,7 +2618,8 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // físico (achado do review round 3 — ver docstring de `syncSaldoLocalizacaoPadrao`).
       // AJUSTE COM localização já escreveu na localização certa acima — chamar isto aqui
       // reescreveria a localização padrão por engano.
-      await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal, { drenar: true });
+      // Etapa 256 (RN-256.01): as linhas drenadas ficam para a gravacao depois do livro (o estorno as devolve).
+      drenadasDoAjuste = await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal, { drenar: true });
     }
   }
 
@@ -2720,6 +2742,21 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       } catch (e) {
         console.warn(`[almoxarifado] entrada anterior da serie ${a.linha.id} nao registrada (movimentacao ${result.lastID}): ${e.message}`);
       }
+    }
+  }
+  // Etapa 256 (C549, RN-256.01): grava de onde o AJUSTE sem localizacao tirou as pecas, para o estorno devolver a essas prateleiras.
+  // Depois do livro (precisa do id) e ainda dentro da secao do material (o motor inteiro roda sob `naTravaDoMaterial`). NAO-FATAL, como
+  // o vinculo de serie acima e a auditoria (Etapa 120, C250): o ajuste ja valeu e os chamadores leem a excecao como "nada aconteceu".
+  // Sem o registro, o estorno deste ajuste faz o de antes (tudo na posicao padrao). So o AJUSTE: o AJUSTE_INVENTARIO nao e estornavel.
+  if (tipo === 'AJUSTE' && drenadasDoAjuste.length > 0) {
+    // Tudo ou nada (Fase 2, achado 2): um INSERT so, com todas as linhas — o comando e atomico no SQLite. Linha a linha, uma falha no
+    // meio deixava o registro pela metade e o estorno devolvia so parte, sem dizer.
+    try {
+      await dbRun(db, `INSERT INTO ajuste_linhas_drenadas_almoxarifado (movimentacao_id, saldo_id, quantidade)
+        VALUES ${drenadasDoAjuste.map(() => '(?, ?, ?)').join(', ')}`,
+      drenadasDoAjuste.flatMap((d) => [result.lastID, d.id, Q.qtd(d.quantidade)]));
+    } catch (e) {
+      console.warn(`[almoxarifado] linhas drenadas do ajuste ${result.lastID} nao registradas (o estorno devolve na posicao padrao): ${e.message}`);
     }
   }
   // Vínculo série → movimentação de SAÍDA (Etapa 6b, Task 4): mesmo raciocínio e mesma janela que
@@ -3807,9 +3844,15 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             // Etapa 253 (RN-253.14; Fase 2, achado 2): com lote, o estorno drena as linhas do lote nos outros enderecos (sem isto, um
             // ajuste para cima seguido de uma transferencia do lote deixava a linha padrao do lote negativa). As drenadas entram no
             // rastreador que o desfazer devolve ANTES do total e do sync (`compensarLinhasClaim`). Sem lote, como sempre (sem drenar).
-            if (mov.lote_id) compensarLinhasClaim = [];
+            // Etapa 256 (C549, RN-256.02..05): antes do residuo, devolve as linhas que o ajuste drenou (gravadas na ida), limitado ao que
+            // iria a mais para a padrao — dentro do sync, sob a mesma secao. As devolvidas entram no MESMO rastreador (negativas: o
+            // desfazer soma), que o desfazer aplica antes de voltar o total e re-sincronizar. Ajuste antigo (sem registro): lista vazia,
+            // o de antes. Lida aqui, sob a trava: nada escreve o registro de um ajuste ja gravado.
+            const devolver = await dbAll(db, `SELECT saldo_id AS id, SUM(quantidade) AS quantidade, MIN(id) AS ordem
+              FROM ajuste_linhas_drenadas_almoxarifado WHERE movimentacao_id = ? GROUP BY saldo_id ORDER BY ordem`, [mov.id]);
+            compensarLinhasClaim = [];
             await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id,
-              { drenar: Boolean(mov.lote_id), drenadas: compensarLinhasClaim || [] });
+              { drenar: Boolean(mov.lote_id), drenadas: compensarLinhasClaim, devolver, devolvidas: compensarLinhasClaim });
           }
         } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
           // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao

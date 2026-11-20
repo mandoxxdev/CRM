@@ -1602,6 +1602,19 @@ async function initSchemaUmaExecucao(db) {
   // voltaram por uma Entrada, recusa (antes devolvia a quantidade em dobro). safeAlter para o banco que ja tem a tabela (119).
   await safeAlter(db, 'ALTER TABLE series_entrada_anterior_almoxarifado ADD COLUMN saida_anterior_id INTEGER');
 
+  // Etapa 256 (C549, RN-256.01): as linhas de estoque que o AJUSTE sem localizacao drenou (outras prateleiras), por movimento e na
+  // ordem da drenagem. O estorno do ajuste le esta tabela e devolve as pecas a essas linhas antes do residuo da posicao padrao —
+  // sem ela, o estorno punha tudo na padrao (B1597). Ajuste antigo (sem linha aqui): o estorno faz o de antes. Tabela nova, sem ALTER.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS ajuste_linhas_drenadas_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    movimentacao_id INTEGER NOT NULL,
+    saldo_id INTEGER NOT NULL,
+    quantidade REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_ajuste_linhas_drenadas_mov
+    ON ajuste_linhas_drenadas_almoxarifado (movimentacao_id)`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',
