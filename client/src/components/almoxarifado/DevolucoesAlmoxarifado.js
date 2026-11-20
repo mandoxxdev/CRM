@@ -264,8 +264,10 @@ const DevolucoesAlmoxarifado = () => {
 
   const rotuloSaida = (s) => {
     const partes = [formatData(s.created_at), s.tipo, `${s.quantidade} un`];
+    // Etapa 253 (Fase 2, achado 8): a OS aparece também quando há requisição — a busca "OS 12" acha as duas, e a linha tem de mostrar
+    // por que casou.
     if (s.requisicao_numero) partes.push(s.requisicao_numero);
-    else if (s.os_id) partes.push(`OS ${s.os_id}`);
+    if (s.os_id) partes.push(`OS ${s.os_id}`);
     if (s.usuario_nome) partes.push(s.usuario_nome);
     if (s.lote) partes.push(`lote ${s.lote}`);
     // Etapa 121 (C253): o que voltou ao estoque por uma entrada que não cita esta saída (Entrada avulsa, devolução avulsa)

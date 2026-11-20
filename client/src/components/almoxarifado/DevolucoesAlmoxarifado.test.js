@@ -617,3 +617,15 @@ describe('DevolucoesAlmoxarifado — busca da entrega (Etapa 253, C477)', () => 
     expect(idsDaLista()).toHaveLength(30);
   });
 });
+
+describe('DevolucoesAlmoxarifado — o rótulo da entrega mostra a OS também com requisição (Etapa 253, Fase 2)', () => {
+  test('entrega com requisição e OS: as duas no rótulo (a busca "OS 12" acha a linha e a linha diz por quê)', async () => {
+    saidasDoBanco = [{ ...SAIDA_COM_SALDO, id: 601, requisicao_numero: 'REQ-0101', os_id: 12 },
+      { ...SAIDA_COM_SALDO, id: 602, requisicao_numero: null, requisicao_id: null, os_id: 13 }];
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    const textos = [...campo('dev-saida').querySelectorAll('option')].filter((o) => o.value).map((o) => o.textContent);
+    expect(textos[0]).toContain('REQ-0101 · OS 12 · Maria');
+    expect(textos[1]).toContain('OS 13 · Maria');
+  });
+});
