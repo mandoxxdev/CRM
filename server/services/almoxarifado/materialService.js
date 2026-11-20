@@ -295,8 +295,11 @@ const TENTATIVAS_CODIGO_AUTO = 5;
  * UNIQUE regera pelo proximoCodigo da familia e tenta de novo, ate TENTATIVAS_CODIGO_AUTO. Sem a
  * flag, colisao continua sendo 400 'Código já existe' — identico ao de hoje, e o formulario de
  * cadastro manual nao muda: quem digitou o codigo quer saber que ele ja existe, nao ganhar outro.
+ *
+ * `opcoes.cadastroACompletar` (Etapa 254, RN-254.10): grava a marca "cadastro a completar" — a rota a liga para o material criado pela
+ * porta do Almoxarifado (sobra e remessa, formato restrito). Sem a opcao, 0 (os outros chamadores nao mudam).
  */
-async function createMaterial(db, user, data) {
+async function createMaterial(db, user, data, { cadastroACompletar = false } = {}) {
   const {
     codigo, nome, descricao, categoria, unidade,
     quantidade_atual, quantidade_minima, quantidade_maxima,
@@ -396,6 +399,7 @@ async function createMaterial(db, user, data) {
     fator_conversao_consumo: fator_conversao_consumo ?? null,
     ca_numero: normalizarCaNumero(ca_numero) ?? null,
     ca_validade: caValidade ?? null,
+    cadastro_a_completar: cadastroACompletar ? 1 : 0,
   };
   const insertColumns = Object.keys(insertValues);
 

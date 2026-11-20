@@ -500,6 +500,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         sql += ` AND m.quantidade_atual = 0`;
       }
 
+      // Etapa 254 (RN-254.12): `a_completar=1` (texto exato) — so os materiais com a marca "cadastro a completar" (o filtro do Compras).
+      if (req.query.a_completar === '1') sql += ' AND m.cadastro_a_completar = 1';
       // Etapa 113 (RN-08): `status=inativo` lista SO os inativos (a tela reativa daqui); sem ele, so os ativos, como sempre —
       // os seletores das outras telas nao mandam esse valor.
       sql += status === 'inativo' ? ' AND (m.ativo IS NULL OR m.ativo <> 1)' : ' AND m.ativo = 1';
@@ -678,7 +680,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(403).json({ error: materialService.mensagemSaldoInicialSemPermissao(getPerfilFromUser(req.user)) });
     }
     try {
-      const row = await materialService.createMaterial(db, req.user, req.body);
+      // Etapa 254 (RN-254.10, B1593): pela porta do Almoxarifado (sobra e remessa) o material nasce "cadastro a completar"; pela do
+      // Compras, nao. Com a chave de reversao da Etapa 193 ligada o Almoxarifado volta a cadastrar tudo — nao marca.
+      const row = await materialService.createMaterial(db, req.user, req.body, {
+        cadastroACompletar: !req.portaDoCompras && !cadastroDeMaterialCompras.cadastroNoAlmoxarifadoLiberado(),
+      });
       res.status(201).json(row);
     } catch (err) {
       res.status(err.status || 500).json({ error: err.message });
@@ -973,8 +979,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
     try {
       // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
+      // Etapa 254 (RN-254.11): salvar o cadastro pelo Compras tira a marca "cadastro a completar" — no MESMO UPDATE (a recusa nao tira).
+      // So reativar (`{ ativo }`, o botao da lista) nao e completar o cadastro: nao tira.
+      const tiraMarca = !!req.portaDoCompras && Object.keys(req.body || {}).some((k) => k !== 'ativo');
       const gravar = () => dbRun(db, `UPDATE materiais_almoxarifado SET
-        ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
+        ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},${tiraMarca ? ' cadastro_a_completar = 0,' : ''}
         updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}${condControle}`,
         [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null,

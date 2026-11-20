@@ -1398,6 +1398,9 @@ async function initSchemaUmaExecucao(db) {
   // e acrescentar a coluna em 12 delas nao quebraria nada: o sistema so passaria a recusar pela
   // funcao e aceitar pelo SQL, com o numero errado em silencio.
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN quantidade_em_terceiros REAL DEFAULT 0');
+  // Etapa 254 (item 27, RN-254.10/.11): o material criado pelo Almoxarifado (sobra e remessa, formato restrito da Etapa 193) nasce
+  // marcado (1); salvar o cadastro pelo Compras desmarca. Material antigo: 0 (nao se sabe quais vieram da sobra — B1594).
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN cadastro_a_completar INTEGER DEFAULT 0');
 
   // ── Seed de tipos_material_almoxarifado (só existia no callback do CREATE TABLE da
   // rota — diff de segurança Task 3). Protegido por try/catch: alguns harnesses de teste
