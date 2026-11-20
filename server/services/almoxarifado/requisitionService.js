@@ -1439,7 +1439,12 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   const pecasAntes = entrega && entrega.pecas ? (entrega.pecas.get(chave) || 0) : 0;
   if (entrega && entrega.pecas) entrega.pecas.set(chave, pecasAntes + 1);
   const fisico = Number(s.q) || 0;
-  if (entrega && entrega.irmaos && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA && pecasAntes > 0 && fisico + 1e-9 >= qty) {
+  // Fase 2 (item 3): o fisico cobre so sem a guarda de OUTRAS requisicoes no par (`entrega.outras`) — senao a frase nova diria "sobra 2"
+  // quando a outra requisicao ja guardou esses 2: fica a de hoje.
+  const outrasDoParQ = entrega && entrega.irmaos && entrega.outras && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA
+    && pecasAntes > 0 && fisico + 1e-9 >= qty ? (Number((await entrega.outras(item.material_id, origemId, loteId)).q) || 0) : 0;
+  if (entrega && entrega.irmaos && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA && pecasAntes > 0
+    && fisico - outrasDoParQ + 1e-9 >= qty) {
     const r6 = (x) => Math.round(x * 1e6) / 1e6;
     const cod = loteCodigo ? `${codigoOrigem}, lote ${loteCodigo}` : codigoOrigem;
     const sai = jaPedido < 2 - Q.QTD_FOLGA ? 'sai' : 'saem';
@@ -2615,7 +2620,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
       await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem, null,
-        { pecas: pecasPorOrigem, irmaos: !planejada }); // Etapa 252 (RN-252.10): a frase do C497 so para quem escolheu a origem
+        { pecas: pecasPorOrigem, irmaos: !planejada, outras: outrasDaFrase }); // Etapa 252 (RN-252.10): a frase do C497 so para quem escolheu a origem
       if (contarOutras) casoC.push({ item, origemId, loteId, qtdComOrigem });
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
       if (loteId) conferidasNoLote.push({ item, origemId, loteId, qtdComOrigem, planejada }); // Etapa 218: a passada do lote
@@ -2632,6 +2637,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   };
   const substituicoes = new Map(); // Etapa 63: item.id -> substituicao da origem separada
   const pecasPorOrigem = new Map(); // Etapa 252 (RN-252.10): par -> quantas pecas desta entrega ja pediram dele (a frase do C497)
+  const outrasDaFrase = memoParteGuardadaDeOutras(db, requisicaoId); // Fase 2 (item 3): a guarda de outras requisicoes no par
   // Etapa 196 (RN-196.07): item com origem guardada -> se esta entrega sai DELA (a parte cai pelo que saiu) ou de outro par
   // (consome primeiro a parte sem origem; a parte so e limitada a caixa que sobra). Lido no finally.
   const origemGuardada = new Map();

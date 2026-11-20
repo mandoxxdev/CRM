@@ -170,6 +170,21 @@ process.on('exit', (code) => {
       + 'saída tiraria de outros endereços) — entregue escolhendo de onde sai');
   });
 
+  // Fase 2 (item 3): outra requisicao tambem guardou de A — o fisico (4) so cobre (3) contando a guarda dela; a frase nova diria
+  // "sobra 2", o que e falso (entregar so o item 1 da "sobra 0"). Fica a de hoje.
+  await test('[RN-252.11 d] outra requisicao guardou 2 de A (A 4): a literal de antes, nao "sobra 2"', async () => {
+    const m = await material();
+    await entrar(m, A.id, 4); await entrar(m, B.id, 5);
+    const outra = await reqDireta([[m.id, 2]]);
+    await separar(outra.R, [{ item_id: outra.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    const msg = await recusa(R, [{ item_id: ids[0], quantidade_atendida: 3, localizacao_origem_id: A.id }, { item_id: ids[1], quantidade_atendida: 2 }]);
+    assert.strictEqual(msg, `${m.nome}: O saldo em TF-A (2) não cobre a quantidade (3) — a saída tiraria de outros endereços`);
+    assert.strictEqual(await saidas(R), 0);
+  });
+
   console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
   terminou = true;
   await close();
