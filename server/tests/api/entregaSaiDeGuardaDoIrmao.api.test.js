@@ -361,10 +361,13 @@ process.on('exit', (code) => {
       await entOk(R, [saiDe(sem, 2), saiDe(com, 2)]);
       assert.deepStrictEqual(await retrato(m), { linhas: ['GI-B/-=5'], fisico: 5 });
     });
+    // Etapa 252 (RN-252.10, C497): a recusa continua no item a mao, com a frase que diz que os outros 2 de A saem para a outra peca.
+    // Isto afirmava "O saldo em GI-A (1) nao cobre a quantidade (3)" (a frase de antes, que nao dizia de quem era o resto).
     // eslint-disable-next-line no-await-in-loop
-    await test(`[RN-208.12 (b), ${ordem}] A 3: item sem origem Sai de A 3 + o irmao com A 2 -> 400 no item a mao (O saldo (1) ... (3)), nada gravado`, async () => {
+    await test(`[RN-208.12 (b), ${ordem}] A 3: item sem origem Sai de A 3 + o irmao com A 2 -> 400 no item a mao (ha 3, 2 saem para a outra peca, sobra 1), nada gravado`, async () => {
       const { m, R, sem, com } = await cenario12(3, 3, semPrimeiro);
-      await recusaSemGravar(m, R, [saiDe(sem, 3), saiDe(com, 2)], fisica(m, 1, 3));
+      await recusaSemGravar(m, R, [saiDe(sem, 3), saiDe(com, 2)], `${m.nome}: em GI-A há 3 para esta entrega, mas 2 saem dali nesta entrega para `
+        + 'outra peça desta requisição; sobra 1, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)"');
     });
   }
 

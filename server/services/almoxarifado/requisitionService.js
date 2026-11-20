@@ -1397,7 +1397,7 @@ async function listarSeparacoes(db, requisicaoId) {
  * vivas no par. So a separacao com endereco passa; a entrega nao passa (B1333: comportamento de antes, bit a bit). Precedencia: se o
  * fisico sozinho nao cobre, a literal de antes; se cobre e o que sobra depois das outras nao, a C1 com a conta e os numeros.
  */
-async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem, outras = null) {
+async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem, outras = null, entrega = null) {
   if (lidoNorm && !origemId) {
     throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
   }
@@ -1433,6 +1433,20 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   const jaPedido = pedidoPorOrigem.get(chave) || 0;
   pedidoPorOrigem.set(chave, jaPedido + qty);
   const saldo = (Number(s.q) || 0) - jaPedido;
+  // Etapa 252 (RN-252.10/11, C497): na entrega, quantas pecas desta entrega ja pediram do par (`entrega.pecas`: chave -> n). O item que
+  // ESCOLHEU a origem (`entrega.irmaos`), com o fisico cobrindo a quantidade e o ja pedido nao: a frase diz que o resto sai para a outra
+  // peca (antes "O saldo em A (1) nao cobre a quantidade (3)", sem dizer de quem eram os outros 2). Mesma condicao de recusa; so o texto.
+  const pecasAntes = entrega && entrega.pecas ? (entrega.pecas.get(chave) || 0) : 0;
+  if (entrega && entrega.pecas) entrega.pecas.set(chave, pecasAntes + 1);
+  const fisico = Number(s.q) || 0;
+  if (entrega && entrega.irmaos && origemId && saldo + 1e-9 < qty && jaPedido > Q.QTD_FOLGA && pecasAntes > 0 && fisico + 1e-9 >= qty) {
+    const r6 = (x) => Math.round(x * 1e6) / 1e6;
+    const cod = loteCodigo ? `${codigoOrigem}, lote ${loteCodigo}` : codigoOrigem;
+    const sai = jaPedido < 2 - Q.QTD_FOLGA ? 'sai' : 'saem';
+    throw Object.assign(new Error(`em ${cod} há ${r6(fisico)} para esta entrega, mas ${r6(jaPedido)} ${sai} dali nesta entrega para `
+      + `${pecasAntes > 1 ? 'outras peças' : 'outra peça'} desta requisição; sobra ${r6(Math.max(0, saldo))}, que não cobre a `
+      + `quantidade (${qty}). Escolha outro endereço ou deixe "Qualquer endereço (automático)"`), { status: 400 });
+  }
   if (saldo + 1e-9 < qty) {
     throw Object.assign(new Error(origemId
       ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
@@ -2600,7 +2614,8 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada, contarOutras = false) => {
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
-      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
+      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem, null,
+        { pecas: pecasPorOrigem, irmaos: !planejada }); // Etapa 252 (RN-252.10): a frase do C497 so para quem escolheu a origem
       if (contarOutras) casoC.push({ item, origemId, loteId, qtdComOrigem });
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
       if (loteId) conferidasNoLote.push({ item, origemId, loteId, qtdComOrigem, planejada }); // Etapa 218: a passada do lote
@@ -2616,6 +2631,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     }
   };
   const substituicoes = new Map(); // Etapa 63: item.id -> substituicao da origem separada
+  const pecasPorOrigem = new Map(); // Etapa 252 (RN-252.10): par -> quantas pecas desta entrega ja pediram dele (a frase do C497)
   // Etapa 196 (RN-196.07): item com origem guardada -> se esta entrega sai DELA (a parte cai pelo que saiu) ou de outro par
   // (consome primeiro a parte sem origem; a parte so e limitada a caixa que sobra). Lido no finally.
   const origemGuardada = new Map();
