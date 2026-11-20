@@ -5,14 +5,22 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 247 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 248 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 247 fechada — 2026-11-18.** **Liberar o lote que veio de mais de uma nota.** Liberar um lote
+> **O desenvolvimento parou aqui: Etapa 248 fechada — 2026-11-18.** **O estorno da nota no mesmo instante da liberação do lote.** O
+> estorno da entrada de uma nota e a liberação, o bloqueio ou a correção de validade do lote do mesmo material agora fazem fila: um espera o
+> outro terminar. O estorno deixa de ser recusado uma vez sem motivo (*"…libere as reservas antes de estornar"*) e de deixar uma requisição
+> esperando com o material livre; a resposta e o aviso da liberação dizem o que continua reservado. **Só motor, nenhuma tela nova.** **Sem
+> consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 248). **Onde parou, exatamente:** a **248 está fechada**; a
+> **próxima** é o item 14 da estimativa de 18/11 — **bloquear material indicando o lote, em Inspeções** (C500) —, detalhada no fim do plano
+> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa248-estorno-da-nota-sob-a-trava.md`).
+>
+> *(Antes:)* **Etapa 247 fechada — 2026-11-18.** **Liberar o lote que veio de mais de uma nota.** Liberar um lote
 > abastecido por duas notas reserva para quem esperava **repartido por nota** — cada parte com a marca da sua nota —, e o estorno de qualquer
 > das notas passa (antes era recusado com *"libere as reservas antes de estornar"*). A tela **Reservas** diz, abaixo do destino, *"Recebimento
 > ⟨REC⟩ · NF ⟨nota⟩"*. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 247). **Onde parou, exatamente:** a
@@ -7359,6 +7367,38 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 248 — O estorno da nota no mesmo instante da liberação do lote (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** estornar a entrada de uma nota e liberar (ou bloquear) o lote do mesmo material ao mesmo tempo não dá mais
+resultado errado — um espera o outro terminar.
+
+**O problema que ela resolve.** Ao estornar a nota, o sistema solta a reserva que ela fez para quem esperava antes de tirar o material. Essa
+conta não esperava quem mexia no mesmo material: com o lote sendo liberado no mesmo instante, o estorno podia ser recusado com *"Não é
+possível estornar: o material está reservado para requisições (REQ-…) — libere as reservas antes de estornar"* (tentando de novo, passava), ou
+soltar a reserva de uma requisição que já podia ser atendida.
+
+| Antes | Agora |
+|---|---|
+| Estorno e liberação do lote no mesmo instante: o estorno às vezes recusado | O estorno espera a liberação e passa |
+| Lote liberado no meio do estorno de outra nota: a requisição podia voltar a esperar com material livre | A liberação espera o estorno e reserva para ela de novo |
+| A mensagem da liberação e o aviso ao solicitante podiam prometer reserva que o estorno já tinha soltado | Dizem o que continua reservado |
+| Estornos e liberações feitos um de cada vez, mensagens e telas | **Igual** |
+
+**Roteiro de teste manual (≈3 min)** — a corrida não se reproduz à mão; o roteiro confere que o caminho normal não mudou:
+
+1. Entre como **Administrador do almoxarifado**. Material *LOT-248* com **controle por lote** e **exige certificado**.
+2. Crie a requisição *R1* de 4 *LOT-248* e aprove: fica *Aguardando estoque*.
+3. **Recebimentos**: nota *A* com 4, lote *L1* — processar. **Confira:** o L1 está *Bloqueado* e *R1* continua sem reserva.
+4. **Lotes e Séries → L1 → Anexar certificado.** **Confira:** *"4 PC reservado(s) para quem esperava este material (1 requisição(ões))."*
+5. **Movimentações**, histórico: a entrada da nota A → **Estornar**. **Confira:** o estorno passa; em **Reservas** a linha de *R1* some e *R1*
+   volta a *Aguardando estoque*.
+
+**O que esta etapa não cobre:** bloquear o lote no mesmo instante do estorno dá o mesmo resultado de "estornar, depois bloquear" (a requisição
+pode ficar reservada sobre o lote bloqueado, como em qualquer bloqueio); a requisição que já separou alguma coisa continua sem perder a
+reserva no estorno.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor) provam.
 
 ## Etapa 247 — Liberar o lote que veio de mais de uma nota: a reserva repartida por nota (ENTREGUE — 2026-11-18)
 

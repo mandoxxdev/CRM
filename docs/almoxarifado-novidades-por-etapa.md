@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 247 fechada** (**liberar o lote que veio de mais de uma nota** — a reserva da
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 248 fechada** (**o estorno da nota no mesmo instante da liberação do lote** — a conta
+> do estorno que solta a reserva da nota roda sob a trava do material: a liberação, o bloqueio e a correção de validade do lote esperam o
+> estorno, e o estorno deixa de ser recusado (**C525**) ou de soltar a reserva de quem já podia sair (**C534**); a resposta e o aviso da
+> liberação dizem o que continua reservado. Só motor. Item 12 da estimativa de 18/11; decisões **B1564** a **B1566**; limitação **D (248)**;
+> verificação **F (248)**; sem consulta antes do deploy).
+> **Próxima:** **bloquear material indicando o lote, em Inspeções** (item 14 da estimativa de 18/11 — **C500**, **B1419**) — detalhada no fim
+> do plano da 248.
+> *(Antes, 2026-11-18:)* **Etapa 247 fechada** (**liberar o lote que veio de mais de uma nota** — a reserva da
 > liberação do lote é repartida pelas notas do lote, cada parte com a marca da sua nota, e o estorno de cada nota passa (antes: recusado com
 > *"libere as reservas antes de estornar"* — **C524**); a tela **Reservas** diz o recebimento da reserva. Item 11 da estimativa de 18/11;
 > decisões **B1561** a **B1563**; limitação **D (247)**; verificação **F (247)**; sem consulta antes do deploy).
@@ -4808,7 +4815,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15439,6 +15446,31 @@ só o recebimento) abaixo do destino, em toda reserva com a marca de uma nota �
 almoxarife vê qual parte é de qual nota antes de estornar. Descartado: mostrar só na reserva da liberação do lote (a da chegada e a da
 inspeção têm a mesma marca e o mesmo efeito no estorno). **Reversível** (campo de leitura).
 
+**B1564 (NOVA, da Etapa 248; decisão do agente; revê a B1506) — a conta do estorno da nota dentro da trava, depois do claim.** A pré-checagem
+da linha do lote e a soltura da reserva da nota rodam no começo da seção da trava do material do estorno (a mesma que já ia do débito ao
+livro, Etapa 118), depois de gravar o claim; se o estorno falha, a reserva solta é recriada ali dentro, antes de soltar a trava. A liberação,
+o bloqueio e a correção de validade do lote (que pegam a mesma trava) esperam o estorno inteiro. A **B1506** dizia "fora da trava, como antes;
+descartado pegar a trava aqui (não é reentrante e o estorno a pega depois)" — o descartado era pegar uma **segunda** trava; esta usa a do
+próprio estorno. Descartado: (a) uma seção curta só para a conta, antes do claim (a liberação do lote caberia entre ela e o débito e levaria o
+que o estorno acabou de soltar); (b) gravar o claim também dentro da seção (muda a ordem de dois estornos da mesma entrada sem ganho). Fora
+da trava continuam o recálculo das requisições (pega a trava de novo) e as solturas sem distribuir das outras portas (**B441**). A linha do
+`CLAUDE.md` que diz *"Fora da seção ficam a liberação e a recriação das reservas da chegada e o recálculo"* ficou **desatualizada** — não foi
+editada por esta etapa (o arquivo de instruções é seu); texto sugerido: *"Fora da seção fica só o recálculo; desde a 248 a conta que solta a
+reserva da nota e a recriação rodam dentro"*. **Reversível.**
+
+**B1565 (NOVA, da Etapa 248, revisão do plano; decisão do agente) — a resposta e o aviso da liberação dizem o que continua reservado.** Com
+o estorno esperando a liberação do lote, ele pode soltar logo em seguida a reserva que a liberação acabou de criar; a resposta da liberação
+(*"⟨n⟩ PC reservado(s) para quem esperava…"*) e o aviso ao solicitante (que saem depois) passam a reler as reservas e contar só as que
+continuam de pé — a reserva recriada por um estorno que falhou conta (revisão do código). Vale para todo aviso de liberação (nota, inspeção,
+não conformidade, lote). Descartado: deixar a resposta com o número da hora da distribuição (prometia reserva que não existe mais).
+**Reversível.**
+
+**B1566 (NOVA, da Etapa 248, revisão do plano; decisão do agente) — a recusa da pré-checagem do lote depois do claim.** A pré-checagem (*"Não
+é possível estornar: o lote ⟨L⟩ tem ⟨n⟩ ⟨un⟩ nesta localização, menos que os ⟨q⟩ que a entrada creditou"*) agora roda depois de gravar o
+claim (e o desfaz ao recusar). Fora de corrida, a mesma mensagem e o mesmo 400. Numa corrida com **outro estorno da mesma entrada**, a segunda
+tentativa pode ouvir *"Movimentação já cancelada"* em vez da frase do lote. Descartado: manter uma pré-checagem também fora da trava (a frase
+certa na corrida rara, ao custo de ler o lote duas vezes). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19616,6 +19648,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      recusado uma vez.** A conta do estorno que solta a reserva da nota roda fora da trava do material (como desde a Etapa 92 — soltar não
      distribui); se ela ler o material no meio da liberação, não solta nada e o estorno recusa com a frase do C524. Reproduzido na revisão
      com gancho. **Nenhum erro de estoque.** **O que fazer:** tentar o estorno de novo (passa). Conserto: a conta do estorno sob a trava.
+     *(**Resolvido na Etapa 248** — `d7da2ad1` (**B1564**): a conta do estorno roda sob a trava do material; o estorno espera a liberação e passa.)*
 
 526. **NOVO (da Etapa 221, revisão do plano; decisão B1474) — a reserva da OS sobre um lote bloqueado faz a reserva manual ser recusada.**
      Com peças boas num lote ativo e a compra de uma OS reservada sobre um lote bloqueado, a reserva manual do mesmo material é recusada com
@@ -19662,6 +19695,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      instante pode fazer o estorno soltar de menos (a requisição fica reservada como antes) ou de mais (ela volta a esperar). **Nenhum erro
      de estoque.** **O que fazer:** se a requisição ficou reservada sem nada que saia, liberar a reserva à mão em **Reservas**; se voltou a
      esperar, a liberação do lote ou a próxima nota a atende.
+     *(**Resolvido na Etapa 248** — `d7da2ad1`, Fase 5 `99a2fabf` (**B1564**): a liberação do lote espera o estorno; o bloqueio no mesmo instante dá o
+     mesmo resultado de "estornar, depois bloquear" — **D (248)** 1.)*
 535. **NOVO (da Etapa 229; decisão B1512) — a não conformidade aceita não diz que o lote continua bloqueado.** Aceitar o reprovado de um lote
      que continua bloqueado não reserva nada para quem espera (como a inspeção), mas a tela **Não Conformidades** não avisa — só a tela
      **Inspeções** tem a frase. **Nenhum erro de estoque.** **O que fazer:** olhar o lote em **Lotes e Séries**; liberar o lote reserva para
@@ -21092,6 +21127,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(248) O estorno da nota sob a trava, o que ficou de fora.** (1) Bloquear o lote no mesmo instante do estorno não mudou: o resultado é o
+  mesmo de "estornar, depois bloquear" (bloquear não solta reserva; a requisição pode ficar reservada sobre o lote bloqueado, como em
+  qualquer bloqueio). (2) A requisição que já separou alguma coisa continua não perdendo a reserva no estorno. (3) Se a conta do estorno
+  falhar no meio (erro de banco), a reserva da OS que ela já soltou não é recriada (anterior à etapa). (4) As outras solturas sem distribuir
+  (liberar à mão, expirar, cancelar a requisição) continuam fora da trava (**B441**); a conta do estorno relê a reserva que uma delas soltou.
 - **(247) Liberar o lote de mais de uma nota, o que ficou de fora.** (1) Quando parte do lote já saiu, a nota mais antiga fica com menos que
   o que entrou por ela e o estorno dela pode continuar recusado com *"Não é possível estornar: o material está reservado para requisições
   (⟨REQ⟩) — libere as reservas antes de estornar"* (as peças do lote não dizem de qual nota vieram). (2) A marca é da **nota**, não do lote:
@@ -22661,6 +22701,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(248) Nenhum clique foi dado.** As corridas foram provadas pela rota real com gancho em `estornoNotaSobTrava` (6 cenários: a liberação no
+meio do estorno, o lote liberado no meio da conta, a conta e a recriação sob a trava, pelo serviço, a requisição cancelada no meio da conta, a
+reserva recriada na resposta da liberação). A corrida não se reproduz à mão. Vale 3 minutos: o roteiro da seção da 248 (passo 1) — o caminho
+normal continua igual.
 
 **(247) Nenhum clique foi dado.** A reserva repartida por nota e o estorno de cada nota, provados pela rota real em
 `liberarLoteDeDuasNotas` (14 cenários: a repartição, os dois estornos, a fila menor, a nota estornada antes, a entrada avulsa, a segunda
@@ -43380,12 +43425,64 @@ nota (a reserva da chegada, a da OS, a de uma liberação anterior do mesmo lote
 - O estorno no mesmo instante da liberação (**C525**, item 12 da estimativa) e a requisição que já separou alguma coisa (o estorno não solta
   a reserva dela) continuam como estavam.
 
+## Etapa 248 — O estorno da nota no mesmo instante da liberação do lote (2026-11-18)
+
+Quando alguém estorna a entrada de uma nota, o sistema primeiro solta a reserva que aquela nota fez para quem esperava, e só então tira o
+material do estoque. Essa conta era feita **sem esperar** quem estava mexendo no mesmo material. Se, no mesmo instante, outra pessoa liberava
+o lote (anexando o certificado ou mudando o status para *Ativo*), o estorno via o material ainda livre, não soltava nada, a liberação
+reservava as peças para a requisição que esperava, e o estorno era **recusado** com *"Não é possível estornar: o material está reservado para
+requisições (REQ-…) — libere as reservas antes de estornar"* (**C525**). No caso oposto, o estorno via um lote bloqueado, soltava a reserva de
+uma requisição e, enquanto isso, o lote era liberado: a requisição **voltava a esperar** com o material livre na prateleira (**C534**). Agora o
+estorno da nota e a liberação, o bloqueio ou a correção de validade do lote do mesmo material **fazem fila**: um espera o outro terminar.
+Etapa só de motor (nenhuma tela nova). Item 12 da estimativa de 18/11. Decisões do agente: **B1564** a **B1566**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estornar a nota no mesmo instante em que o lote dela era liberado podia ser recusado uma vez (*"…libere as reservas antes de estornar"*) | O estorno espera a liberação terminar e passa, soltando a reserva que ela acabou de fazer |
+| Liberar um lote enquanto o estorno de outra nota do material soltava reservas podia deixar uma requisição esperando com o material livre | A liberação espera o estorno; a requisição que o estorno soltou é reservada de novo pela liberação |
+| A resposta da liberação (*"⟨n⟩ PC reservado(s) para quem esperava…"*) e o aviso ao solicitante podiam prometer uma reserva que o estorno feito logo em seguida já tinha soltado | Os dois dizem o que **continua** reservado |
+| Uma requisição cancelada no meio do estorno fazia o estorno soltar também a reserva de outra requisição | A reserva cancelada conta como solta; a outra requisição fica reservada |
+| Os estornos e as liberações feitos um de cada vez, as mensagens e as telas | **Igual** |
+
+### As regras, com o cenário exato
+
+A corrida depende de dois cliques no mesmo instante — não dá para reproduzir com a mão na apresentação. O que dá para mostrar é que o
+caminho normal continua igual:
+
+Preparação: usuário **Administrador do almoxarifado**. Material *LOT-248* com **controle por lote** e **exige certificado**. Uma requisição *R1*
+de 4 *LOT-248* aprovada e esperando (*Aguardando estoque*).
+
+**1. Liberar, depois estornar (RN-248.01).** **Recebimentos**: nota *A* com 4 *LOT-248*, lote *L1* — processar. O *L1* fica *Bloqueado*.
+**Lotes e Séries → L1 → Anexar certificado.** **Confira:** *"4 PC reservado(s) para quem esperava este material (1 requisição(ões))."*.
+**Movimentações → histórico → a entrada da nota A → Estornar.** **Confira:** o estorno passa; a reserva de *R1* some e *R1* volta a *Aguardando
+estoque*. Se os dois cliques forem dados no mesmo instante (dois usuários), o resultado agora é este mesmo — antes podia ser a recusa.
+
+**2. O que a liberação diz.** Quando o estorno passa logo depois da liberação, o aviso ao solicitante não sai prometendo os 4, e a resposta
+da liberação diz o que ficou reservado de fato.
+
+### O que esta etapa NÃO cobre
+
+- Bloquear o lote no mesmo instante do estorno não mudou: o resultado é o mesmo de "estornar, depois bloquear" (bloquear um lote não solta
+  reserva) — **D (248)** 1.
+- Estornar duas vezes a mesma entrada no mesmo instante, com o lote que não comporta o estorno: a segunda tentativa ouve *"Movimentação já
+  cancelada"* em vez da frase do lote (**B1566**).
+- Requisição que já separou alguma coisa continua não perdendo a reserva no estorno (como antes).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 248 entregue (2026-11-18):** **o estorno da nota no mesmo instante da liberação do lote** (item 12 da estimativa de 18/11; **C525**
+  e **C534** resolvidos). A conta do estorno da nota e a recriação rodam sob a trava do material (**B1564**, revê a B1506); a resposta e o
+  aviso da liberação releem as reservas (**B1565**); a recusa da pré-checagem do lote numa corrida rara (**B1566**). Commits `d7da2ad1`,
+  `99a2fabf` (Fase 5) e o fechamento. **O que é seu:** as **B1564** a **B1566** (reversíveis; na B1564, a linha do `CLAUDE.md` que ficou
+  desatualizada); a limitação **(248)** em D e a verificação **(248)** em F. Sem consulta antes do deploy. **Próxima:** **bloquear material
+  indicando o lote, em Inspeções** (item 14 da estimativa de 18/11, **C500**) — detalhada no fim do plano da 248.
 
 - **Etapa 247 entregue (2026-11-18):** **liberar o lote que veio de mais de uma nota** (item 11 da estimativa de 18/11; **C524**
   resolvido). A reserva da liberação do lote é repartida pelas notas vivas do lote, cada parte com a marca da sua nota (**B1561**, **B1562**);

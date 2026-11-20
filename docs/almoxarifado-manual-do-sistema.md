@@ -866,7 +866,7 @@ As recusas dizem qual é o problema:
 
 Mudar a situação é feito em **Almoxarifado → Lotes e Séries**, botão **Mudar status** da linha. A **justificativa é obrigatória** — sem ela o botão Confirmar não habilita, e o servidor recusa com *"justificativa obrigatoria para mudar o status do lote"*. Toda mudança fica na auditoria, com o valor anterior, o novo e o motivo.
 
-**Liberar o lote reserva para quem esperava.** Voltar para *Ativo* um lote *Bloqueado* ou *Reprovado* — ou anexar o certificado que o bloqueava, liberar o vencimento ou corrigir a validade de um lote vencido para uma data futura — reserva as peças dele para as requisições que esperavam o material, e a tela diz quanto: *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."* As regras estão em 9.3c-bis. Mudar a situação espera as outras operações do mesmo material terminarem.
+**Liberar o lote reserva para quem esperava.** Voltar para *Ativo* um lote *Bloqueado* ou *Reprovado* — ou anexar o certificado que o bloqueava, liberar o vencimento ou corrigir a validade de um lote vencido para uma data futura — reserva as peças dele para as requisições que esperavam o material, e a tela diz quanto: *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."* As regras estão em 9.3c-bis. Mudar a situação espera as outras operações do mesmo material terminarem — inclusive o estorno da entrada de uma nota do mesmo material. O número da mensagem (e o aviso enviado a quem pediu) é o que **continua** reservado quando a operação termina: se um estorno que esperava logo atrás soltar parte dessa reserva, ela não entra na conta.
 
 Repare que **"Vencido" não é uma situação**. Vencimento é calculado na hora da leitura, comparando a data de validade com a data de hoje — o dia do horário de Brasília: o lote fica vencido a partir do dia **seguinte** ao da validade, então o lote que vence hoje ainda sai até a meia-noite — e é um eixo independente da situação. Um lote pode estar Ativo e vencido, ou Bloqueado e vencido, ao mesmo tempo.
 
@@ -2228,6 +2228,11 @@ entregou), o estorno é recusado com a mensagem do material reservado (acima) e 
 **depois** de soltar (por exemplo, pela conferência do lote — *"Não é possível estornar: o lote ⟨L⟩ tem ⟨q⟩ ⟨un⟩ nesta
 localização, menos que os ⟨q⟩ que a entrada creditou"*), as reservas soltas são **recriadas** iguais (observação
 *"Reserva recriada após estorno recusado — recebimento ⟨REC⟩, requisição ⟨REQ⟩"*) e a recusa é a resposta.
+O estorno da entrada de uma nota e a liberação, o bloqueio ou a correção de validade de um lote do **mesmo material** não se
+cruzam: um espera o outro terminar. Estornar a nota no mesmo instante em que o lote dela é liberado dá o mesmo resultado de
+liberar e depois estornar — a reserva que a liberação acabou de fazer com a marca da nota é solta e o estorno passa. Se,
+enquanto o estorno faz a conta, outra pessoa solta uma das reservas da nota (cancelando a requisição ou liberando a reserva à
+mão), o que ela soltou já conta: o estorno não solta, no lugar dela, a reserva de outra requisição.
 
 Há linhas que o livro **não estorna de propósito**, cada uma com a porta certa nomeada na mensagem:
 

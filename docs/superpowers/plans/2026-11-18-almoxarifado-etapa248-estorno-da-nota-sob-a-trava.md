@@ -85,11 +85,11 @@ do mesmo material).
 
 ## Tasks
 
-- [x] **T1 (tronco)** — (hash no fechamento) testes RN-248.01..04 e .06 em `server/tests/api/estornoNotaSobTrava.api.test.js` (vermelhos: 0/4 no código anterior) +
+- [x] **T1 (tronco)** — `d7da2ad1` (com os achados 1-3 e 6 da Fase 2; o cenário `[Fase 5]` de `recebimentoReservaChegadaEstorno` reescrito; controle positivo: 4 sabotagens, cada uma derrubou o cenário que guarda) testes RN-248.01..04 e .06 em `server/tests/api/estornoNotaSobTrava.api.test.js` (vermelhos: 0/4 no código anterior) +
   conserto em `stockService.cancelarMovimentacao`. Controle positivo: sabotar (1) a conta de volta para antes do claim, (2) a recriação de
   volta para o `catch` de fora — cada uma derruba o cenário que a guarda.
-- [ ] **T2** — Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
-- [ ] **T3** — fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T2** — `99a2fabf`: 2 achados reproduzidos por sonda, corrigidos com [RN-248.07] e [RN-248.08], vermelhos no código anterior; controle positivo de 2 sabotagens. Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
+- [x] **T3** — fechamento (fechar-etapa sem 7½ e 8).
 
 ## Pontos de atenção
 
@@ -97,3 +97,61 @@ do mesmo material).
 - `liberarReserva` → `registrarMovimentacao` (`naTravaDoMaterial`: passa direto); alerta adiado (`adiarParaDepoisDaSecao`).
 - Quem chama `cancelarMovimentacao` (rota, EPI, retalho, terceiros) não está dentro de seção (CLAUDE.md: proibido); a mudança só afeta a
   `ENTRADA_COMPRA` com recebimento.
+
+## Fase 5 (revisor adversarial fresco com sonda executada, 18/11) — 2 achados reais, 0 ruído
+
+1. (Importante, anterior à etapa, mesma família da C534) a requisição cancelada (ou a reserva liberada à mão, ou expirada — portas que
+   soltam sem a trava, B441) entre a leitura das reservas da conta e o `liberarReserva`: ele lançava, a falta não descontava e a conta
+   soltava a reserva da requisição seguinte (R1 voltava a esperar com 2 livres). Sonda `f5-248-p2-cancelamento.js`. → **RN-248.07**: a
+   reserva relida como LIBERADA/CANCELADA/EXPIRADA conta como solta. Descartado: descontar também a reserva ATIVA reduzida (a entrega reduz o
+   saldo sem devolver ao livre).
+2. (Menor, aberta pela RN-248.06) o estorno que esperou a trava, soltou a reserva da liberação e falhou recria a reserva com **outro id**;
+   `resultadoDePe` seguia o id antigo e a resposta da liberação dizia 0 (e o aviso não saía) com R1 reservada. Sonda
+   `f5-248-p1-recriada.js`. → **RN-248.08**: segue a reserva recriada (mesmo item, mesma nota, observação de recriada).
+
+Não quebrou (tentado): deadlock/reentrada (tudo dentro da seção passa por `naTravaDoMaterial` ou não pega trava; alerta adiado), reserva
+perdida ou duplicada em cada ponto de falha, claim perdido, nota com OS (`recebimentoPedidoOs` 23/23), a régua "nota viva" da 247.
+
+## Divergências do plano
+
+- A RN-248.05 dizia "inalterado, coberto pelas suítes existentes" — **estava errado** (Fase 2, achado 1): o cenário `[Fase 5]` de
+  `recebimentoReservaChegadaEstorno` descrevia a ordem antiga e foi reescrito.
+- O plano não previa mexer na resposta/aviso da liberação do lote (RN-248.06, Fase 2) nem na releitura da reserva solta por outra porta
+  (RN-248.07, Fase 5).
+- A linha do `CLAUDE.md` sobre o que fica fora da seção do estorno ficou desatualizada e **não** foi editada (o arquivo de instruções é do
+  André) — texto sugerido na **B1564**.
+
+## Verificação (medida, sobre o código final `99a2fabf`)
+
+- `npm run test:api`: **641/641 arquivos**. A rodada serial sobre `d7da2ad1` deu 641/641; a rodada sobre `99a2fabf` foi interrompida pela
+  máquina (pouca memória) com 582 arquivos rodados e OK — os 59 que não chegaram a rodar (de `solicitacaoReabreNoEstorno` ao fim) foram
+  rodados depois, em série, com o mesmo guarda do `run-all`: 59/59 OK. Nenhuma edição de produção durante as rodadas.
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
+- Jest da tela: **236 suítes, 3194 testes** (o `client/` não mudou); `CI=true react-scripts build`: *Compiled successfully*.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2: resposta/aviso e teste reescrito; Fase 5: releitura da reserva solta e a recriada).
+- Achados: Fase 2 — 6 (3 importantes reais, 1 reproduzido em teste antes do conserto; 2 menores registrados em B/D; 1 de documentação);
+  Fase 5 — 2 reais reproduzidos com sonda, 0 ruído.
+- Paralelismo: nenhum galho (um tronco só); a Fase 5 rodou junto com a suíte `test:api` (sem edição de produção durante ela).
+- Defeito que escapou: (preencher na etapa seguinte). Da 247: nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+Item 14 da estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`, 1h30, motor):
+**bloquear material indicando o lote, em Inspeções** (**C500**, **B1419**). Módulo Almoxarifado.
+
+- **O que é:** a janela **Inspeções → Bloquear Material** (o bloqueio avulso, `POST /api/almoxarifado/materiais/:id/bloquear`,
+  `server/routes/almoxarifado/extended.js` ~1306, `requirePermission('ajustar_estoque')`) grava o BLOQUEIO **sem lote**, mesmo em material com
+  controle por lote: conta como *"Sem lote"* e o **Desbloquear** precisa escolher *"Sem lote — N"*. Conserto previsto (C500): lote opcional no
+  Bloquear, com a regra "o lote tem livre para bloquear".
+- **Medir antes de prometer (Fase 0):** como o BLOQUEIO grava o lote hoje na devolução para Quarentena (Etapa 209 — molde), como o
+  **Desbloquear** escolhe o lote (a lista *"Sem lote — N"* / por lote) e como a não conformidade libera "sem lote" (**B1417**, C501 — o item 15
+  é a mensagem própria dela). O "livre do lote para bloquear" é o físico do lote menos o que já está bloqueado nele e menos o reservado? A
+  reserva **não tem lote** (C526) — decidir a régua pela da Etapa 241 (o livre do seletor de lote) e registrar na letra B.
+- **Contrato que consome:** `POST /materiais/:id/bloquear` (+ `lote_id` opcional, aditivo; recusa literal nova quando o lote não tem livre);
+  o seletor de lote da tela (molde: `lotService.listarLotesDoMaterial`, com `livre` desde a 241).
+- **Pontos de atenção:** o BLOQUEIO mexe no disponível — sob `naTravaDoMaterial` (o motor já pega); o estorno do BLOQUEIO (Etapa 118,
+  `compensarBloqueada`) e o Desbloquear por lote têm de casar com o lote gravado; a fatia visível é o seletor de lote na janela.
+- **O que já está pronto e não reabre:** a conta do estorno da nota sob a trava (esta etapa); a liberação repartida por nota (247).

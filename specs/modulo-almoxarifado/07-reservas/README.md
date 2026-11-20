@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 248 (2026-11-18, `d7da2ad1`, Fase 5 `99a2fabf`): o estorno da nota sob a trava do material (C525 + C534, B1564–B1566)** — a conta que solta a reserva da nota e a recriação rodam dentro da seção do estorno; a liberação e o bloqueio do lote esperam o estorno inteiro; a resposta e o aviso da liberação do lote dizem o que continua reservado. Ver a seção "Etapa 248", no fim. Continua 🟢.
+
 > **+ Etapa 247 (2026-11-18, `7305080c`, tela `493cfeba`, Fase 5 `0e163246`): liberar o lote que veio de mais de uma nota reparte a reserva por nota (C524, B1561–B1563)** — cada parte com a marca da sua nota; o estorno de cada nota passa; a tela Reservas diz o recebimento. Ver a seção "Etapa 247", no fim. Continua 🟢.
 
 > **+ Etapa 230 (2026-11-13, `59a5ae94`, Fase 5 `de2bd342`): a fila da OS aberta recebe só o que pode sair (C520, B1513–B1516)** — `distribuirParaOs` com `tetoFila` (o que a entrada trouxe fora de lote impedido) e o desconto do lote (sai o `semDescontoDoLote`); o resto vai para a reserva da OS; liberar o lote converte a reserva da OS da nota do lote para a fila da OS (`converterReservaDaOsNoLoteLiberado`); a fila da OS ganha o abono da aprovação (B1381); o estorno perde a exceção B1508. Ver a seção "Etapa 230", no fim. Continua 🟢.
@@ -850,3 +852,33 @@ de R2 sem marca; agora ela tem a marca da nota B (continua provando que não vei
 - [x] **Fase 5** — a parte da nota por entrada (o reprovado trava a entrada, nao a nota) e a reserva marcada de outro lote da mesma nota ([RN-247.12], [RN-247.13]) — `0e163246`.
 - [ ] **Fora (declarado):** a parte já saída do lote fica a menos na nota mais antiga; a marca é da nota, não do lote; o estorno no mesmo
   instante da liberação (**C525**, item 12) — **D (247)**.
+
+## Etapa 248 — o estorno da nota no mesmo instante da liberação do lote: a conta do estorno sob a trava (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa248-estorno-da-nota-sob-a-trava.md`. **C525** e **C534** resolvidos (B1506 revista
+pela **B1564**). Só motor (sem tela nova).
+
+**Correção da spec (regra 5):** a seção da Etapa 228 dizia *"nenhuma trava nova (soltar sem distribuir continua fora da trava, B441)"*, e a
+lista de "fora" da 91 dava *`liberarParaEstorno` fora de trava* como candidata. Para o estorno da nota isso **deixou de valer** na 248: a
+conta que solta a reserva da nota (`liberarParaEstorno`, com a pré-checagem da linha do lote) roda no começo da seção da trava do material do
+estorno, depois do claim e colada no débito; a recriação, se o estorno falhar, roda dentro da seção antes de soltar. Fora da trava ficaram só
+o recálculo das requisições e os efeitos de depois (pedido de compra, alerta, aviso). As outras solturas sem distribuir (liberação manual,
+expiração, cancelamentos) continuam fora (B441). O teste `[Fase 5]` de `recebimentoReservaChegadaEstorno` ("outro estorno ganha o claim
+enquanto este liberava") descrevia uma ordem que deixou de existir — reescrito (o claim alheio antes → 400 e a reserva intacta).
+
+- [x] **RN-248.01** (C525, rota) — o estorno da nota no meio da liberação do lote espera a liberação e conclui 200, soltando a reserva que
+  ela acabou de criar; a próxima nota atende — `d7da2ad1`.
+- [x] **RN-248.02** (C534, "de mais") — o lote liberado no meio da conta do estorno espera; a requisição solta é reservada de novo pela
+  liberação — `d7da2ad1`.
+- [x] **RN-248.03** — a conta e a recriação sob a trava (o livro falhando: a reserva volta, a trava solta) — `d7da2ad1`.
+- [x] **RN-248.04** (serviço) — a corrida da RN-248.01 por `stockService.cancelarMovimentacao` — `d7da2ad1`.
+- [x] **RN-248.06** (Fase 2, B1565) — a resposta da liberação do lote e o aviso ao solicitante releem as reservas (`resultadoDePe`): não
+  prometem a reserva que o estorno soltou — `d7da2ad1`.
+- [x] **RN-248.07** (Fase 5) — a reserva cancelada (ou liberada à mão, ou expirada) por outra porta no meio da conta conta como solta; a
+  conta não solta a reserva da requisição seguinte — `99a2fabf`.
+- [x] **RN-248.08** (Fase 5) — a resposta e o aviso seguem a reserva recriada pelo estorno que falhou — `99a2fabf`.
+- [ ] **Fora (declarado):** o bloqueio do lote no meio do estorno não é defeito (o resultado é o de "estorno, depois bloqueio" — bloquear não
+  solta reserva); a recusa da pré-checagem do lote numa corrida com outro estorno da mesma movimentação diz *"Movimentação já cancelada"*
+  (**B1566**); a reserva da OS solta antes de uma falha no meio da conta continua sem recriação (anterior) — **D (248)**.
+
+Testes: `estornoNotaSobTrava.api.test.js` (6 cenários, 4 com gancho de corrida disparado do contexto do teste). Continua 🟢.
