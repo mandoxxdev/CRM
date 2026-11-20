@@ -710,10 +710,46 @@ async function resumoLotesDoMaterial(db, materialId) {
   };
 }
 
+/**
+ * Etapa 249 (C500, RN-249.02/.09/.11) — quanto cada lote do material tem LIVRE PARA BLOQUEAR (o Bloquear Material indicando o lote). Uma
+ * regua so: a guarda do motor (ramo BLOQUEIO avulso com lote) e a rota `GET /materiais/:id/lotes-para-bloquear` leem esta funcao.
+ *   livre = MAX(0, fisico livre do lote (saldo − em inspecao no lote) − quarentena/avulso do lote (livro) − reprovado do lote (inspecao)
+ *               − em terceiros do lote (remessa) − o guardado nas caixas vivas de TODAS as requisicoes no lote)
+ * As parcelas CRUAS de `retidoDoLote` — sem o corte "tudo ou nada" da familia (B1436) que a entrega usa (Fase 2, achado 1: com a familia
+ * da reprovacao caida, a regua da entrega deixava bloquear a peca reprovada). A caixa conta inteira, com ou sem reserva (Fase 2 achado 4;
+ * a guarda do material so tira a caixa SEM reserva — declarado, B). Reservado nao conta (a reserva nao tem lote, C526).
+ * So material com controle de lote e sem serie (RN-249.11): nos outros nenhum leitor respeita o lote do bloqueio -> `lotes: []`.
+ * Material inexistente -> null. So le (sem trava: quem chama segura a do material, o motor). `require` preguicoso (sem ciclo).
+ */
+async function lotesParaBloquear(db, materialId) {
+  const rdl = require('./retidoDoLote');
+  const mat = await dbGet(db, 'SELECT id, controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  if (!mat) return null;
+  const material_id = Number(mat.id);
+  if (Number(mat.controle_lote) !== 1 || Number(mat.controle_serie) === 1) return { material_id, lotes: [] };
+  const linhas = await dbAll(db, `SELECT lpb_l.id AS lote_id, lpb_l.codigo,
+      COALESCE((SELECT SUM(lpb_s.quantidade) FROM estoque_saldo_almoxarifado lpb_s
+        WHERE lpb_s.material_id = lpb_m.id AND lpb_s.lote_id = lpb_l.id), 0) AS saldo,
+      ${rdl.fisicoLivreDoLoteSql('lpb_m', 'lpb_l')} - ${rdl.quarentenaDoLoteSql('lpb_m', 'lpb_l')} - ${rdl.reprovadoDoLoteSql('lpb_l')}
+        - ${rdl.terceirosDoLoteSql('lpb_m', 'lpb_l')} AS bruto
+    FROM lotes_almoxarifado lpb_l JOIN materiais_almoxarifado lpb_m ON lpb_m.id = lpb_l.material_id
+    WHERE lpb_l.material_id = ? ORDER BY lpb_l.codigo, lpb_l.id`, [material_id]);
+  const { guardadoNoLoteDeOutras } = require('./requisitionService');
+  const lotes = [];
+  for (const l of linhas) {
+    const saldo = Q.qtd(Number(l.saldo) || 0);
+    if (saldo <= Q.QTD_FOLGA) continue;
+    const guardado = await guardadoNoLoteDeOutras(db, material_id, l.lote_id, null);
+    lotes.push({ lote_id: Number(l.lote_id), codigo: l.codigo, saldo, livre: Q.qtd(Math.max(0, (Number(l.bruto) || 0) - guardado)) });
+  }
+  return { material_id, lotes };
+}
+
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
   livreDoMaterialParaSaida, // Etapa 242 (RN-242.01)
+  lotesParaBloquear, // Etapa 249 (C500)
   reservaVaziaDoLote, // Etapa 220 (B1465)
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
   MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,

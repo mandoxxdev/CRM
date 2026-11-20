@@ -502,11 +502,24 @@ async function bloquearMaterial(db, user, materialId, data = {}) {
   // terceiros - caixa sem reserva; o reservado NAO conta — Fase 2, I-5: a qualidade retem o reservado). Antes nao havia
   // guarda nenhuma: bloquear 10 com fisico 4 passava (P6), e bloquear a caixa prendia a entrega. Pelo 4o argumento,
   // nunca do body; o BLOQUEIO interno (devolucao para quarentena) nao a passa e fica como antes.
+  // Etapa 249 (C500, RN-249.01/.03): o lote opcional, lido como no Desbloquear (B1422): vazio/null/ausente = sem lote (como antes);
+  // nao inteiro positivo -> 400. A guarda "o lote tem livre para bloquear" e do motor (RN-249.02, sob a trava do material).
+  const loteId = loteIdDoCorpo(data);
   await registrarMovimentacao(db, user, {
     material_id: materialId, tipo: 'BLOQUEIO', quantidade, justificativa,
-    motivo: 'Bloqueio avulso',
+    motivo: 'Bloqueio avulso', lote_id: loteId,
   }, { bloqueioAvulso: true });
   return { success: true };
+}
+
+/** Etapa 209 (B1422) / 249: o `lote_id` do corpo do Bloquear/Desbloquear — undefined (sem lote) ou inteiro positivo; senao 400. */
+function loteIdDoCorpo(data) {
+  if (data.lote_id === undefined || data.lote_id === null || data.lote_id === '') return undefined;
+  const loteId = Number(data.lote_id);
+  if (!Number.isInteger(loteId) || loteId <= 0) {
+    throw Object.assign(new Error('lote_id deve ser um número inteiro positivo'), { status: 400 });
+  }
+  return loteId;
 }
 
 async function desbloquearMaterial(db, user, materialId, data = {}) {
@@ -518,13 +531,7 @@ async function desbloquearMaterial(db, user, materialId, data = {}) {
   // Etapa 209 (T4, B1422): a liberacao da quarentena diz de qual lote libera. Vazio/null/ausente = sem lote (o motor so tira do
   // "sem lote", M1); nao inteiro positivo -> 400; inteiro de lote inexistente ou de outro material -> as literais do motor.
   // Sem Zod na rota hoje: a validacao mora aqui (as duas portas — a rota e quem chama o servico — passam por ela).
-  let loteId;
-  if (data.lote_id !== undefined && data.lote_id !== null && data.lote_id !== '') {
-    loteId = Number(data.lote_id);
-    if (!Number.isInteger(loteId) || loteId <= 0) {
-      throw Object.assign(new Error('lote_id deve ser um número inteiro positivo'), { status: 400 });
-    }
-  }
+  const loteId = loteIdDoCorpo(data);
   await registrarMovimentacao(db, user, {
     material_id: materialId, tipo: 'DESBLOQUEIO', quantidade, justificativa,
     motivo: 'Desbloqueio avulso', lote_id: loteId,

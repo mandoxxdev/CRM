@@ -1324,6 +1324,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 249 (C500, RN-249.09) — quanto cada lote pode receber de bloqueio, para a janela Bloquear. So leitura (`visualizar`, como o
+  // bloqueado por lote); a mesma funcao que a guarda do motor le. Quem decide e o motor, sob a trava do material.
+  app.get('/api/almoxarifado/materiais/:id/lotes-para-bloquear', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const r = await lotService.lotesParaBloquear(db, req.params.id);
+      if (!r) return res.status(404).json({ error: 'Material não encontrado' });
+      res.json(r);
+    } catch (e) { handleError(res, e); }
+  });
+
   // Task 3b (extra, Etapa 6): liberacao de vencimento para uso — reaproveita o fluxo de
   // bloqueio/desbloqueio acima (mesma permissao `inspecionar`, mesma exigencia de justificativa).
   // NAO "desvence" o lote: lotService.isVencido continua true depois; so registra que alguem

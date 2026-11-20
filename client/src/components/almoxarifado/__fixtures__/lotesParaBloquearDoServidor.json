@@ -1,0 +1,17 @@
+{
+  "material_id": 18,
+  "lotes": [
+    {
+      "lote_id": 29,
+      "codigo": "L1",
+      "saldo": 4,
+      "livre": 3
+    },
+    {
+      "lote_id": 30,
+      "codigo": "L2",
+      "saldo": 5,
+      "livre": 5
+    }
+  ]
+}

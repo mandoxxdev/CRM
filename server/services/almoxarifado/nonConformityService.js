@@ -1089,6 +1089,15 @@ async function executarLiberacao(db, user, nc, insp, previsto, justificativa, id
       decidido_por_nome = NULL, decidido_em = NULL, execucao_estado = NULL,
       updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'DECIDIDA'`, [id]);
+    // Etapa 249 (C501, RN-249.20): o "Sem lote" nao cobre a reprovacao (parte dela saiu pelo Desbloquear "Sem lote"). A recusa do motor e
+    // a frase da tela de Inspecoes ("Informe o lote…"), que aqui nao tem campo de lote: a NC diz o que houve e o que fazer. Mesmo 400,
+    // depois do mesmo desfazer. Descartado (B): tratar como o pool drenado da RN-11 e gravar a decisao sem liberar (irreversivel).
+    if (e && e.codigo === 'SEM_LOTE_INSUFICIENTE') {
+      throw Object.assign(new Error(`Não é possível liberar pela não conformidade: só ${e.sem_lote} ${e.unidade} do bloqueado está sem lote`
+        + ` e a reprovação tem ${previsto.quantidade} ${e.unidade} — parte dela pode já ter sido liberada pelo Desbloquear`
+        + ` (o resto do bloqueado está em lote: ${e.lotes_texto}). Bloqueie de novo, sem lote, o que falta e aceite outra vez,`
+        + ' ou registre outra decisão'), { status: 400 });
+    }
     throw e;
   }
 

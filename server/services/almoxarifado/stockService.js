@@ -1797,15 +1797,36 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // reservado (disponivel + reservado - caixa): a qualidade continua retendo material reservado — o GESTOR bloqueia
       // mas nao libera reserva de requisicao. O BLOQUEIO sem a opcao (devolucao para quarentena) fica como era.
       const bloqueavel = Q.qtdSql(`${disponivelSql()} + COALESCE(quantidade_reservada,0) - ${caixaSql.caixaSemReservaSql('materiais_almoxarifado.id')}`);
+      const recusaDoMaterial = async () => {
+        const b = await dbGet(db, `SELECT ${bloqueavel} AS n FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
+        return Object.assign(new Error(`Saldo disponível insuficiente para bloquear: ${livreMostrado(b && b.n)} ${material.unidade}`
+          + `${await sufixoDaCaixa(db, material_id, material.unidade)}`), { status: 400 });
+      };
+      // Etapa 249 (C500, RN-249.02/.03/.11): o bloqueio avulso INDICANDO O LOTE. So material com controle de lote e sem serie (nos outros
+      // nenhum leitor respeita o lote do bloqueio); depois o material (a literal de sempre — quem pede mais do que o material tem ve a
+      // mensagem de antes, molde B1420); depois o LIVRE DO LOTE (`lotService.lotesParaBloquear`, a mesma regua da tela). Leitura e claim
+      // dentro da secao do motor (`naTravaDoMaterial`): quem diminui o livre do lote (separacao, entrega, inspecao, remessa, motor) pega a
+      // mesma trava. O claim abaixo continua com o WHERE do material.
+      if (loteIdFinal) {
+        if (Number(material.controle_lote) !== 1 || Number(material.controle_serie) === 1) {
+          throw Object.assign(new Error('Bloquear indicando o lote só vale para material com controle por lote e sem número de série'),
+            { status: 400 });
+        }
+        const b = await dbGet(db, `SELECT ${bloqueavel} AS n FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
+        if (!Q.cabe(quantidade, Number(b && b.n) || 0)) throw await recusaDoMaterial();
+        const paraBloquear = await lotService.lotesParaBloquear(db, material_id);
+        const doLote = paraBloquear && paraBloquear.lotes.find((l) => l.lote_id === Number(loteIdFinal));
+        const livreDoLote = doLote ? doLote.livre : 0;
+        if (!Q.cabe(quantidade, livreDoLote)) {
+          throw Object.assign(new Error(`Saldo livre do lote ${loteResolvido.codigo} insuficiente para bloquear: `
+            + `${Q.qtd(livreDoLote)} ${material.unidade}`), { status: 400 });
+        }
+      }
       const claimBloqueio = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND ${bloqueavel} >= ? ${Q.FOLGA_SQL}
         RETURNING id`, [quantidade, material_id, quantidade]);
-      if (!claimBloqueio) {
-        const b = await dbGet(db, `SELECT ${bloqueavel} AS n FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
-        throw Object.assign(new Error(`Saldo disponível insuficiente para bloquear: ${livreMostrado(b && b.n)} ${material.unidade}`
-          + `${await sufixoDaCaixa(db, material_id, material.unidade)}`), { status: 400 });
-      }
+      if (!claimBloqueio) throw await recusaDoMaterial();
     } else {
       await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [quantidade, material_id]);
@@ -1839,8 +1860,11 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
           + `${Q.qtd(Number(noLote.n))} ${material.unidade}`), { status: 400 });
       }
       const lista = porLote.lotes.map((l) => `${l.codigo}: ${Q.qtd(l.quantidade)}`).join('; ');
+      // Etapa 249 (C501, RN-249.20): o `codigo` e os numeros vao junto para a liberacao pela nao conformidade trocar a frase (a decisao
+      // da NC nao tem campo de lote; "Informe o lote" e a frase da tela de Inspecoes).
       throw Object.assign(new Error(`Informe o lote: só ${Q.qtd(porLote.sem_lote)} ${material.unidade} bloqueado(s) sem lote`
-        + ` — o resto está em lote (${lista})`), { status: 400 });
+        + ` — o resto está em lote (${lista})`), { status: 400, codigo: 'SEM_LOTE_INSUFICIENTE', sem_lote: Q.qtd(porLote.sem_lote),
+        lotes_texto: lista, unidade: material.unidade });
     }
     retencaoAplicada = { bloqueada: -quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
