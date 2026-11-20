@@ -15,6 +15,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const requisitionService = require('../../services/almoxarifado/requisitionService');
+const stockService = require('../../services/almoxarifado/stockService');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 
 let passed = 0; let failed = 0;
@@ -337,6 +338,91 @@ const API = '/api/almoxarifado';
     const ativa = await dbGet(db, 'SELECT COALESCE(ativo,1) a FROM requisicoes_almoxarifado WHERE id = ?', [R]);
     assert.strictEqual(Number(ativa.a), 1);
   });
+
+  await test('[RN-259.06, Fase 2 achado 4] padrao P bloqueada, a entrega tirou de A e B: a exclusao passa (antes: recusa da padrao)', async () => {
+    const m = await material();
+    await entrar(m, 4, { localizacao_destino_id: A.id });
+    await entrar(m, 4, { localizacao_destino_id: B.id });
+    const R = await entregaReal(m, 6);
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [P.id]);
+    let r;
+    try {
+      r = await como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'teste 259' });
+    } finally {
+      await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [P.id]);
+    }
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await linhas(m)).replace(/ ?P259T\/-=0/, ''), 'A259T/-=4 B259T/-=4');
+  });
+
+  // ── Fase 2, achado 1 (B1609): a nova tentativa depois de uma falha no meio nao credita de novo ─────────────────────────
+  const comFalhaNaEntrada = async (n, fn) => {
+    const original = stockService.registrarMovimentacao;
+    let chamadas = 0;
+    stockService.registrarMovimentacao = async (...args) => {
+      if (args[2] && args[2].tipo === 'ENTRADA' && /^Estorno exclusão/.test(args[2].motivo || '') && ++chamadas === n) {
+        throw new Error('falha forcada 259');
+      }
+      return original(...args);
+    };
+    try { return await fn(); } finally { stockService.registrarMovimentacao = original; }
+  };
+  await test('[B1609, Fase 2 achado 1] a 2a ENTRADA falha (A volta, B nao); excluir de novo credita so B -> A 3, B 5, fisico 8 (antes: 11)',
+    async () => {
+      const m = await material({ padrao: A.id });
+      await entrar(m, 3);
+      await entrar(m, 5, { localizacao_destino_id: B.id });
+      const R = await entregaReal(m, 6);
+      const r1 = await comFalhaNaEntrada(2, () => como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'teste 259' }));
+      assert.notStrictEqual(r1.status, 200, `a falha forcada nao falhou: ${JSON.stringify(r1.body)}`);
+      assert.strictEqual(await linhas(m), 'A259T/-=3 B259T/-=2', 'premissa: a 1a ENTRADA ficou');
+      const ativa = await dbGet(db, 'SELECT COALESCE(ativo,1) a FROM requisicoes_almoxarifado WHERE id = ?', [R]);
+      assert.strictEqual(Number(ativa.a), 1, 'premissa: a requisicao continua ativa');
+      await excluir(R);
+      assert.strictEqual(await linhas(m), 'A259T/-=3 B259T/-=5');
+      assert.strictEqual(await fis(m), 8);
+      assert.strictEqual(await entradasDaExclusao(m, R), '-=3 B259T=3');
+    });
+
+  await test('[B1609] duas entregas (duas saidas) e a falha na 2a: excluir de novo nao credita a 1a de novo (fisico 8; antes: 10)', async () => {
+    const m = await material({ padrao: A.id });
+    await entrar(m, 8);
+    const { R, item } = await novaReq(m, 6);
+    const sep = await como('ALMOX').put(`${API}/requisicoes/${R}/separacao`, { itens_separados: [{ item_id: item, quantidade_separada: 6 }] });
+    assert.strictEqual(sep.status, 200, JSON.stringify(sep.body));
+    for (const q of [2, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      const ent = await como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: q }] });
+      assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
+    }
+    const r1 = await comFalhaNaEntrada(2, () => como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'teste 259' }));
+    assert.notStrictEqual(r1.status, 200, JSON.stringify(r1.body));
+    assert.strictEqual(await fis(m), 4, 'premissa: so a 1a ENTRADA (2)');
+    await excluir(R);
+    assert.strictEqual(await fis(m), 8);
+    assert.strictEqual(await linhas(m), 'A259T/-=8');
+  });
+
+  // ── Fase 2, achado 2: com serie, a serie diz de que prateleira veio ────────────────────────────────────────────────────
+  await test('[RN-259.04, Fase 2 achado 2] S1 S2 em A, S3 S4 em B; saida das 4; devolucao de S1 em P; excluir -> A 1 (S2), B 2 (S3, S4)',
+    async () => {
+      const m = await material({ padrao: A.id, serie: 1 });
+      await entrar(m, 2, { series: ['S1', 'S2'] });
+      await entrar(m, 2, { series: ['S3', 'S4'], localizacao_destino_id: B.id });
+      const ids = [];
+      for (const n of ['S1', 'S2', 'S3', 'S4']) ids.push(await sid(m, n)); // eslint-disable-line no-await-in-loop
+      const { R, saida } = await entregaPelaSaida(m, 4, { serie_ids: ids });
+      assert.strictEqual(await linhas(m), 'A259T/-=0 B259T/-=0', 'premissa');
+      const dv = await como('ADMIN').post(`${API}/devolucoes`, { material_id: m, quantidade: 1, motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE',
+        movimentacao_saida_id: saida, localizacao_id: P.id, series: ['S1'] });
+      assert.strictEqual(dv.status, 201, `devolucao de premissa: ${JSON.stringify(dv.body)}`);
+      await excluir(R);
+      assert.strictEqual(await linhas(m), 'A259T/-=1 B259T/-=2 P259T/-=1');
+      const ser = (await dbAll(db, `SELECT s.numero, COALESCE(l.codigo,'-') loc FROM series_almoxarifado s
+        LEFT JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id WHERE s.material_id = ? AND s.status = 'EM_ESTOQUE'
+        ORDER BY s.numero`, [m])).map((x) => `${x.numero}:${x.loc}`).join(' ');
+      assert.strictEqual(ser, 'S1:P259T S2:A259T S3:B259T S4:B259T');
+    });
 
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);

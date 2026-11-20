@@ -45,17 +45,27 @@
   (inativo, bloqueado, tipo não permitido): a parte dela vai para o destino de hoje (origem do livro se aceita, senão a padrão) — **B1607**.
   Partes com o mesmo destino viram uma ENTRADA só.
 - **RN-259.03** Líquido menor que o registrado (devolução viva da saída): distribuído na ordem do claim — **B1608**. Cenário: *A* 3, *B* 5,
-  entrega de 6, devolução de 2 para Estoque (em *P*), excluir → *A* 3, *B* 1 (e *P* 2 da devolução).
-- **RN-259.04** Material com série: as séries ENTREGUE da saída são repartidas entre as ENTRADAs — primeiro as que têm o endereço gravado
-  igual ao da parte, depois as demais na ordem do número. Cada ENTRADA leva as suas (quantidade = número de séries). Quantidade não inteira
-  numa parte com série → a saída faz como hoje (uma ENTRADA só).
+  entrega de 6, devolução de 2 para Estoque (em *P*), excluir → *A* 3, *B* 3 (*B* recebe 1), *P* 2 (da devolução). *(Corrigido na Fase 2,
+  achado 3: esta linha dizia "*A* 3, *B* 1" — **estava errada**; *B* tinha 2 e recebe 1.)*
+- **RN-259.04** Material com série: **(Fase 2, achado 2)** a quantidade de cada linha vem primeiro das séries ENTREGUE da saída com o
+  endereço gravado igual ao da linha (até o que saiu dela); só o que sobra segue a ordem do claim (B1608 — para a série, a série diz de que
+  prateleira veio). Depois as séries são repartidas: primeiro, em todas as partes, as de endereço igual; depois as demais na ordem do número.
+  Cenário: S1 S2 em *A*, S3 S4 em *B*; saída das 4; devolução de S1 em *P*; excluir → *A* 1 (S2), *B* 2 (S3, S4) — pela ordem do claim
+  seria *A* 2 com S3. Quantidade não inteira numa parte com série → a saída faz como hoje (uma ENTRADA só).
 - **RN-259.05** Saída **sem registro** (entrega anterior à 257, ou o registro falhou) e o ramo legado (o livro não soma o entregue): como hoje.
-- **RN-259.06** O que não muda: as recusas e mensagens da exclusão (séries que não batem, a guarda da 116, a C251, endereço); todas as partes
+- **RN-259.06** O que não muda: as recusas e mensagens da exclusão (séries que não batem, a guarda da 116, a C251, endereço — **menos uma**,
+  Fase 2 achado 4: a padrão bloqueada com a entrega tirada de outras prateleiras que aceitam deixa de recusar, porque nada vai para a
+  padrão; antes, *"⟨material⟩: Localização ⟨P⟩ está bloqueada"*); a ENTRADA da linha da padrão vai sem destino no livro, como antes
+  (Fase 2, achado 5); todas as partes
   validadas antes da primeira ENTRADA; o motivo, a referência, a OS da saída e os vínculos de cada ENTRADA; `estornos` na resposta (por item);
   o UPDATE final e a regra B447/B452 (a gravação que perde depois de mexer em estoque **não** tenta de novo: 409); a liberação das reservas.
-- **RN-259.07** (declarado, anterior) Falha **inesperada** numa ENTRADA depois de outra já gravada (disco, erro do motor) deixa o que já entrou
-  creditado com a requisição ativa — a exclusão nunca teve transação (as validações rodam antes para que isto só aconteça fora do previsto). A
-  etapa multiplica as ENTRADAs por saída, não muda a regra.
+- **RN-259.07** (**reescrita na Fase 2, achado 1 — B1609**; dizia "a etapa multiplica as ENTRADAs por saída, não muda a regra" e **estava
+  errada**: excluir de novo creditava tudo outra vez, e com uma ENTRADA por prateleira o caso deixou de ser raro) Falha **inesperada** numa
+  ENTRADA depois de outra já gravada (disco, erro do motor) deixa o que já entrou creditado com a requisição ativa — a exclusão não tem
+  transação. A **nova tentativa** pula, por material e na ordem fixa das partes, o que as ENTRADAs vivas desta exclusão (`requisicao_id`,
+  tipo `ENTRADA`, motivo *"Estorno exclusão requisição ⟨número⟩"*) já creditaram. Cenário: entrega de 6 de *A* e *B*, a 2ª ENTRADA falha
+  (*A* 3, *B* 2, ativa); excluir de novo → *A* 3, *B* 5, físico 8 (antes: 11). Vale também para duas entregas (antes: 10). Material com série
+  fica de fora: a nova tentativa já é recusada pela validação das séries (as que voltaram não estão mais Entregue) — não credita de novo.
 
 ## Contratos
 
@@ -72,6 +82,25 @@ d.saldo_id ORDER BY ordem`. Sem linhas → uma parte como hoje. Com linhas: `res
 (existe, mesmo material, `lote_id IS g.lote_id`, endereço não nulo, ativo, `motivoRecusaEndereco` nulo) → parte com destino = endereço; senão
 a fatia vai para o destino de hoje. `resto` que sobrar → destino de hoje. Partes agrupadas por destino. Séries repartidas (RN-259.04). O
 resto do fluxo (validação de endereço de todas as partes, ENTRADAs, UPDATE) como está.
+
+## Fase 2 (revisor fresco, 20/11) — 2 importantes, 4 menores, 1 anterior, 1 ruído
+
+Sondas executadas numa cópia de `server/` (`git archive HEAD`) com um protótipo do desenho. Cobertos e medidos: FEFO por lote (uma saída
+por lote, registro certo), duas entregas parciais e dois itens do mesmo material, saída com origem da separação (uma linha, como hoje), linha
+registrada que é a padrão; trava: nada novo, a leitura fica na seção.
+
+1. **[importante]** A falha no meio das ENTRADAs: excluir de novo creditava tudo outra vez (11 em vez de 8; com duas entregas, já antes: 10).
+   → **consertado**: a nova tentativa pula o que já entrou (RN-259.07, **B1609**); testes [B1609].
+2. **[importante]** Série com devolução: a ordem do claim dava a *A* a série que veio de *B*. → **consertado**: a série primeiro
+   (RN-259.04); teste [RN-259.04, Fase 2 achado 2]. *(Sem devolução, a entrega pode ter baixado linhas que não batem com o endereço das
+   séries — a Etapa 252; a exclusão devolve as quantidades às linhas e as séries pelo endereço quando cabem — declarado, D (259).)*
+3. **[menor]** O cenário da RN-259.03 estava errado → corrigido acima, dizendo que estava errado.
+4. **[menor]** Uma recusa some (a padrão bloqueada) → RN-259.06 e B1607; teste [RN-259.06, Fase 2 achado 4].
+5. **[menor]** O livro passaria a gravar a padrão por id → a linha da padrão vai `undefined` (já no T1).
+6. **[menor]** T3: os mesmos 4 arquivos que o T1 já tinha virado (`entregaAutomaticaPeloLote` passou de volta com o 5).
+7. **[anterior]** Devolução de 2, exclusão (físico 8), estorno pelo livro da entrada da devolução → físico 6: a exclusão já tinha descontado
+   a devolução. → declarado **C552**.
+8. **[ruído]** A44 (c) soma por material; o alerta de mínimo roda uma vez por ENTRADA.
 
 ## Tasks
 

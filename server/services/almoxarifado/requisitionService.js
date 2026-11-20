@@ -3397,30 +3397,51 @@ async function fatiasDaSaidaPorLinha(db, material, saida, liquido, destinoDeHoje
       if (destino && !f.destino) f.destino = destino;
     } else porChave.set(k, { quantidade: Q.qtd(q), destino });
   };
-  let resto = Q.qtd(liquido);
+  const linhas = [];
   for (const b of baixadas) {
-    const q = Q.qtd(Math.min(Number(b.q) || 0, resto));
-    if (!(q > Q.QTD_FOLGA)) continue;
     let destino = destinoDeHoje;
+    let aceita = null;
     if (b.linha != null && Number(b.material_id) === Number(material.id) && (b.lote_id || null) === (saida.lote_id || null)
       && b.localizacao_id != null) {
       // eslint-disable-next-line no-await-in-loop
       const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [b.localizacao_id]);
       // a linha da padrao vai como `undefined` (o motor resolve a padrao): o livro da ENTRADA fica como antes (destino nulo)
       if (loc && Number(loc.ativo) === 1 && !stockService.motivoRecusaEndereco(loc, material, 'destino')) {
-        destino = Number(b.localizacao_id) === Number(material.localizacao_padrao_id) ? undefined : Number(b.localizacao_id);
+        aceita = Number(b.localizacao_id);
+        destino = aceita === Number(material.localizacao_padrao_id) ? undefined : aceita;
       }
     }
-    somar(destino, q);
+    linhas.push({ q: Number(b.q) || 0, destino, aceita, dado: 0 });
+  }
+  let resto = Q.qtd(liquido);
+  // Fase 2 (achado 2): com serie, a serie diz de que prateleira a peca veio — cada linha recebe primeiro as series ENTREGUE desta saida
+  // com o endereco gravado igual ao dela (ate o que saiu dela); so o que sobra segue a ordem do claim (B1608). Sem isto, devolvida uma
+  // serie de A, a ordem do claim dava a A a serie que veio de B.
+  let locDe = null;
+  if (series) {
+    const ender = await dbAll(db, `SELECT numero, localizacao_id FROM series_almoxarifado
+      WHERE material_id = ? AND numero IN (${series.map(() => '?').join(',')})`, [material.id, ...series]);
+    locDe = new Map(ender.map((x) => [x.numero, Number(x.localizacao_id) || 0]));
+    const porLoc = new Map();
+    for (const n of series) porLoc.set(locDe.get(n) || 0, (porLoc.get(locDe.get(n) || 0) || 0) + 1);
+    for (const l of linhas) {
+      if (l.aceita == null) continue;
+      const n = Math.min(Math.floor(l.q + Q.QTD_FOLGA), porLoc.get(l.aceita) || 0, Math.floor(resto + Q.QTD_FOLGA));
+      if (n <= 0) continue;
+      l.dado += n; porLoc.set(l.aceita, porLoc.get(l.aceita) - n); resto = Q.qtd(resto - n);
+    }
+  }
+  for (const l of linhas) {
+    const q = Q.qtd(Math.min(l.q - l.dado, resto));
+    if (!(q > Q.QTD_FOLGA)) continue;
+    l.dado = Q.qtd(l.dado + q);
     resto = Q.qtd(resto - q);
   }
+  for (const l of linhas) if (l.dado > Q.QTD_FOLGA) somar(l.destino, l.dado);
   if (resto > Q.QTD_FOLGA) somar(destinoDeHoje, resto);
   const fatias = [...porChave.entries()].map(([k, f]) => ({ ...f, k }));
   if (!series) return fatias.map(({ quantidade, destino }) => ({ quantidade, destino }));
   if (fatias.some((f) => Math.abs(f.quantidade - Math.round(f.quantidade)) > Q.QTD_FOLGA)) return comoAntes;
-  const ender = await dbAll(db, `SELECT numero, localizacao_id FROM series_almoxarifado
-    WHERE material_id = ? AND numero IN (${series.map(() => '?').join(',')})`, [material.id, ...series]);
-  const locDe = new Map(ender.map((x) => [x.numero, Number(x.localizacao_id) || 0]));
   const livres = [...series].sort();
   for (const f of fatias) f.series = [];
   for (const f of fatias) {
@@ -3570,6 +3591,27 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
       if (liquido > 1e-9) partes.push({ material, nome, quantidade: liquido, destino: undefined, lote_id: undefined });
     }
   }
+  // Etapa 259 (Fase 2, achado 1; B1609): a exclusao nao tem transacao — uma falha inesperada numa ENTRADA depois de outra deixava a ja
+  // gravada creditada com a requisicao ativa, e excluir de novo creditava TUDO de novo (entrega de 6 de A e B, a 2a ENTRADA falha, excluir
+  // de novo: fisico 11 em vez de 8). Antes desta etapa uma entrega simples era uma ENTRADA so; com uma por prateleira o caso ficou comum.
+  // Aqui a nova tentativa pula, por material e na ordem fixa das partes (saidas por id, linhas na ordem do claim), o que as ENTRADAs vivas
+  // desta exclusao ja creditaram. Material com serie fica de fora: as series que ja voltaram nao estao mais Entregue e a validacao acima
+  // ja recusa (nao credita de novo).
+  const motivoDaExclusao = `Estorno exclusão requisição ${reqRow.numero}`;
+  const jaEntrou = await dbAll(db, `SELECT material_id, SUM(quantidade) AS q FROM movimentacoes_almoxarifado
+    WHERE requisicao_id = ? AND tipo = 'ENTRADA' AND motivo = ? AND COALESCE(cancelado, 0) = 0 GROUP BY material_id`,
+  [requisicaoId, motivoDaExclusao]);
+  for (const j of jaEntrou) {
+    let pular = Q.qtd(Number(j.q) || 0);
+    for (const parte of partes) {
+      if (!(pular > Q.QTD_FOLGA)) break;
+      if (Number(parte.material.id) !== Number(j.material_id) || parte.series) continue;
+      const p = Q.qtd(Math.min(parte.quantidade, pular));
+      parte.quantidade = Q.qtd(parte.quantidade - p);
+      pular = Q.qtd(pular - p);
+    }
+  }
+  for (let i = partes.length - 1; i >= 0; i--) if (!(partes[i].quantidade > Q.QTD_FOLGA)) partes.splice(i, 1);
   for (const parte of partes) {
     try {
       // eslint-disable-next-line no-await-in-loop
@@ -3591,7 +3633,7 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
         localizacao_destino_id: parte.destino,
         lote_id: parte.lote_id,
         ...(parte.series ? { series: parte.series } : {}),
-        motivo: `Estorno exclusão requisição ${reqRow.numero}`,
+        motivo: motivoDaExclusao,
         referencia: reqRow.os_referencia || reqRow.numero,
         justificativa: justificativa || motivo,
         requisicao_id: requisicaoId,
