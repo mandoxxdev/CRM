@@ -343,6 +343,24 @@ const API = '/api/almoxarifado';
     assert.strictEqual(await linhas(m), 'A257T/-=0 B257T/-=2');
   });
 
+  await test('[C550, documenta] Saida, Ajuste para menos, estorno da Saida e depois o do Ajuste: o SET absoluto deixa a padrao negativa',
+    async () => {
+      // Achado da Fase 2: o estorno do AJUSTE sem localizacao volta o total ao saldo_anterior (valor fixo, D (256) 3) e grava o residuo na
+      // padrao. Estornado DEPOIS do estorno de uma Saida mais antiga, o total fica errado (2, o certo seria 8) — como antes da 257 — e,
+      // como as pecas da Saida agora voltam a B e nao a padrao, o residuo deixa A negativa num material sem negativo (antes: A 1, B 1).
+      // Este cenario afirma o defeito para o conserto (a proxima tarefa do plano) o virar.
+      const m = await material({ padrao: A.id });
+      await entrar(m, 3);
+      await entrar(m, 5, { localizacao_destino_id: B.id });
+      const s = await sair(m, 6); // A 0, B 2
+      const aj = (await v2({ material_id: m, tipo: 'AJUSTE', quantidade: 1 })).body.id; // A 0, B 1
+      await estornar(s); // A 3, B 4
+      assert.strictEqual(await linhas(m), 'A257T/-=3 B257T/-=4', 'premissa');
+      await estornar(aj);
+      assert.strictEqual(await fis(m), 2);
+      assert.strictEqual(await linhas(m), 'A257T/-=-2 B257T/-=4');
+    });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
