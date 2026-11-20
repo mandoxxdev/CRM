@@ -131,9 +131,11 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
   // ajuste com endereco) — funcoes puras, sem require novo; o teste do ciclo abaixo segue igual, agora com 6 exports.
   // Etapa 128 (C209): e lerCaixaComReserva (a caixa coberta por reserva, para o aviso da retencao) — so le o banco (db.js, que o
   // modulo ja usava), sem require novo; 7 exports.
+  // Etapa 249 (Fase 5): e bloqueavelAvulsoSql (a expressao do bloqueavel do bloqueio avulso, movida do motor) — so SQL, sem require
+  // novo; 8 exports.
   await test('[97 RN-00] o modulo exporta exatamente caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa (e, desde a 104, descreverRequisicoes, avisoCaixaDoAjuste; desde a 128, lerCaixaComReserva)', async () => {
     exigeModulo();
-    assert.deepStrictEqual(Object.keys(caixaSql).sort(), ['avisoCaixaDoAjuste', 'caixaSemReservaSql', 'descreverRequisicoes', 'lerCaixa', 'lerCaixaComReserva', 'livreDeCaixaSql', 'sufixoCaixa']);
+    assert.deepStrictEqual(Object.keys(caixaSql).sort(), ['avisoCaixaDoAjuste', 'bloqueavelAvulsoSql', 'caixaSemReservaSql', 'descreverRequisicoes', 'lerCaixa', 'lerCaixaComReserva', 'livreDeCaixaSql', 'sufixoCaixa']);
   });
 
   await test('[97 RN-00] requisitionService.caixaSemReservaSql e o MESMO do caixaSql (movido, re-exportado)', async () => {
@@ -151,7 +153,7 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
       const r = spawnSync(process.execPath, ['--trace-warnings', '-e', codigo], { cwd: server, encoding: 'utf8' });
       assert.strictEqual(r.status, 0, `${ordem.join(' -> ')}: saiu ${r.status} ${r.stderr}`);
       assert.ok(!/circular|non-existent property/i.test(r.stderr), `${ordem.join(' -> ')}: aviso de ciclo: ${r.stderr}`);
-      assert.strictEqual(r.stdout.trim().split('\n').pop(), '7', `${ordem.join(' -> ')}: exports parciais: ${r.stdout}`);
+      assert.strictEqual(r.stdout.trim().split('\n').pop(), '8',`${ordem.join(' -> ')}: exports parciais: ${r.stdout}`);
     }
   });
 
