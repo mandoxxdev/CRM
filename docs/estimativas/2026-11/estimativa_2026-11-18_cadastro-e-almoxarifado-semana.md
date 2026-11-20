@@ -31,8 +31,8 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 13 | Busca de entrega na tela Devoluções | 1h15 | tela + servidor (o C477 dizia ~1h30 na régua antiga) | 1h15 | C477, B1367 | `returnService.js:486-495` (páginas de 30, cursor `antes_de`) | — | — | — |
 | 14 | Bloquear material indicando o lote | 1h30 | motor (BLOQUEIO com lote; regra "o lote tem livre para bloquear") | 1h30 | C500, B1419 (Etapa 249, `2026-11-19-almoxarifado-etapa249-bloquear-indicando-o-lote.md`) | `extended.js:1302` (`/materiais/:id/bloquear`); Etapa 209 já grava lote no BLOQUEIO da devolução — **confirmado na Fase 0 da 249** (o serviço não lia `lote_id`; teste vermelho 0/14) | 0,675 h (rateio da Etapa 249: 0,9 h medida no horas.js 19/11, grupo C500 — os commits do pacote citam C500 —, pelos 1h30 + 30 min estimados) | 45 min | `9ef32392`, `55b78b37`, `7fd033c9`, `20ed25bb`, `df6054f3` |
 | 15 | Mensagem própria na liberação pela NC | 30 min | frase | 30 min | C501 (Etapa 249) | `nonConformityService.js` `executarLiberacao` `:1047` — **confirmado na Fase 0 da 249** (a aceitação recebia *"Informe o lote…"*) | 0,225 h (rateio da Etapa 249, como o item 14) | 30 min | `9ef32392`, `df6054f3` |
-| 16 | Entrega diz quantas peças do lote estão bloqueadas | 45 min | fatia de tela | 45 min | C514, B1440 | janela de entrega (Etapa 218 já mostra quanto pode sair do lote) | — | — | — |
-| 17 | Sugestão da fila lê a conta do lote preso | 45 min | fatia (o C517 diz "pequeno") | 45 min | C517 | dica "pegar em XB-01, lote L1" da Fila | — | — | — |
+| 16 | Entrega diz quantas peças do lote estão bloqueadas | 45 min | fatia de tela | 45 min | C514, B1440 (Etapa 250, `2026-11-19-almoxarifado-etapa250-entrega-e-fila-sabem-do-lote-preso.md`) | janela de entrega (Etapa 218 já mostra quanto pode sair do lote) — **confirmado na Fase 0 da 250** (o automático não dizia nada; sem campo novo de servidor) | 0,35 h (rateio da Etapa 250: 0,7 h medida no horas.js 19/11, grupos C514 + C517 — o fechamento cita os dois e caiu no C514 —, pelos 45 min + 45 min estimados) | 30 min | `9c85f727`, `122d7e68`, `a0fbec62` |
+| 17 | Sugestão da fila lê a conta do lote preso | 45 min | fatia (o C517 diz "pequeno") | 45 min | C517 (Etapa 250) | dica "pegar em XB-01, lote L1" da Fila — **confirmado na Fase 0 da 250** (teste vermelho: a dica mandava pegar 2 no lote com 1 livre e a separação recusava) | 0,35 h (rateio da Etapa 250, como o item 16) | 30 min | `69c3f581`, `6dfb6905`, `a0fbec62` |
 | 18 | Ajuste com lote limita a baixa ao saldo do lote | 1h15 | motor (o C475 dizia ~1h30 na régua antiga) | 1h15 | C475, B1357 | ramo de Ajuste do `registrarMovimentacao`; só pela movimentação nova (integração) | — | — | — |
 | 19 | Frase própria para o excesso de dois itens na mesma prateleira | 30 min | frase | 30 min | C497, B1415 | recusa de saldo da entrega (Etapa 208) | — | — | — |
 | 20 | Teto dividido entre itens que disputam o mesmo lote | 1h | fatia de tela (molde: separação, Etapa 127) | 1h | C489, B1395 | detalhe e Fila | — | — | — |
@@ -94,6 +94,9 @@ cancelada no meio do estorno fazendo soltar a reserva de outra, e a reserva recr
 existia (a da entrega) e a frase era só a troca da mensagem. A revisão do plano trocou a régua da entrega pelas parcelas cruas (com ela a peça
 reprovada parecia livre) e restringiu o lote a material com controle por lote e sem série; a revisão final limitou o livre de cada lote pelo
 do material — corrigidos com teste. Medido 0,9 h para os dois (todos os commits citam C500; o grupo C501 não casa sozinho) → 45 min + 30 min.
+**Etapa 250 (itens 16 e 17, 19/11):** não revisados (a medição confirmou os dois). 30 min abaixo do estimado no total: a frase usa números
+que a tela já recebia e a sugestão reaproveitou a conta da separação. A revisão final achou a frase falando da saída automática quando as
+peças saíam do endereço da separação, corrigida com teste. Medido 0,7 h para os dois → 30 min + 30 min.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 

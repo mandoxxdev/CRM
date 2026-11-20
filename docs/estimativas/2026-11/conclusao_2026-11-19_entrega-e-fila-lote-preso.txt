@@ -1,0 +1,7 @@
+*Concluído — Entrega diz as peças presas do lote e sugestão da fila de separação*
+_19/11/2026_
+
+16. Entrega diz quantas peças do lote estão bloqueadas — estimado 45 min · realizado 30 min
+17. Sugestão da fila de separação lê a conta do lote preso — estimado 45 min · realizado 30 min
+
+*Total: estimado 1h30 · realizado 1h*
