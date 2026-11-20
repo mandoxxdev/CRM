@@ -1,0 +1,9 @@
+*Planejamento — estorno de um ajuste depois de outros movimentos*
+_20/11/2026_
+
+*1. Estornar um ajuste desfaz só a diferença que ele fez*
+Hoje, quando um ajuste de saldo total é estornado depois de outros movimentos do mesmo material (uma entrada, uma saída ou o estorno de outra movimentação), o total volta ao número de antes do ajuste e esses outros movimentos somem da conta: por exemplo, o total fica 2 quando o certo seria 8, e a posição padrão pode ficar negativa num material que não aceita saldo negativo. Com a alteração, o estorno passa a desfazer só a diferença que o ajuste aplicou, mantendo os movimentos feitos depois; quando isso deixaria o material negativo, o estorno é recusado com o aviso de saldo já consumido. Sem movimento depois do ajuste, o resultado é o mesmo de hoje.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
