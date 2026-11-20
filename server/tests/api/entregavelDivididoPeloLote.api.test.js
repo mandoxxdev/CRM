@@ -263,6 +263,54 @@ process.on('exit', (code) => {
     assert.ok(r.body.error.includes('não serve mais'), r.body.error);
   });
 
+  await test('[RN-251.14, Fase 5] C518 com lote impedido e nada fora do L1 que cubra: o teto e o que a origem deixa sair (2), sem apagar o um clique — e o um clique de 2 entrega (antes da correcao: janela no automatico com 2, recusado)', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 5, 'L1'); await entrar(m, A01.id, 2, 'L3'); await vencer(m, 'L3');
+    await quarentena(m, 1, 'L1', B01.id);
+    const { R, ids } = await reqDireta(m, 3);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
+    await remessa(m, 'L1', 2);
+    const d = await detalhe(R);
+    assert.deepStrictEqual([d[0].quantidade_entregavel, d[0].saldo_entregavel_lote, d[0].saldo_entregavel_lote_proprio,
+      d[0].lote_separacao_nao_cobre], [2, 2, 2, false], JSON.stringify(d[0]));
+    assert.deepStrictEqual((await fila(R)).itens.map((x) => x.entregavel), [2]);
+    const r = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2, origem_automatica: true }]);
+    assert.strictEqual(r.status, 400, 'o automatico de 2 a porta recusa (a guarda que fica no L1)');
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }]));
+    assert.deepStrictEqual(await livro(R, m), ['L1:2']);
+  });
+
+  await test('[RN-251.14, Fase 5] o automatico com a guarda solta (3) nao cobre a caixa (4): vale o que cabe com a guarda inteira (1), menor que a origem (2) -> teto 2 pelo um clique; o automatico de 3 a porta recusa', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 6, 'L1'); await entrar(m, P01.id, 1, 'L2'); await entrar(m, A01.id, 2, 'L3'); await vencer(m, 'L3');
+    await quarentena(m, 1, 'L1', B01.id);
+    const { R, ids } = await reqDireta(m, 4);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
+    await remessa(m, 'L1', 3);
+    const d = await detalhe(R);
+    assert.deepStrictEqual([d[0].quantidade_entregavel, d[0].saldo_entregavel_lote, d[0].lote_separacao_nao_cobre], [2, 2, false],
+      JSON.stringify(d[0]));
+    const r = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3, origem_automatica: true }]);
+    assert.strictEqual(r.status, 400, 'o automatico de 3 (o teto sem a guarda que fica) a porta recusa');
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }]));
+    assert.deepStrictEqual(await livro(R, m), ['L1:2']);
+  });
+
+  await test('[RN-251.14, Fase 5] com irmao guardado em outro lote (S6): X (L1 nao cobre) 2 e Y 2 pelo um clique -> 200', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 5, 'L1'); await entrar(m, P01.id, 2, 'L2'); await entrar(m, A01.id, 2, 'L3'); await vencer(m, 'L3');
+    await quarentena(m, 1, 'L1', B01.id);
+    const { R, ids } = await reqDireta(m, 3, 2);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') },
+      { item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: P01.id, lote_id: await loteId(m, 'L2') }]);
+    await remessa(m, 'L1', 2);
+    const d = await detalhe(R);
+    assert.deepStrictEqual(d.map((x) => [x.quantidade_entregavel, x.lote_separacao_nao_cobre]), [[2, false], [2, false]], JSON.stringify(d));
+    assert.deepStrictEqual((await fila(R)).itens.map((x) => x.entregavel), [2, 2]);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }, { item_id: ids[1], quantidade_atendida: 2 }]));
+    assert.deepStrictEqual((await livro(R, m)).sort(), ['L1:2', 'L2:2']);
+  });
+
   await test('[RN-251.13] caixa sem origem guardada e material sem lote: lote_separacao_nao_cobre false', async () => {
     const m = await material({ lote: 0 });
     await entrar(m, B01.id, 3);

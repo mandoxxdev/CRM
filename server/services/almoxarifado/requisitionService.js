@@ -348,9 +348,11 @@ function normalizarItem(item) {
     saldo_entregavel_lote_proprio: Q.qtd(Math.min(tetoLote, Math.max(0, num(item.teto_entrega_lote_proprio)))) } : {};
   // Etapa 251 (RN-251.11; C518): a parte guardada num lote com peca presa que nao a deixa sair — a tela apaga o um clique e abre a janela
   // no automatico. So quando a rota do detalhe o calculou (aditivo).
+  // Fase 5 (RN-251.14): so quando o entregavel passa do que a origem deixa sair — ate la o um clique (tudo da origem) passa.
+  const naoCobre = Number(item.lote_separacao_nao_cobre) === 1 && entregavel > num(item.lote_separacao_pode_sair) + Q.QTD_FOLGA;
   const camposNaoCobre = Object.prototype.hasOwnProperty.call(item, 'lote_separacao_nao_cobre') ? {
-    lote_separacao_nao_cobre: Number(item.lote_separacao_nao_cobre) === 1,
-    ...(Number(item.lote_separacao_nao_cobre) === 1 ? { lote_separacao_pode_sair: Q.qtd(num(item.lote_separacao_pode_sair)) } : {}),
+    lote_separacao_nao_cobre: naoCobre,
+    ...(naoCobre ? { lote_separacao_pode_sair: Q.qtd(num(item.lote_separacao_pode_sair)) } : {}),
   } : {};
   return {
     ...resto,
@@ -2308,10 +2310,25 @@ async function tetoDaEntregaPeloLote(db, item, origemLida) {
   // parte) nao conta — o caminho que a tela oferece e o automatico (Etapa 231; RN-251.12), em que a guarda do item solta (`parteQueFica` 0
   // com a caixa inteira) e nada sai da origem. Antes o teto somava a parte e o detalhe oferecia o que a porta recusava (2 com "nada sai").
   const origem = origemLida !== undefined ? origemLida : await origemDaSeparacaoNaoServe(db, item);
-  if (origem && (origem.impedido || origem.naoCobre)) {
+  if (origem && origem.impedido) {
     fica.set(Number(item.id), 0);
     const cabeAuto = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, fica);
     return { teto: Q.qtd(cabeAuto), proprio: 0 };
+  }
+  if (origem && origem.naoCobre) {
+    // Etapa 251 (Fase 5, RN-251.14): a guarda do item esta num lote que PODE sair. O automatico so solta a guarda inteira entregando a caixa
+    // inteira; abaixo dela fica `parte − troca` guardado no lote e a conferencia o desconta. Entao: cobre a caixa com a guarda solta -> esse
+    // e o teto; senao, so o que cabe com a guarda inteira (vale para qualquer quantidade). E o um clique da origem leva ate `podeSair` (tudo da
+    // guarda): o maior dos dois caminhos vale — o da origem com `proprio` = ele (nao disputa o automatico), e a tela so apaga o um clique
+    // quando o numero passa do que a origem deixa sair (`normalizarItem`). Antes o teto era o automatico com a guarda solta: 2 com caixa 3, e a
+    // entrega automatica de 2 recusava ("faltam 1") enquanto o um clique de 2, que a tela apagava, passava.
+    fica.set(Number(item.id), 0);
+    let auto = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, fica);
+    if (auto + Q.QTD_FOLGA < caixa) {
+      auto = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, new Map([[Number(item.id), parte]]));
+    }
+    if (num(origem.podeSair) + Q.QTD_FOLGA >= auto) return { teto: Q.qtd(origem.podeSair), proprio: Q.qtd(origem.podeSair) };
+    return { teto: Q.qtd(auto), proprio: 0 };
   }
   if (parte > Q.QTD_FOLGA) { // o um clique da entrega: a planejada sai inteira (min(qty, parte) = parte) — saiDaOrigem, guarda que fica 0
     origemPorItem.set(item.id, { origemId: Number(item.origem_separacao_id), loteId: item.lote_separacao_id ? Number(item.lote_separacao_id) : null,
