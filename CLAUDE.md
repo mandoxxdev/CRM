@@ -146,8 +146,9 @@ da seção, antes de soltar (fora dela, uma Saída do mesmo material cabia entre
 desfaz **subtraindo** o que acabou de creditar tem de desfazer sob a trava. Desde a Etapa 118 (C238, C243) isso vale para
 **todos** os ramos do estorno: uma seção só vai do efeito ao livro (entrada, saída, ajuste, transferência, bloqueio,
 desbloqueio), com o desfazer dos efeitos **e do claim** dentro dela — o ramo de entrada, que desfaz somando, entrou mesmo
-assim, porque as séries dele trocavam fora da trava (uma devolução avulsa no meio deixava físico 4 com 2 séries). Fora da
-seção ficam a liberação e a recriação das reservas da chegada e o recálculo (pegam a mesma trava). E o **bloquear/desbloquear
+assim, porque as séries dele trocavam fora da trava (uma devolução avulsa no meio deixava físico 4 com 2 séries). Desde a Etapa
+248 (B1564, C525/C534) a liberação e a recriação das reservas da chegada rodam **dentro** da trava, depois do claim (esta linha
+dizia que ficavam fora e estava errada desde a 248); fora fica só o recálculo. E o **bloquear/desbloquear
 série** (`mudarStatusSerie`) pega a trava do material desde a 118 (RN-10): fora dela, bloquear uma série no meio do estorno
 de entrada fazia o estorno pular a série e responder 200 com séries e estoque sem bater. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
 de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devolução. A régua "viva" mora em
