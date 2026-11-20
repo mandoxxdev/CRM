@@ -17,10 +17,14 @@ Régua: fatia do almoxarifado de tela com um campo novo na leitura (estimativa-d
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Fila de separação com filtro por setor, projeto e localização | 1h15 | fatia de tela + leitura (E253 0,6 h; E254 1,2 h) | 1h15 | Etapa 255 (`2026-11-20-almoxarifado-etapa255-fila-separacao-filtros.md`) | fatia do almoxarifado (tela) | — | — | — |
+| 1 | Fila de separação com filtro por setor, projeto e localização | 1h15 | fatia de tela + leitura (E253 0,6 h; E254 1,2 h) | 1h15 | Etapa 255 (`2026-11-20-almoxarifado-etapa255-fila-separacao-filtros.md`) | fatia do almoxarifado (tela) | 0,8 h (horas.js 20/11, grupo "Etapa 255|filtros na Fila") | 1h | `9df48668`, `ac79f814`, `7941ba7f`, `56fd4b51`, `f13b0b4a`, `cbe4dc76` |
 
 ## Medição no fechamento
 
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-20 --ate 2026-11-21 --grupos "Filtros da fila=Etapa 255|filtros na Fila"
 ```
+
+**Etapa 255 (20/11):** não revisada. Medido 0,8 h (48 min, arredondado para 1h) — 15 min abaixo do estimado: a fatia ficou na tela e numa
+leitura a mais da fila, sem motor. A revisão do plano achou 7 pontos (todos antes do código) e a revisão final, 1 menor corrigido e 3 testes
+que faltavam. A suíte do servidor inteira (~1 h de relógio, sem commit no meio) não entra no horas.js.
