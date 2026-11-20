@@ -292,10 +292,14 @@ const planejadaPendenteImpedida = (item, rows, saldosFalharam = false) => {
 };
 // Etapa 231 (C532, B1520): os itens que a entrega de um clique mandaria com a parte planejada num lote impedido (a porta aplica a planejada e
 // recusa a entrega inteira). Pelo detalhe: o botão não abre janela nem busca saldos.
+// Etapa 251 (Fase 5, RN-251.15): o servidor marca pelo item sozinho; com a divisão entre irmãos a quantidade pode caber no que a origem
+// deixa sair (`lote_separacao_pode_sair`) — aí o um clique e a planejada passam, e o automático, abaixo da caixa, seria recusado.
+const naoCobreNaQuantidade = (item, quantidade) => item.lote_separacao_nao_cobre === true
+  && (parseFloat(quantidade) || 0) > (Number(item.lote_separacao_pode_sair) || 0) + 1e-9;
 const itensEntregaDiretaImpedida = (itens) => {
   const qtds = quantidadesIniciaisEntrega(itens);
   return (itens || []).filter((i) => (parseFloat(qtds[i.id]) || 0) > 0 && temPlanejada(i) && pendentePlanejado(i) > 1e-9
-    && (i.lote_separacao_esta_impedido === true || i.lote_separacao_nao_cobre === true));
+    && (i.lote_separacao_esta_impedido === true || naoCobreNaQuantidade(i, qtds[i.id])));
 };
 // Etapa 251 (RN-251.12; C518): a parte guardada num lote cuja peça presa não a deixa sair (`lote_separacao_nao_cobre` do detalhe) — a entrega
 // de um clique sai da origem da separação e é recusada ("não serve mais"); o caminho é a janela, no automático.
@@ -885,11 +889,11 @@ const RequisicoesList = () => {
       }
       // Etapa 251 (RN-251.12; C518): a parte guardada num lote cuja peça presa não a deixa sair — a planejada seria recusada ("não serve
       // mais"); a janela abre no automático (o que a recusa ensina), dito ao servidor.
-      if (item.lote_separacao_nao_cobre === true) {
+      const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
+      if (naoCobreNaQuantidade(item, qtd)) {
         novas[item.id] = { valor: '', codigo: '', automatico: true };
         return;
       }
-      const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
       // Etapa 196 (RN-196.11): o servidor aplica a planejada só até a PARTE da origem (o resto da caixa sai no automático);
       // pré-selecionar acima dela mandaria estrito o que lá não está separado e o servidor recusaria.
       if (qtd > pendentePlanejado(item)) {

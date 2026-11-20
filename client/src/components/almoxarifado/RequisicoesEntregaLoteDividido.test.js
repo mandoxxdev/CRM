@@ -183,6 +183,36 @@ describe('Etapa 251: a caixa separada de um lote que não deixa sair a parte (C5
     expect(fraseUmClique().textContent).toContain('da 1 PC separada dele, nenhuma pode sair (peça presa no lote)');
   });
 
+  test('[RN-251.15, Fase 5] o irmão anterior divide e o item fica dentro do que o lote deixa sair: o um clique acende e manda pela origem', async () => {
+    // Y (sem origem) leva 2 do teto do lote; X (caixa 3 de XB-01/L1, só 2 podem sair) fica com 2 — a origem cobre os 2.
+    requisicao = { ...REQ_BASE, itens: [
+      item(1, { quantidade_solicitada: 2, quantidade_separada: 2, quantidade_entregavel: 2, saldo_entregavel: 2, saldo_entregavel_proprio: 2,
+        saldo_entregavel_lote: 2, saldo_entregavel_lote_proprio: 0 }),
+      item(2, { saldo_entregavel_lote: 4, saldo_entregavel_lote_proprio: 0, origem_separacao_id: 2, lote_separacao_id: 7,
+        origem_separacao_codigo: 'XB-01', lote_separacao_codigo: 'L1', quantidade_origem_separacao: 3, lote_separacao_esta_impedido: false,
+        lote_separacao_nao_cobre: true, lote_separacao_pode_sair: 2 }),
+    ] };
+    await renderizar();
+    expect(fraseUmClique()).toBeNull();
+    expect(botaoPorTexto(UM_CLIQUE).disabled).toBe(false);
+    await clicar(UM_CLIQUE);
+    expect(payload()).toEqual([{ item_id: 1, quantidade_atendida: 2 }, { item_id: 2, quantidade_atendida: 2 }]);
+  });
+
+  test('[RN-251.15, Fase 5] na janela, o mesmo: X abre na planejada (2 cabem na origem)', async () => {
+    requisicao = { ...REQ_BASE, itens: [
+      item(1, { quantidade_solicitada: 2, quantidade_separada: 2, quantidade_entregavel: 2, saldo_entregavel: 2, saldo_entregavel_proprio: 2,
+        saldo_entregavel_lote: 2, saldo_entregavel_lote_proprio: 0 }),
+      item(2, { saldo_entregavel_lote: 4, saldo_entregavel_lote_proprio: 0, origem_separacao_id: 2, lote_separacao_id: 7,
+        origem_separacao_codigo: 'XB-01', lote_separacao_codigo: 'L1', quantidade_origem_separacao: 3, lote_separacao_esta_impedido: false,
+        lote_separacao_nao_cobre: true, lote_separacao_pode_sair: 2 }),
+    ] };
+    await renderizar();
+    await clicar(JANELA);
+    expect(inputs().map((i) => i.value)).toEqual(['2', '2']);
+    expect(container.querySelector('#entrega-origem-2').value).toBe('2:7');
+  });
+
   test('[RN-251.13] o lote cobre: o um clique acende, sem frase, e a janela pré-seleciona a planejada', async () => {
     requisicao = NAO_COBRE(2, { lote_separacao_nao_cobre: false, lote_separacao_pode_sair: undefined });
     await renderizar();
