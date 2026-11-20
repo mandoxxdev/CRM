@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-20):** **Etapa 252 fechada** (**o endereço na troca para o automático, a frase de dois itens na mesma
+> **Onde o desenvolvimento está (2026-11-20):** **Etapa 253 fechada** (**a busca da entrega na tela Devoluções e o Ajuste com lote que não
+> deixa o lote negativo** — o campo **Buscar entrega** acha a entrega por requisição, OS ou data (**C477**); o Ajuste que indica o lote, pela
+> integração, é recusado quando deixaria o lote negativo ou abaixo do que está preso nele, com o mínimo aceitável, e o estorno também
+> (**C475**). Itens 13 e 18 da estimativa de 18/11; decisões **B1586** a **B1592**; limitação **D (253)**; verificação **F (253)**; sem
+> consulta antes do deploy).
+> **Próxima:** os itens 24 a 27 da estimativa de 18/11 — **esperam resposta**; o caminho reversível de cada um está no fim do plano da 253.
+> *(Antes, 2026-11-20:)* **Etapa 252 fechada** (**o endereço na troca para o automático, a frase de dois itens na mesma
 > prateleira e a peça com série que respeita a separação do outro item** — o bloco **Substituições** diz *"saiu de B-02 (automático)"*
 > (**C495**); a recusa de dois itens no mesmo endereço diz que o resto sai para a outra peça (**C497**); a peça com série sai da prateleira
 > onde está, sem levar a peça que o outro item separou (**C493**). Itens 22, 19 e 23 da estimativa de 18/11; decisões **B1581** a **B1585**;
@@ -4844,7 +4850,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15587,6 +15593,37 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1586 (NOVA, da Etapa 253; decisão do agente) — a busca casa a OS pelo número que a tela mostra.** A lista de entregas mostra *"OS 12"*
+com o número interno da OS; a busca *12* ou *OS 12* casa esse mesmo número (e também o número da requisição que contém *12*). **Descartado:**
+casar o número do cadastro de OS (`numero_os`, ex. *OS-2026-0012*) — a tela não o mostra, e a busca acharia linhas sem dizer por quê.
+**Reversível.** `f393437b`.
+
+**B1587 (NOVA, da Etapa 253; decisão do agente) — a busca roda ao clicar em Buscar (ou Enter) e desmarca a entrega escolhida.** **Descartado:**
+buscar enquanto digita (um pedido por tecla) e manter a entrega escolhida (ela pode não estar no resultado, e a devolução citaria uma entrega
+que a pessoa não está vendo). **Reversível.** `f393437b`.
+
+**B1588 (NOVA, da Etapa 253; decisão do agente) — o Ajuste com lote que passaria do lote é recusado, não dividido.** A recusa diz o mínimo
+aceitável e manda ajustar sem indicar o lote para baixar mais. **Descartado:** baixar o lote até zerar e tirar o resto do "sem lote" — o
+histórico grava um lote só por ajuste, e o estorno não saberia devolver a divisão. **Reversível.** `521f6651`.
+
+**B1589 (NOVA, da Etapa 253, Fase 2; decisão do agente) — o Ajuste com lote não desce o lote abaixo do que está preso nele.** Preso = o
+separado na caixa de requisições daquele lote (com ou sem reserva) + em inspeção + bloqueado no lote + reprovado + em terceiros — a mesma
+régua do **Bloquear indicando o lote**. Só vale quando o ajuste **desce** o lote. **Descartado:** só o "não negativo" (a caixa da requisição
+ficava presa: a entrega recusava com *"não serve mais"*, medido na revisão do plano). **Reversível.** `521f6651`.
+
+**B1590 (NOVA, da Etapa 253; decisão do agente) — o Ajuste e o estorno com lote tiram das prateleiras do lote.** Quando o lote está em outra
+prateleira, a baixa sai dela — primeiro a parte que não está separada numa requisição (revisão final), a prateleira livre antes da
+bloqueada —, como o Ajuste sem lote já fazia com as prateleiras sem lote (que ainda não poupa a caixa: **C548**). O
+estorno de um ajuste assim devolve o lote na posição padrão, não na prateleira de onde saiu (**D (253)**). **Descartado:** gravar de onde a
+baixa saiu, para o estorno devolver no mesmo lugar (coluna nova no histórico — escopo maior). **Reversível.** `521f6651`.
+
+**B1591 (NOVA, da Etapa 253, Fase 2; decisão do agente) — o estorno do Ajuste com lote tem a mesma guarda.** **Descartado:** deixar o estorno
+como antes (o lote negativo voltava pelo estorno, medido: *LB* −5). **Reversível.** `521f6651`.
+
+**B1592 (NOVA, da Etapa 253; decisão do agente; mantém a B1357) — a movimentação antiga (v1) continua sem lote no Ajuste.** O motivo da
+B1357 (não abrir o **C475** por mais uma porta) deixou de existir, mas ninguém pediu o lote no Ajuste pela v1 e passar a repassá-lo mudaria a
+resposta de quem já a chama. **Descartado:** reabrir agora. **Reversível.**
+
 **B1576 (NOVA, da Etapa 251; decisão do agente; revê o descartado da B1395) — o lote bom é dividido entre os itens na tela e na Fila, não no
 número de cada item.** Com lote impedido no material, o detalhe manda o teto de cada item **sozinho** (o mesmo de antes) e a parte dele que sai
 da própria prateleira separada (`saldo_entregavel_lote`, `saldo_entregavel_lote_proprio`, aditivos); a janela de entrega e o botão de um clique
@@ -19562,6 +19599,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Quem alcança:** só a integração — a tela **Movimentações** não mostra o campo de lote no Ajuste. **O que fazer:** ajustar sem citar o
      lote. A movimentação antiga
      **não** leva o lote no Ajuste (**B1357**). Conserto (se valer): o Ajuste com lote limitar a baixa ao saldo do lote — ~1h30, motor.
+     *(**Resolvido na Etapa 253** — `521f6651`, `bffd526a`: o Ajuste com lote que deixaria o lote negativo, ou abaixo do que está preso nele, é recusado
+     com o mínimo aceitável; a baixa sai das prateleiras do lote; o estorno tem a mesma guarda — **B1588** a **B1591**.)*
 476. **NOVO (da Etapa 203, Fase 0; o comportamento é anterior) — o cancelamento não apaga o local separado.** Cancelar uma requisição grava
      *Cancelado* sem mexer nos itens. **Nenhum efeito:** o cancelamento **recusa** requisição com material na caixa (é preciso devolver à
      prateleira ou entregar antes), e devolver à prateleira já apaga o local quando a caixa zera; só uma cancelada **antiga** com caixa (de
@@ -19571,6 +19610,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      uma entrega muito antiga, é preciso clicar **"Carregar entregas mais antigas"** até ela aparecer (30 por clique). **O que fazer:** clicar
      até chegar; a entrega aparece com a data, a requisição ou OS e quem retirou. Conserto (se valer): um campo de busca somado ao "carregar
      mais", sem mudar a ordem nem a página (**B1367**) — ~1h30, tela e servidor.
+     *(**Resolvido na Etapa 253** — `f393437b`, `289cea8c`: o campo **Buscar entrega** por requisição, OS ou data — **B1586**, **B1587**.)*
 478. **NOVO (da Etapa 205, Fase 0 e Fase 2; o comportamento é anterior) — as três portas que distribuem para quem espera reservam saldo de
      lote impedido.** A chegada da nota, a liberação da inspeção ou da não conformidade e a OS encerrada reservam para as requisições que
      esperam o que entrou livre — inclusive o que entrou num lote **bloqueado** por falta de certificado (material não crítico: não fica em
@@ -19957,6 +19997,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      bloqueado nele.** Com *L1* 4 todo bloqueado no lote e *L2* 4, estornar a entrada do *L1* passa: o *L1* fica com 0 e o bloqueado continua
      dizendo *L1 4* (o total bloqueado cai sobre as peças do *L2*). **O que fazer:** antes de estornar a entrada de um lote, desbloquear o que
      está bloqueado nele (**Desbloquear Material**, escolhendo o lote). Conserto: o estorno da entrada conferir o bloqueado do lote (não medido).
+548. **NOVO (da Etapa 253, revisão final; já era assim desde a Etapa 51) — o Ajuste sem lote, para baixo, pode tirar da prateleira onde está a
+     caixa separada de uma requisição.** O Ajuste sem localização que baixa o total tira das prateleiras sem lote, a maior primeiro — e a maior
+     pode ser a da peça separada. Medido: *A* com 4 (separadas de *A* numa requisição) e *B* com 3, Ajuste do total para 4 → *A* 1, *B* 3, e a
+     entrega da requisição é recusada com *"a origem da separação (A) não serve mais …"*. **O que fazer:** entregar escolhendo de onde sai, ou
+     ajustar pela prateleira (Ajuste com localização). O Ajuste **com lote** já não faz isso (Etapa 253: tira primeiro o que não está separado).
+     Conserto: as mesmas duas passadas no Ajuste sem lote (~45 min, motor).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -21313,6 +21359,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(253) A busca da entrega e o Ajuste com lote, o que ficou de fora.** (1) A busca casa a OS pelo número que a tela mostra, não pelo do
+  cadastro de OS (**B1586**); a `busca` repetida na chamada vira o texto "a,b". (2) O estorno de um Ajuste que tirou de outra prateleira do lote
+  devolve o lote na posição padrão, não na prateleira de onde saiu (**B1590**) — uma transferência do lote a partir daquela prateleira pode
+  ser recusada depois; o mesmo acontecia com o Ajuste sem lote desde a Etapa 51. (3) O Ajuste de inventário sem lote, com o lote em outra
+  prateleira, ainda pode deixar o "sem lote" negativo (anterior; o inventário não indica lote). (4) Se o registro do Ajuste com lote falhar
+  depois de drenar as prateleiras do lote, as prateleiras não voltam (o mesmo do Ajuste sem lote; só o estorno tem o desfazer).
 - **(252) A troca para o automático, a frase da outra peça e a peça com série, o que ficou de fora.** (1) A saída automática continua sem
   endereço no histórico de movimentações; só o registro da troca o diz (**B1581**). (2) A peça com série sem separação de outro item no
   caminho continua saindo da linha de sempre (a padrão, depois a maior) — o saldo da prateleira e as séries dela podem não bater, como antes
@@ -22911,6 +22963,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(253) Nenhum clique foi dado.** A busca foi provada pela rota real em `devolucaoBuscaEntrega` e pela tela nos testes de
+`DevolucoesAlmoxarifado`; o Ajuste com lote e o estorno pelas rotas reais em `ajusteComLoteNaoNegativa` (o Ajuste com lote só existe pela
+integração). Vale 5 minutos: a parte 1 do roteiro da seção da 253 (a busca). **E a suíte do servidor inteira (`npm run test:api`) não foi medida nesta etapa:** a
+rodada foi interrompida por falta de memória da máquina; rodaram um por um os 57 arquivos que tocam o Ajuste e as entregas devolvíveis
+(verdes, depois de um teste antigo ajustado). Rode a suíte inteira antes do deploy.
 
 **(252) Nenhum clique foi dado.** O registro da troca, a frase e a saída da peça com série foram provados pelas rotas reais da entrega e do
 detalhe em `substituicaoAutomaticaEndereco`, `entregaFraseDoIrmao` e `entregaSerieRespeitaGuarda`, e o texto do bloco pelos testes da tela
@@ -43889,12 +43947,77 @@ primeiro (1, série **S-B1**, o segundo com 0) → no extrato do material, *A-01
   podem continuar não batendo (**B1583**, **D (252)**).
 - Depois de transferir saldo entre prateleiras, o endereço da série não é usado (**B1584**).
 
+## Etapa 253 — A busca da entrega na tela Devoluções e o Ajuste com lote que não deixa o lote negativo (2026-11-20)
+
+Duas correções. Na tela **Devoluções**, achar a entrega de onde a peça saiu exigia clicar em *"Carregar entregas mais antigas"* de 30 em 30
+até ela aparecer — num material que sai todo dia, dezenas de cliques para uma entrega de dois meses atrás (**C477**). Agora há um campo de
+busca por número da requisição, OS ou data. E o **Ajuste** que indica o lote — só pela integração, porque a tela **Movimentações** não mostra
+lote no Ajuste — baixava a diferença da linha do lote mesmo sem saldo nela: o total do material ficava certo, mas o relatório **Saldo por
+lote** mostrava o lote negativo (**C475**). Agora ele recusa, dizendo o mínimo aceitável, e não tira do lote o que está separado numa
+requisição ou preso nele. Itens 13 e 18 da estimativa de 18/11. Decisões do agente: **B1586** a **B1592**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Devoluções → Nova devolução**, material com 33 entregas: para achar a da requisição *REQ-2026-0101*, clicar em *"Carregar entregas mais antigas"* até ela aparecer | Campo **Buscar entrega**: digitar *0101* e **Buscar** traz só as entregas dessa requisição; *10/03/2026* traz as daquele dia; *OS 12* as da OS 12 |
+| Entrega com requisição e OS: o rótulo mostrava só a requisição | *"REQ-2026-0101 · OS 12 · …"* |
+| Ajuste (integração) para 1 indicando o lote *LB*, com *LB* 5 e 3 sem lote: gravava; **Saldo por lote** com *LB* −2 | Recusado: *"Ajuste para 1 UN indicando o lote LB deixaria o lote com saldo negativo (-2 UN): fora do lote LB há 3 UN. Para baixar só este lote, o novo total tem de ser de no mínimo 3 UN; para baixar mais, faça o ajuste sem indicar o lote."* |
+| Ajuste indicando o lote com 4 separadas dele numa requisição: gravava, e a entrega da requisição era recusada (*"não serve mais"*) | Recusado, com *"… abaixo do que está preso nele (separada na caixa de requisição: 4; mínimo do lote: 4 UN) …"* |
+| O lote em outra prateleira: o Ajuste deixava a prateleira dizendo 5 e a linha do lote na posição padrão com −4 | A baixa sai da prateleira do lote (5 → 1), primeiro do que não está separado numa requisição; nenhuma linha do lote negativa |
+| Estorno do Ajuste com lote depois de uma Entrada sem lote: *LB* −5 | Recusado: *"Não é possível estornar: o estorno volta o total para 8 UN, mas fora do lote LB já há 13 UN — o lote LB ficaria com saldo negativo (-5 UN). Faça um novo ajuste em vez de estornar."* |
+| Ajuste sem lote; Ajuste com localização; Ajuste na tela; material que permite saldo negativo; a lista de entregas sem busca | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**.
+
+**1. A busca da entrega (RN-253.01 a .06).** Material *DEV-253* com várias **Saídas** (algumas de requisição). **Devoluções → Nova devolução**
+→ **Material** = *DEV-253*. Acima de **Entrega de origem** aparece o campo *"Buscar entrega: requisição, OS ou data (DD/MM/AAAA)"*. Digite parte
+do número de uma requisição (ex.: *0101*) → **Buscar** (ou Enter — a devolução **não** é enviada) → a lista mostra só as entregas daquela
+requisição, a mais nova primeiro; a entrega escolhida antes é desmarcada. Digite a data de uma das saídas (*DD/MM/AAAA*) → só as daquele dia
+(pelo horário de Brasília). *OS 12* (ou *12*) → as entregas da OS 12. Busca sem resultado → *"Nenhuma entrega deste material para ⟨texto⟩."*.
+**Limpar** volta à lista de sempre; trocar de material também limpa. *31/02/2026* → *"Data inválida na busca: 31/02/2026 — use DD/MM/AAAA"*;
+mais de 60 caracteres → *"Busca muito longa — use até 60 caracteres"*. Com mais de 30 resultados, *"Carregar entregas mais antigas"*
+continua dentro da busca.
+
+**2. O Ajuste com lote (RN-253.10 a .13) — só pela integração** (`POST /api/almoxarifado/movimentacoes/v2`, tipo *AJUSTE*, com `lote_id` ou
+`lote`, sem localização). Material *AJL-253* sem controle por lote: **Entrada** de 5 com lote *LB* e 3 sem lote (total 8). Ajuste para 1
+indicando *LB* → *"Ajuste para 1 UN indicando o lote LB deixaria o lote com saldo negativo (-2 UN): fora do lote LB há 3 UN. Para baixar só
+este lote, o novo total tem de ser de no mínimo 3 UN; para baixar mais, faça o ajuste sem indicar o lote."* Nada muda. Ajuste para 3 indicando
+*LB* → grava; *LB* com 0 e 3 sem lote. Com uma requisição separada de *LB* (4 na caixa), o mínimo sobe: *"… deixaria o lote com 1 UN, abaixo do
+que está preso nele (separada na caixa de requisição: 4; mínimo do lote: 4 UN): fora do lote LB há 3 UN. Para baixar só este lote, o novo
+total tem de ser de no mínimo 7 UN; …"*. O que está bloqueado no lote, em inspeção, reprovado ou em terceiros também conta (*"bloqueada no
+lote: 2"*). Com o lote noutra prateleira, a baixa sai da prateleira do lote — primeiro o que não está separado numa requisição, a prateleira
+livre antes da bloqueada. Material que permite
+saldo negativo: grava como antes.
+
+**3. O estorno (RN-253.14).** O mesmo material: Ajuste para 6 indicando *LB* (*LB* 3), depois **Entrada** de 10 sem lote; **Estornar** o Ajuste
+→ *"Não é possível estornar: o estorno volta o total para 8 UN, mas fora do lote LB já há 13 UN — o lote LB ficaria com saldo negativo (-5 UN).
+Faça um novo ajuste em vez de estornar."* (o estorno do Ajuste volta o total ao de antes — regra de sempre). O estorno que cabe põe o lote de
+volta no total certo — na posição padrão, mesmo que a baixa tenha saído de outra prateleira (**D (253)**).
+
+### O que esta etapa NÃO cobre
+
+- A busca casa a OS pelo número que a tela mostra (*OS 12*), não pelo número do cadastro de OS (**B1586**).
+- O Ajuste com lote continua só pela integração; a tela **Movimentações** não mostra lote no Ajuste, e a movimentação antiga (v1) continua
+  sem lote no Ajuste (**B1592**).
+- O estorno de um Ajuste que tirou de outra prateleira devolve o lote na posição padrão, não na prateleira de onde saiu (**D (253)**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 253 entregue (2026-11-20):** **a busca da entrega na tela Devoluções** e **o Ajuste com lote que não deixa o lote negativo**
+  (itens 13 e 18 da estimativa de 18/11; **C477** e **C475** resolvidos). A busca casa o que a tela mostra (**B1586**) e só ao clicar,
+  limpando a entrega escolhida (**B1587**); o Ajuste com lote recusa em vez de dividir a baixa (**B1588**), com o piso do que está preso no
+  lote (**B1589**), drena a prateleira do lote (**B1590**), e o estorno tem a mesma guarda (**B1591**); a v1 continua sem lote no Ajuste
+  (**B1592**). Commits `f393437b`, `521f6651`, `289cea8c`, Fase 5 `bffd526a`, `8c495ce0` (teste antigo) e o fechamento. Aviso novo **C548** (anterior). **O que é seu:** as **B1586** a **B1592** (reversíveis);
+  a limitação **(253)** em D e a verificação **(253)** em F. Sem consulta antes do deploy. **Próxima:** os itens 24 a 27 da estimativa de 18/11
+  (esperam resposta; o caminho reversível de cada um está no plano da 253).
 
 - **Etapa 252 entregue (2026-11-20):** **o endereço na troca para o automático**, **a frase de dois itens na mesma prateleira** e **a peça
   com série que respeita a separação do outro item** (itens 22, 19 e 23 da estimativa de 18/11; **C495**, **C497** e **C493** resolvidos). O

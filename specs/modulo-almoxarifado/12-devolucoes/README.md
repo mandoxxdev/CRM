@@ -477,7 +477,8 @@ descartado: não resolve a entrega nunca devolvida, que tem saldo cheio para sem
 - [x] **Tela: "Carregar entregas mais antigas"**, *"Carregando…"*, *"Não há entregas mais antigas deste material."*, toast *"Erro ao
   carregar entregas mais antigas"*; guarda por geração na troca de material; reabrir depois de devolver começa da página 1 (RN-204.06 a
   .08; B1364) — `280c4d5e`.
-- [ ] **Fora: busca por número da requisição, OS ou data** — **C477** (B1367). O cursor sozinho já torna toda entrega alcançável.
+- [x] ~~**Fora: busca por número da requisição, OS ou data** — **C477** (B1367).~~ **Feita na Etapa 253** (`f393437b`, `289cea8c`) —
+  ver a seção "Etapa 253", no fim.
 - [ ] **Fora: a tela não foi clicada no navegador** — só Jest (letra F (204) das novidades).
 
 Continua 🟢. Testes: `devolucaoEntregasAntigas.api.test.js` (7), `DevolucoesAlmoxarifado.test.js` (8 novos, 24 no total).
@@ -516,3 +517,23 @@ saída **citada**: a devolução **avulsa** sem lote de material sem controle de
 Fase 0 da 243) — não estava escrito em lugar nenhum.
 
 Continua 🟢. Teste: `devolucaoLoteDasSeries.api.test.js` (19).
+
+## Etapa 253 — a busca da entrega (2026-11-20)
+
+Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa253-busca-de-entrega-e-ajuste-com-lote.md` (item 13 da estimativa de 18/11; C477).
+
+- [x] **`GET /devolucoes/saidas-elegiveis` aceita `busca`** (opcional, aditivo): data *DD/MM/AAAA* ou *AAAA-MM-DD* = o dia no fuso do
+  negócio (`DATE(created_at, diaLocal.modificadorDoFuso())`, a régua dos relatórios); outro texto = o número da requisição contém (LIKE com
+  escape, `%` e `_` literais) **ou** a OS como a tela a mostra (*OS 12*, *12*); a mesma ordem, a página de 30 e o cursor `antes_de` dentro do
+  filtro; sem busca, byte a byte a de antes (RN-253.01 a .04) — `f393437b`.
+- [x] **Recusas** *"Busca muito longa — use até 60 caracteres"* e *"Data inválida na busca: ⟨texto⟩ — use DD/MM/AAAA"*, julgadas antes do
+  cursor (RN-253.05) — `f393437b`. A `busca` repetida na query vira o texto "a,b" (como o `antes_de`; RN-253.05 b, declarado).
+- [x] **Tela: campo Buscar entrega + Buscar (e Enter) + Limpar**; buscar limpa a entrega escolhida; o "Carregar entregas mais antigas" segue a
+  busca; *"Nenhuma entrega deste material para ⟨texto⟩."*; trocar de material limpa; recusa vira toast e a lista fica (RN-253.06) —
+  `f393437b`.
+- [x] **O rótulo da entrega mostra a OS também quando há requisição** (*"REQ-x · OS 12"*; Fase 2, achado 8) — `289cea8c`.
+- [ ] **Fora: buscar pelo número da OS do cadastro de OS** (`numero_os`) — a tela mostra o número interno da OS (*OS 12*), e a busca casa o
+  que a tela mostra (**B1586**).
+- [ ] **Fora: a tela não foi clicada no navegador** — só Jest (letra F (253) das novidades).
+
+Continua 🟢. Testes: `devolucaoBuscaEntrega.api.test.js` (9), `DevolucoesAlmoxarifado.test.js` (+7, 31 no total).

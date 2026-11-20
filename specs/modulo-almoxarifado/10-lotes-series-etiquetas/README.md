@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 253 (2026-11-20, `521f6651`, Fase 5 `bffd526a`): o Ajuste com lote não deixa o lote negativo (C475; B1588–B1592, C548).** O
+> AJUSTE sem localização citando o lote é recusado quando deixaria o lote negativo ou, ao descer, abaixo do que está preso nele; a baixa
+> drena as prateleiras do lote (poupando a caixa separada); o estorno tem a mesma guarda. Ver a seção "Etapa 253", no fim. Continua 🟢.
+
 > **+ Etapa 250 (2026-11-19, tela `9c85f727`, Fase 5 `122d7e68`): a janela de entrega diz as peças presas do lote no automático (C514;
 > B1572, B1573).** Ver a seção "Etapa 250", no fim. Continua 🟢.
 
@@ -1277,7 +1281,7 @@ Plano: `docs/superpowers/plans/2026-11-05-almoxarifado-etapa202-rota-antiga-resp
   com `superRefine`), **depois** de tipo e motivo — `00ec247e` (B1351).
 - [x] **`null`, vazio e só espaços = sem lote** (o livro grava `lote` NULL) — `00ec247e` (B1352).
 - [x] **`AJUSTE` não repassa nada** (Fase 2): o AJUSTE com lote deixa a linha do lote negativa no motor (C475, documentado por teste pela
-  v2) — `00ec247e` (B1357).
+  v2) — `00ec247e` (B1357). *(O C475 foi consertado no motor na Etapa 253 — `521f6651`; a v1 continua sem repassar lote no AJUSTE, B1592.)*
 - [x] **Resposta 201:** as 9 chaves de antes + `aviso_validade` só quando o motor avisa — `00ec247e` (B1356, mudada na Fase 2).
 - [x] **C474 consertado** (`stockService.js`, a comparação do dono do lote por `Number`): `material_id` em texto com o lote do próprio
   material dava "pertence a outro material" (vale também para `/transferencias`) — `00ec247e`.
@@ -1289,6 +1293,7 @@ Plano: `docs/superpowers/plans/2026-11-05-almoxarifado-etapa202-rota-antiga-resp
 **Correção à vista:** a linha da v1 na tabela "O alcance REAL de `controle_lote`" e o parágrafo "Não confundir com a rota v1" diziam que a
 v1 não carrega lote — **valia até a 202** (e era o C458); anotados com o certo. A Fase 0 do plano dizia que o AJUSTE com lote na v1 seria
 "igual à v2" como coisa boa — **estava errado** (a v2 deixa a linha do lote negativa, C475); a v1 não repassa lote no AJUSTE.
+*(Desde a Etapa 253 a frase "a v2 deixa a linha do lote negativa" vale só para material que permite saldo negativo: o motor recusa.)*
 
 Testes: `movimentacaoV1Lote.api.test.js` (37), `movimentacaoV1LoteIntegracao.api.test.js` (14); os 16 arquivos que fazem `POST` na v1
 verdes sem mudança. Continua 🟢.
@@ -1600,3 +1605,25 @@ Sem mudança de servidor: consome `lote_livre`, `lote_bloqueado`, `lote_inspecao
   automático foi escolhido de fato — `122d7e68`.
 
 Testes: `RequisicoesEntregaLotePreso.test.js` (6; 3/5 vermelhos antes, o da Fase 5 vermelho antes; 6 sabotagens, todas caem). Continua 🟢.
+
+## Etapa 253 — o Ajuste com lote não deixa o lote negativo (2026-11-20)
+
+Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa253-busca-de-entrega-e-ajuste-com-lote.md` (item 18 da estimativa de 18/11; C475).
+
+- [x] **Recusa do AJUSTE/AJUSTE_INVENTARIO sem localização com lote** quando o lote ficaria negativo (o lote depois = novo total − fora do
+  lote), com o mínimo aceitável na literal; depois da guarda de retenção e da das séries; material que permite negativo fica como antes
+  (RN-253.10, .12) — `521f6651`.
+- [x] **O piso do preso no lote** (caixa viva no lote, em inspeção, bloqueado no lote, reprovado, em terceiros — a régua da 249), só quando o
+  ajuste desce o lote (RN-253.10 b; Fase 2, achado 1) — `521f6651`; as três parcelas de documento com teste — `bffd526a`.
+- [x] **O drenar com lote** (`syncSaldoLocalizacaoPadrao`): as linhas do lote nos outros endereços, bloqueadas por último (RN-253.11; Fase 2,
+  achado 6) — `521f6651`; **poupando a caixa separada** (duas passadas; Fase 5, achado 1 — regressão da etapa) — `bffd526a`.
+- [x] **O estorno do AJUSTE com lote**: a mesma guarda e o mesmo drenar, com as drenadas no desfazer (`compensarLinhasClaim`) (RN-253.14; Fase
+  2, achado 2) — `521f6651`; o piso no texto do estorno com teste — `bffd526a`.
+- [x] **O teste da 202 "[C475, documenta]"** passou a afirmar a recusa — `521f6651`.
+- [x] **O teste (20) da Etapa 51** (`saidaPorLocalizacao.api.test.js`) também afirmava o ajuste de lote que deixa o lote negativo — passou a
+  afirmar a recusa e a regra dele com um ajuste que cabe — `8c495ce0`.
+- [ ] **Fora:** o estorno devolve o lote na linha padrão, não no endereço drenado (Fase 2, achado 3; B1590); o livro falhando no AJUSTE de ida
+  não desfaz o drenar (anterior: nada do AJUSTE sem localização é desfeito); o AJUSTE sem lote ainda drena a caixa separada (C548,
+  anterior); a v1 continua sem lote no AJUSTE (B1592); a tela Movimentações não mostra lote no Ajuste.
+
+Continua 🟢. Teste: `ajusteComLoteNaoNegativa.api.test.js` (18).

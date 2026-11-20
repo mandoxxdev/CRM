@@ -5,14 +5,20 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 252 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 253 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 252 fechada — 2026-11-20.** **De qual prateleira saiu a troca automática, a frase de dois itens na
+> **O desenvolvimento parou aqui: Etapa 253 fechada — 2026-11-20.** **A busca da entrega na tela Devoluções e o Ajuste com lote que não
+> deixa o lote negativo.** A janela **Nova devolução** tem o campo **Buscar entrega** (requisição, OS ou data); o Ajuste que indica o lote,
+> pela integração, é recusado quando deixaria o lote negativo ou abaixo do que está preso nele, e o estorno dele também. **Sem consulta
+> antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 253). **Onde parou, exatamente:** a **253 está fechada**; a fila da
+> estimativa de 18/11 acabou, fora os itens 24 a 27, que **esperam resposta** (o caminho reversível de cada um está no fim do plano da 253).
+>
+> *(Antes:)* **Etapa 252 fechada — 2026-11-20.** **De qual prateleira saiu a troca automática, a frase de dois itens na
 > mesma prateleira e a peça com série que respeita a separação do outro item.** O bloco **Substituições** diz *"saiu de B-02 (automático)"*;
 > a recusa de dois itens no mesmo endereço diz *"… mas 2 saem dali nesta entrega para outra peça desta requisição; sobra 1 …"*; e a peça com
 > série sai da prateleira onde está, sem levar a peça que o outro item separou. **Sem consulta antes do deploy.** **Nenhum clique foi dado**
@@ -7397,6 +7403,48 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 253 — A busca da entrega na tela Devoluções e o Ajuste com lote que não deixa o lote negativo (ENTREGUE — 2026-11-20)
+
+**O que mudou, em uma frase:** a janela **Nova devolução** ganhou um campo para buscar a entrega por requisição, OS ou data; e o Ajuste que
+indica o lote (feito por integração) não deixa mais o lote com saldo negativo nem leva o que está separado numa requisição.
+
+**O problema que ela resolve.** Para devolver uma peça de uma entrega antiga, era preciso clicar em *"Carregar entregas mais antigas"* de 30
+em 30 até a entrega aparecer. E o Ajuste indicando o lote baixava a diferença do lote mesmo sem saldo nele: o total ficava certo, mas o
+relatório **Saldo por lote** mostrava o lote negativo.
+
+| Antes | Agora |
+|---|---|
+| Achar a entrega da *REQ-2026-0101* entre 33: clicar em *"Carregar entregas mais antigas"* | Digitar *0101* no campo **Buscar entrega** e **Buscar** |
+| Entrega com requisição e OS: só a requisição no rótulo | *"REQ-2026-0101 · OS 12 · …"* |
+| Ajuste para 1 indicando o lote *LB* (5 no lote, 3 sem lote): **Saldo por lote** com *LB* −2 | Recusado, com o mínimo: *"… o novo total tem de ser de no mínimo 3 UN; …"* |
+| Ajuste indicando o lote com peças dele separadas numa requisição: a entrega era recusada depois | Recusado: *"… abaixo do que está preso nele (separada na caixa de requisição: 4; …"* |
+| A lista sem busca; o Ajuste sem lote; o Ajuste na tela | **Igual** |
+
+**Roteiro de teste manual (≈6 min) — a busca:**
+
+1. Entre como **Administrador do almoxarifado**. Use um material com várias **Saídas** registradas, algumas por requisição (na base local,
+   o material com mais entregas tem 33).
+2. **Devoluções → Nova Devolução** → **Material** = esse material. **Confira:** acima de **Entrega de origem** aparece o campo *"Buscar entrega:
+   requisição, OS ou data (DD/MM/AAAA)"* e o botão **Buscar**.
+3. Escolha uma entrega qualquer na lista. Digite parte do número de uma das requisições (ex.: os últimos 4 dígitos) e tecle **Enter**.
+   **Confira:** a lista mostra só as entregas daquela requisição; a entrega escolhida foi desmarcada; a janela continua aberta (o Enter não
+   registrou a devolução); apareceu o botão **Limpar**.
+4. Digite a data de uma das saídas, como *DD/MM/AAAA* → **Buscar**. **Confira:** só as entregas daquele dia.
+5. Digite *31/02/2026* → **Buscar**. **Confira** o aviso *"Data inválida na busca: 31/02/2026 — use DD/MM/AAAA"*; a lista não muda.
+6. Digite *XYZ-NADA* → **Buscar**. **Confira:** *"Nenhuma entrega deste material para XYZ-NADA."*
+7. **Limpar** → a lista volta às 30 mais recentes. Troque o material → o campo de busca vem vazio.
+
+**O Ajuste com lote (só integração — sem roteiro de clique):** `POST /api/almoxarifado/movimentacoes/v2` com `{ "tipo": "AJUSTE",
+"quantidade": 1, "lote_id": <LB>, "material_id": …, "motivo": "…", "justificativa": "…" }` num material com 5 no lote *LB* e 3 sem lote →
+400 *"Ajuste para 1 UN indicando o lote LB deixaria o lote com saldo negativo (-2 UN): fora do lote LB há 3 UN. Para baixar só este lote, o
+novo total tem de ser de no mínimo 3 UN; para baixar mais, faça o ajuste sem indicar o lote."* Com quantidade 3 → 201 e *LB* com 0 em
+**Lotes e Séries**.
+
+**O que esta etapa não cobre:** a busca acha a OS pelo número que a tela mostra (*OS 12*), não pelo número do cadastro de OS; a tela
+**Movimentações** continua sem lote no Ajuste; o estorno de um Ajuste que tirou de outra prateleira devolve o lote na posição padrão.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 252 — De qual prateleira saiu a troca automática, a frase de dois itens na mesma prateleira e a peça com série que respeita a separação do outro item (ENTREGUE — 2026-11-20)
 
