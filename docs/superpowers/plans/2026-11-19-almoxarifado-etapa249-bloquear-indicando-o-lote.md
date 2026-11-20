@@ -129,7 +129,7 @@ retém mais; o desconto do impedido já tira o retido do lote, B1438 — sem dup
   tirar a tradução.
 - [x] **T3 (galho)** (vermelhos 5/5 antes; controle positivo: 4 sabotagens — `lote_id` no POST, opção desabilitada, resposta atrasada, rótulo obrigatório —, cada uma derrubou o seu cenário) — tela: RN-249.10 em `InspecoesAlmoxarifado.test.js` (com a fixture), teste (8) da 209 reescrito.
 - [x] **T4** — Fase 5 (revisor adversarial fresco com sonda executada, 19/11): 3 achados reais, 0 ruído. (1) o GET prometia o lote inteiro com bloqueio sem lote no material e o motor recusava pela guarda do material (sonda p4) → **RN-249.12**: o livre de cada lote é limitado pelo bloqueável do material (`caixaSql.bloqueavelAvulsoSql`, a mesma expressão do motor), teste vermelho antes, sabotagem do limite derruba. (2) o estorno da ENTRADA do lote passa com o lote inteiro bloqueado nele (sonda p3a) → declarado (aviso C, teste prende o comportamento). (3) a caixa separada sem lote não sai do livre do lote (sonda p1b) → declarado (letra B, como o bloqueio sem lote desde a 97). Não quebrou: corrida bloquear × separar (0/20), burlar pela v2, fracionado, permissão, reentrada. Fase 5 (revisor adversarial fresco com sonda executada) e correções com teste próprio.
-- [ ] **T5** — fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T5** — fechamento (fechar-etapa sem 7½ e 8).
 
 ## Pontos de atenção
 
@@ -137,3 +137,47 @@ retém mais; o desconto do impedido já tira o retido do lote, B1438 — sem dup
 - `situacaoDosLotes` limita a quarentena por família (B1436): o livre pode subir se a soma da família não couber no total — o mesmo número
   que a entrega usa.
 - O estorno do DESBLOQUEIO com lote rebloqueia o lote sem conferir o livre do lote (RN-209.06 a, *"sem guarda nova"*; C504) — não muda.
+
+## Divergências do plano
+
+- O plano dizia que a régua do livre do lote era a `situacaoDosLotes` da entrega — **estava errado** (Fase 2, achado 1): com o corte da
+  família (B1436) ela deixava bloquear a peça reprovada; a régua usa as parcelas cruas.
+- O plano não previa: a restrição a material com controle por lote e sem série (RN-249.11, Fase 2), o limite pelo bloqueável do material
+  (RN-249.12, Fase 5), os dois testes que prendem o comportamento declarado (Saída com lote, estorno da entrada — C546, C547).
+- A RN-249.20 do plano dizia que a recusa do total era *"Quantidade bloqueada insuficiente: N"* — **estava errado**: o total abaixo da
+  reprovação é a RN-11 da 44 (a decisão é gravada sem liberar, *"O material já havia sido desbloqueado fora do documento…"*); o teste foi
+  escrito assim.
+- Nenhuma linha do `CLAUDE.md` ficou desatualizada (o motor inteiro já roda sob `naTravaDoMaterial` desde a 97; a guarda nova lê dentro dela).
+
+## Verificação (medida, sobre o código final)
+
+- `npm run test:api` sobre o código de produção final (`7fd033c9`): **641/642 arquivos** — o vermelho foi `portasAvulsasCaixa` (prende a lista
+  exata de exports do `caixaSql`, que a Fase 5 aumentou com `bloqueavelAvulsoSql`); o teste foi atualizado em `20ed25bb` (só teste) e
+  rodado de novo: 46/46. A rodada rodou sozinha, sem Jest nem build em paralelo, e terminou (não morreu por memória).
+- `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
+- Jest da tela: **236 suítes, 3201 testes**; `CI=true react-scripts build`: *Compiled successfully*.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2: régua crua, série, frase com ação; Fase 5: limite pelo bloqueável do material).
+- Achados: Fase 2 — 10 (5 importantes: 3 corrigidos, 2 declarados; 5 menores: 3 aplicados, 2 registrados); Fase 5 — 3 reais com sonda
+  executada (1 corrigido com teste vermelho antes, 2 declarados com teste que prende), 0 ruído.
+- Paralelismo: a tela (T3) depois do tronco (fixture); a Fase 5 rodou enquanto a tela era feita, sem edição de servidor.
+- Defeito que escapou: (preencher na etapa seguinte). Da 248: nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+Itens 16 e 17 da estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`, 45 min cada,
+fatias de tela). Módulo Almoxarifado.
+
+- **Item 16 — a entrega diz quantas peças do lote estão bloqueadas (C514, B1440).** A janela de entrega (Etapa 218 já mostra quanto pode sair
+  do lote: `GET /estoque/:materialId/saldos` traz por linha de lote com peça presa `lote_livre`, `lote_bloqueado`, `lote_inspecao`) sai do lote
+  seguinte sem dizer por quê. **Medir antes de prometer:** onde a janela usa `lote_bloqueado` hoje (o *"Sai de"* de `RequisicoesAlmoxarifado`/
+  janela de entrega) e se o automático (sem *Sai de*) tem como dizer; desde a 249 o bloqueio avulso com lote também entra em `lote_bloqueado`
+  (RN-249.06). Contrato que consome: o de `/saldos` (sem campo novo, se a medição confirmar).
+- **Item 17 — a sugestão da Fila lê a conta do lote preso (C517).** A dica *"pegar em XB-01, lote L1"* (`sugestaoDeColeta.js`, Etapa 218)
+  pode apontar um lote cujo livre não cobre. Conserto previsto: a sugestão ler `retidoDoLote.situacaoDosLotes` (a régua da entrega, com o
+  corte da família — **não** a do bloqueio, B1568) e o guardado das outras caixas. **Medir:** sonda com peça em quarentena no lote sugerido.
+- **Pontos de atenção:** a régua da entrega e a do bloqueio diferem de propósito (B1568); a fila só lê (sem trava); fixture da tela regravada
+  se `/saldos` ou a fila mudarem.
+- **O que já está pronto e não reabre:** o bloqueio com lote e a frase da NC (esta etapa); o retido do lote nos leitores (217/218).

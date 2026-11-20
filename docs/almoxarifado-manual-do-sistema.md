@@ -2386,7 +2386,7 @@ Regras:
     (ver abaixo); e o que **outra requisição em andamento** já separou daquele lote, num endereço escolhido no **Sai de** (a origem da separação dela) e ainda não entregou — para que a entrega dela continue saindo de lá. Quando o lote tem parte separada assim, a saída se divide pelos **endereços** do lote — a posição padrão primeiro, depois a de mais saldo —, cada um com o que sobra nele depois dessa parte, e a saída diz o endereço; o saldo do lote **sem endereço** e o de endereço **bloqueado** não entram (o que eles têm passa ao próximo lote). Exemplo: o lote *L1* tem 4 em *XB-01*, todos separados por outra requisição, e 2 em *XC-01*: a entrega automática de 2 sai de *XC-01*, e a outra requisição entrega os 4 de *XB-01*. A parte separada do **próprio** item, quando esta entrega não sai da origem dele, só conta pelo que fica para a próxima entrega (entregando a caixa toda, não conta).
   - **O bloqueado do lote.** Uma peça pode estar fisicamente num lote e não poder sair por três motivos, e nos três o sistema sabe de qual lote
     ela é: **(1) quarentena** — a peça devolvida para a Quarentena citando a entrega fica bloqueada no lote dela (12.6), e a liberação pelo
-    **Desbloquear** diz o lote; o bloqueio feito em **Bloquear Material** não tem lote; **(2) reprovada na inspeção** — a quantidade reprovada
+    **Desbloquear** diz o lote; o bloqueio feito em **Bloquear Material** tem o lote quando ele foi indicado na janela (15.3); **(2) reprovada na inspeção** — a quantidade reprovada
     fica no lote do item recebido (o lote continua *Ativo*) até a não conformidade decidir: liberar, devolver ao fornecedor ou sucatear;
     **(3) em poder de terceiro** — a quantidade de um item de remessa **enviado** e ainda não devolvido, perdido ou consumido fica no lote do
     item (a remessa não baixa o saldo do lote). O bloqueado do lote é a soma das três, com dois limites:
@@ -2730,7 +2730,7 @@ saldo em lote impedido = máximo(0, soma, pelos lotes impedidos, de máximo(0, m
 
 O *bloqueado do lote* é o de 7.5 (quarentena, reprovada na inspeção e em poder de terceiro, contados no lote em que estão). O bloqueado,
 o em poder de terceiros e o em inspeção já saem do disponível; a parte que **diz** o lote sai do lote dela, e o **resto** (o que não se sabe
-em que lote está — por exemplo, o bloqueio feito em **Bloquear Material**) é suposto **dentro** do lote impedido, para nunca tirar a mesma
+em que lote está — por exemplo, o bloqueio feito em **Bloquear Material** sem indicar o lote) é suposto **dentro** do lote impedido, para nunca tirar a mesma
 peça duas vezes (um lote sem certificado de material crítico fica bloqueado **e** em inspeção). Exemplo: lote L1 Ativo com 4, dos quais 2 em
 quarentena, e lote L2 Bloqueado com 6 → disponível 8, saldo em lote impedido 6, pedido de 4 reserva **2** (**Parcialmente Reservada**). O resultado é arredondado a 6 casas. Exemplos: lote L1 Ativo com 4 e lote L2 Bloqueado com 6, pedido de 10 → reserva **4**, **Parcialmente Reservada**; só o lote Bloqueado com 6, pedido de 3 → nada reservado, **Aguard. Estoque** (ou **Aguard. Compra**, com compra a caminho) — nunca *Aprovado* sem reserva; só um lote Ativo vencido ontem com 5 → **Aguard. Estoque**, e depois de **Liberar vencimento** uma requisição de 5 fica **Totalmente Reservada**.
 
@@ -5453,8 +5453,8 @@ Os dois exigem **material**, **quantidade** e **justificativa**, e nenhum dos tr
 O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando há 30 bloqueados é recusado, e não devolve 30 fingindo que devolveu 50.
 
 **O bloqueado de cada lote.** O bloqueio que nasce de uma **devolução para Quarentena** (12.6) fica registrado com o **lote** da peça
-devolvida — o lote da entrega citada, ou o informado na devolução. O bloqueio feito por **Bloquear Material** não tem lote: conta como
-*"Sem lote"*, mesmo num material com controle por lote. O sistema guarda, para cada material:
+devolvida — o lote da entrega citada, ou o informado na devolução. O bloqueio feito por **Bloquear Material** fica com o lote quando ele é
+indicado na janela (abaixo); sem indicar, conta como *"Sem lote"*. O sistema guarda, para cada material:
 
 ```
 bloqueado do lote L = bloqueios com o lote L − desbloqueios do lote L   (os estornados não contam)
@@ -5477,6 +5477,32 @@ As recusas do desbloqueio, nesta ordem (só a primeira que se aplica aparece):
 | Escolher *"Sem lote"* (ou não ter o campo) e pedir mais que o *"Sem lote"* | *"Informe o lote: só 3 UN bloqueado(s) sem lote — o resto está em lote (L1: 2)"* |
 | Pela integração, um lote que não é número inteiro positivo | *"lote_id deve ser um número inteiro positivo"* |
 
+**Bloquear indicando o lote.** Num material com **Controle por lote** e sem número de série, ao escolher o material no **Bloquear
+Material** a janela mostra o campo **Lote**, opcional: *"Sem lote (não indicar)"* (o bloqueio de sempre) e uma opção por lote com saldo,
+com quanto ele tem livre para bloquear (*"L1 — 3 livre(s) para bloquear"*); o lote sem nada livre aparece apagado. Material sem
+controle por lote, ou com número de série, não mostra o campo. O que o lote tem livre para bloquear:
+
+```
+livre do lote = máximo(0, saldo do lote − em inspeção no lote − bloqueado no lote (quarentena e bloqueio avulso) − reprovado na inspeção
+                do lote − em terceiro do lote − separado do lote na caixa de requisições em andamento, com ou sem reserva)
+```
+
+O bloqueio com lote também tem de caber no bloqueável do material (abaixo). As recusas do bloqueio com lote, nesta ordem (só a primeira
+que se aplica aparece):
+
+| Situação | Mensagem |
+|---|---|
+| Pela integração, um lote que não é número inteiro positivo | *"lote_id deve ser um número inteiro positivo"* |
+| Lote que não existe, ou que é de outro material | *"Lote nao encontrado"* / *"O lote informado pertence a outro material"* |
+| Material sem controle por lote, ou com número de série | *"Bloquear indicando o lote só vale para material com controle por lote e sem número de série"* |
+| Pedir mais que o bloqueável do material | *"Saldo disponível insuficiente para bloquear: 4 UN"* |
+| Pedir mais que o livre do lote | *"Saldo livre do lote L1 insuficiente para bloquear: 1 UN"* |
+
+A peça bloqueada com o lote fica no lote: para liberá-la, escolha o lote no **Desbloquear Material** (o *"Sem lote"* não a alcança), e
+quem entrega e separa já não a conta como saldo do lote (7.5). ⚠️ A **Saída** e a **Perda** da tela de
+Movimentações escolhendo o lote **não** conferem o bloqueado do lote — conferem só o do material; para não tirar a peça bloqueada,
+escolha outro lote nelas.
+
 Liberar sem dizer o lote **nunca** tira de um lote: o sistema não adivinha qual peça saiu da quarentena. Dois desbloqueios do mesmo lote no
 mesmo instante não liberam mais do que o lote tem — o segundo recebe a mensagem do lote.
 
@@ -5485,9 +5511,8 @@ utilizado"*). O caminho é
 liberar **do lote da peça** no **Desbloquear Material** e, em seguida, lançar a **Perda** (ou a sucata, pelo processo próprio — seção 20)
 **do mesmo lote**. Assim o livro mostra a entrada da devolução, o bloqueio, o desbloqueio e a baixa, todos com o mesmo lote.
 
-**O que o bloqueado por lote ainda não muda.** As contas de disponível — aprovação, separação, entrega e a escolha automática do lote na
-entrega — continuam descontando o bloqueado **do material**, não do lote. Em material com lote e peça em quarentena, escolha o lote no
-**Sai de** da entrega (7.5). A peça reprovada na inspeção e o material em terceiros têm o lote no próprio documento (a inspeção e a
+**Quem conta o bloqueado do lote.** A aprovação, a separação, a entrega (o **Sai de** e a escolha automática do lote) descontam o
+bloqueado do lote no lote dele (7.5); a Saída e a Perda da tela de Movimentações, não (acima). A peça reprovada na inspeção e o material em terceiros têm o lote no próprio documento (a inspeção e a
 remessa) e não aparecem no campo **Lote**: a parte reprovada que ainda está bloqueada entra no *"Sem lote"*.
 
 **O bloqueio não passa do que existe e não está retido.** A quantidade a bloquear tem de caber em:
@@ -5684,6 +5709,13 @@ um documento e os dois forem aceitos, só o primeiro libera; o segundo grava a d
 material já havia sido liberado. ⚠️ **E a quantidade liberada é a reprovada INTEIRA daquela
 inspeção** — se um documento da mesma inspeção tiver sido decidido *Devolver*, a aceitação do outro
 solta também a parte que se pretendia devolver.
+
+**Quando a parte reprovada já saiu pelo Desbloquear "Sem lote", a aceitação é recusada.** A aceitação libera sem dizer o lote, e por
+isso só tira do *"Sem lote"* do material (15.3) — a reprovação conta lá. Se alguém já liberou parte dela pelo **Desbloquear Material**
+escolhendo *"Sem lote"*, e o que sobrou sem lote não cobre a reprovação (o resto do bloqueado está em lotes), a decisão é recusada e o
+documento continua Aberto: *"Não é possível liberar pela não conformidade: só 2 UN do bloqueado está sem lote e a reprovação tem 3 UN —
+parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote: L1: 2). Bloqueie de novo, sem lote, o que falta
+e aceite outra vez, ou registre outra decisão"*. Assim a aceitação nunca solta uma peça de um lote em quarentena.
 
 **Dois estados conhecidos não travam o documento: ele fecha e a tela diz por quê.**
 

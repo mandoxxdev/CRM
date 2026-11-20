@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 249 (2026-11-19, `9ef32392`, tela `55b78b37`, Fase 5 `7fd033c9`): bloquear material indicando o lote (C500) e a frase própria
+> da liberação pela não conformidade (C501); B1567–B1571, C546, C547.** O **Bloquear Material** aceita o lote (opcional) com a regra "o lote
+> tem livre para bloquear"; `GET /materiais/:id/lotes-para-bloquear`. Ver a seção "Etapa 249", no fim. Continua 🟢.
+
 > **+ Etapa 246 (2026-11-18, `4bf9fe15`, tela `522ded97`, `fcc7b076`, Fase 5 `509d6902`): a frase do lote das séries só quando o lote cobre
 > as marcadas (C539) e a lista de séries relida depois de uma recusa na Saída/Perda (C538); B1558–B1560.** A lista de séries ganha
 > `lote_saldo_positivo`. Ver a seção "Etapa 246", no fim. Continua 🟢.
@@ -1367,7 +1371,8 @@ Fase 5). **C466 resolvido na 1ª parte** (gravar o lote); a 2ª parte (o automá
 - [x] **Fase 5** — o estorno de um `BLOQUEIO` **sem** lote só tira do "sem lote" (a guarda M1 no claim; literal *"Não é possível estornar:
   o bloqueio sem lote já foi desfeito (bloqueado sem lote: N UN)"*); e o teste da resposta atrasada do GET na troca de material —
   `fa50fae9`.
-- [ ] **Fora (declarado):** o **Bloquear** avulso sem lote (B1419, C500); reprovação e terceiros sem lote no livro — já sabem pelo documento
+- [ ] **Fora (declarado):** ~~o **Bloquear** avulso sem lote (B1419, C500)~~ *(**deixou de valer na Etapa 249**: o Bloquear aceita o lote,
+  `9ef32392` — esta linha dizia que o Bloquear ficava sem lote; a frase da NC (C501) também foi trocada na 249)*; reprovação e terceiros sem lote no livro — já sabem pelo documento
   (B1418); a liberação por NC passa pela M1 (C501); devolução ao fornecedor/descarte do reprovado não olham os lotes da quarentena (C502);
   nenhum leitor de disponível muda (C503, a 2ª parte); *(— **deixou de valer na Etapa 217**: o automático e a conta do lote
   impedido leem o bloqueado do lote, `e2a43f20`)* o lote pode ficar com bloqueado maior que o saldo depois do estorno da
@@ -1554,3 +1559,26 @@ C538 e C539 atualizadas). Itens 9 e 10 da estimativa de 18/11.
 
 Testes: `saidaAvulsaFraseDoLote.api.test.js` (4); `MovimentacoesSaidaLoteDasSeries.test.js` (+9), `MateriaisClienteDevolucaoSeries.test.js`
 (+1), `MateriaisClienteDevolucaoLote.test.js` (+1). Continua 🟢.
+
+## Etapa 249 — bloquear material indicando o lote, e a frase da não conformidade (2026-11-19)
+
+Plano: `docs/superpowers/plans/2026-11-19-almoxarifado-etapa249-bloquear-indicando-o-lote.md` (RN-249.01 a .12 e .20; B1567–B1571; C546,
+C547; C500 e C501 resolvidas). Itens 14 e 15 da estimativa de 18/11.
+
+- [x] **RN-249.01/.03** — `POST /materiais/:id/bloquear` aceita `lote_id` (opcional, aditivo; o formato como no Desbloquear, B1422); a ordem
+  das recusas (formato → lote → material sem controle/com série → material → lote) — `9ef32392`.
+- [x] **RN-249.02** — a guarda "o lote tem livre para bloquear" no ramo `BLOQUEIO` avulso do motor, dentro da seção da trava do material:
+  `lotService.lotesParaBloquear` (parcelas cruas de `retidoDoLote`, sem o corte da família — Fase 2, achado 1 —, menos a caixa no lote) —
+  `9ef32392`; limitada pelo bloqueável do material (`caixaSql.bloqueavelAvulsoSql`, Fase 5 achado 1, **RN-249.12**) — `7fd033c9`.
+- [x] **RN-249.04/.05/.06/.07** — o Desbloquear, o estorno, os leitores do retido e a NC que aceita, depois do bloqueio com lote — `9ef32392`.
+- [x] **RN-249.08** — dois bloqueios simultâneos do mesmo lote: um passa (controle positivo: trava desligada → os dois passam) — `9ef32392`.
+- [x] **RN-249.09** — `GET /api/almoxarifado/materiais/:id/lotes-para-bloquear` (`visualizar`; `{ material_id, lotes: [{ lote_id, codigo,
+  saldo, livre }] }`; 404) e a fixture da tela (`__fixtures__/lotesParaBloquearDoServidor.json`) — `9ef32392`.
+- [x] **RN-249.10** — tela: campo **Lote** opcional no Bloquear; livre 0 desabilitado; resposta atrasada ignorada — `55b78b37`.
+- [x] **RN-249.11** — só material com controle por lote e sem série (Fase 2, achado 3) — `9ef32392`.
+- [x] **RN-249.20** (C501) — a aceitação da NC que esbarra no *"Sem lote"* recebe a frase própria (o motor marca a recusa M1 com `codigo`)
+  — `9ef32392`.
+- [ ] **Fora (declarado):** a Saída/Perda com lote e o estorno da entrada do lote não conferem o bloqueado do lote (C546, C547 — testes prendem o
+  comportamento de hoje); a caixa separada sem lote não sai do livre do lote (B1568); o estorno do DESBLOQUEIO com lote sem a régua (C504).
+
+Testes: `bloquearIndicandoOLote.api.test.js` (19); `InspecoesAlmoxarifado.test.js` (+7, e o (8) da 209 reescrito — mudança de regra). Continua 🟢.

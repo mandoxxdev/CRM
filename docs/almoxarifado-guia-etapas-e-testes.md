@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 248 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-19 (Etapa 249 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 248 fechada — 2026-11-18.** **O estorno da nota no mesmo instante da liberação do lote.** O
+> **O desenvolvimento parou aqui: Etapa 249 fechada — 2026-11-19.** **Bloquear material indicando o lote, em Inspeções.** A janela
+> **Bloquear Material** tem o campo **Lote** (opcional) com quanto cada lote tem livre para bloquear; a peça fica bloqueada no lote, a entrega
+> não a tira e o **Desbloquear** a libera pelo lote. A aceitação da não conformidade que esbarra no *"Sem lote"* consumido ganha frase
+> própria. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 249). **Onde parou, exatamente:** a **249 está
+> fechada**; a **próxima** são os itens 16 e 17 da estimativa de 18/11 — **a entrega diz quantas peças do lote estão bloqueadas** (C514) e
+> **a sugestão da Fila lê a conta do lote preso** (C517) —, detalhados no fim do plano da 249.
+>
+> *(Antes:)* **Etapa 248 fechada — 2026-11-18.** **O estorno da nota no mesmo instante da liberação do lote.** O
 > estorno da entrada de uma nota e a liberação, o bloqueio ou a correção de validade do lote do mesmo material agora fazem fila: um espera o
 > outro terminar. O estorno deixa de ser recusado uma vez sem motivo (*"…libere as reservas antes de estornar"*) e de deixar uma requisição
 > esperando com o material livre; a resposta e o aviso da liberação dizem o que continua reservado. **Só motor, nenhuma tela nova.** **Sem
@@ -7367,6 +7374,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 249 — Bloquear material indicando o lote, e a frase da não conformidade (ENTREGUE — 2026-11-19)
+
+**O que mudou, em uma frase:** ao bloquear um material em **Inspeções → Bloquear Material** dá para dizer de qual lote é a peça; ela fica
+bloqueada naquele lote e a entrega não a tira de lá.
+
+**O problema que ela resolve.** O bloqueio feito pela qualidade não sabia o lote: contava como *"Sem lote"*, a entrega podia continuar
+tirando a peça do lote dela, e para liberar o **Desbloquear** oferecia *"Sem lote"*. E a aceitação de uma não conformidade, num caso de
+borda, mostrava *"Informe o lote…"*, uma frase de outra janela.
+
+| Antes | Agora |
+|---|---|
+| **Bloquear Material** sem campo de lote | Campo **Lote** (opcional) com *"L1 — 3 livre(s) para bloquear"*; lote sem nada livre apagado |
+| A entrega podia tirar a peça bloqueada do lote | A peça bloqueada no lote não sai pela entrega |
+| Aceitar a não conformidade com o *"Sem lote"* consumido: *"Informe o lote…"* | *"Não é possível liberar pela não conformidade: … ou registre outra decisão"* |
+| Bloquear sem lote, desbloquear, estornar | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *LOT-249* com **controle por lote**, sem série.
+2. **Movimentações → Entrada**: 4 *LOT-249* lote *L1*; outra entrada de 4 lote *L2*.
+3. **Inspeções → Bloquear Material**, *LOT-249*. **Confira:** o campo **Lote** com *"Sem lote (não indicar)"*, *"L1 — 4 livre(s) para
+   bloquear"*, *"L2 — 4 livre(s) para bloquear"*. Escolha *L1*, 3, justificativa *"avaria"* → *"Material bloqueado!"*.
+4. **Bloquear Material** de novo, *L1*, 2. **Confira:** *"Saldo livre do lote L1 insuficiente para bloquear: 1 UN"*.
+5. *L2*, 5. **Confira:** *"Saldo disponível insuficiente para bloquear: 4 UN"* (o material vem antes).
+6. **Desbloquear Material**, *LOT-249*. **Confira:** o campo **Lote** com *"L1 — 3 bloqueado(s)"*. Escolha *L1*, 3 → *"Material desbloqueado!"*.
+7. **Bloquear Material** num material **sem** controle por lote. **Confira:** sem o campo **Lote**.
+
+**O que esta etapa não cobre:** a **Saída** e a **Perda** escolhendo o lote, e o estorno da entrada do lote, não conferem o bloqueado do lote
+(avisos C546 e C547); material com número de série ou sem controle por lote não bloqueia por lote; a aceitação da não conformidade
+continua recusada quando o *"Sem lote"* não cobre a reprovação — só a frase mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 248 — O estorno da nota no mesmo instante da liberação do lote (ENTREGUE — 2026-11-18)
 
