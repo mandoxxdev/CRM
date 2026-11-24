@@ -1246,22 +1246,30 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const biCss = `
     /* ===== Proposta bilíngue (specs/proposta-bilingue) ===== */
     .bi-par, .bi-h, .bi-capa { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6mm; }
+    /* As duas metades com a MESMA largura de texto: o filete e o recuo eram só da direita (3,4mm a menos), que quebrava linha antes
+       e deixava buraco embaixo da esquerda (24/11/2026, 2ª vez: "os espaçamentos estão errados ainda"). */
+    .bi-par, .bi-h { column-gap: 0; }
+    .bi-par > .bi-pt, .bi-h > .bi-pt { padding-right: 3.4mm; }
     .bi-par { break-inside: avoid; page-break-inside: avoid; }
     /* Espaçamento (o usuário: "totalmente errado os espaçamentos", 24/11/2026): cada parágrafo e cada item de lista é um par, e o
        gap das pilhas (.stack-sm/.stack-md, feito para parágrafos soltos) SOMAVA com a margem entre pares — uma lista de 5 itens
-       saía espalhada como 5 parágrafos. A pilha que contém pares fica sem gap; o espaço é só este: parágrafo 2.4mm, item 0.8mm. */
+       saía espalhada como 5 parágrafos. A pilha que contém pares fica sem gap; o espaço é o MESMO da proposta em português,
+       medido nela: título → texto 15px, parágrafo → parágrafo 12px, item de lista → item 0. */
     .stack-sm:has(> .bi-par), .stack-md:has(> .bi-par) { gap: 0 !important; }
-    .bi-par + .bi-par { margin-top: 2.4mm; }
-    .bi-par-li + .bi-par-li { margin-top: 0.8mm; }
-    .bi-par > .bi-tr, .bi-h > .bi-tr { border-left: 0.4mm solid #c9d3e3; padding-left: 3mm; }
+    .bi-par + .bi-par { margin-top: 12px; }
+    .bi-par-li + .bi-par-li { margin-top: 0; }
+    /* O filete é sombra (não ocupa largura): com borda, o arredondamento para pixel deixava a direita ~0,5px mais larga e uma frase
+       no limite quebrava só na esquerda. */
+    .bi-par > .bi-tr, .bi-h > .bi-tr { box-shadow: inset 0.4mm 0 0 #c9d3e3; padding-left: 3.4mm; }
     .bi-par p, .bi-par ul, .bi-par ol, .bi-par li { margin: 0 !important; text-indent: 0 !important; }
     .bi-par ul, .bi-par ol { padding-left: 5mm; }
     /* Justificado em meia largura abria buracos entre as palavras ("aspectos      técnicos"): no bilíngue, à esquerda. */
     .bi-par p, .bi-par li, .bi-par div { text-align: left !important; }
-    .bi-h { margin-bottom: 1.6mm; }
+    .bi-h { margin-bottom: 3px; }
     .bi-tr { color: #1f3a66; }
-    .bi-pendente { font-style: italic; color: #9a5b00; }
-    .bi-pendente::after { content: " (tradução pendente)"; font-size: 0.85em; }
+    /* Pendente: só cor e fundo. O itálico e o "(tradução pendente)" escrito alargavam a metade direita e abriam buraco na esquerda
+       em toda linha; quem avisa da pendência é a tela (selo e aviso ao baixar o PDF). */
+    .bi-pendente { color: #9a5b00; background: #fff3dc; }
     .bi-tabela { font-size: 7.5pt; table-layout: fixed; width: 100%; }
     .bi-tabela th, .bi-tabela td { white-space: normal !important; overflow-wrap: break-word; padding-left: 1mm !important; padding-right: 1mm !important; }
     /* Preços: 10 colunas (5 por língua) — sem largura fixa a tabela vazava pela direita e o overflow da página cortava o total;
