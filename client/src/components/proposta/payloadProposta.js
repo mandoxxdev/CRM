@@ -39,7 +39,9 @@ export function montarPayloadProposta({ form, itens, statusSalvar, valorTotal, m
       codigo_produto: i.codigo_produto?.trim() || null,
       familia_produto: i.familia_produto || null,
       regiao_busca: i.regiao_busca || null,
-      desconto_percentual: 0,
+      // Desconto do ITEM: o preço do catálogo baixado à mão abaixo da tabela (24/11/2026). Só registro — o valor do item já é o
+      // reduzido; o documento não desconta de novo.
+      desconto_percentual: Number(i.desconto_percentual) || 0,
       preco_tabela: i.preco_tabela != null ? Number(i.preco_tabela) : null,
       // Normaliza na saída: descarta linha sem descrição (o vendedor clicou em adicionar
       // e desistiu) e converte os campos numéricos, que enquanto se digita são texto.

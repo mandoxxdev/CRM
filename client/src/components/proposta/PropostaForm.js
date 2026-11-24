@@ -99,6 +99,19 @@ export function produtoParaItem(p) {
   };
 }
 
+/**
+ * Preço do item do catálogo editado à mão (pedido do Comercial, 24/11/2026: "devo poder mudar manualmente o preço"). Abaixo do preço de
+ * tabela, a diferença É desconto do item e entra na MESMA regra de aprovação do desconto da proposta (acima do limite: rascunho +
+ * Aprovações) — senão baixar o preço à mão passaria por fora da aprovação. Acima da tabela (ou tabela zero, como serviço) = 0.
+ */
+export function descontoDoItem(it) {
+  if (!it || it.manual) return 0;
+  const tabela = Number(it.preco_tabela) || 0;
+  const v = Number(it.valor_unitario) || 0;
+  if (tabela <= 0 || v >= tabela) return 0;
+  return Math.round((1 - v / tabela) * 10000) / 100;
+}
+
 function calcValorComDesconto(precoTabela, descontoPerc) {
   const base = Number(precoTabela) || 0;
   const d = Math.min(100, Math.max(0, Number(descontoPerc) || 0));
@@ -286,7 +299,7 @@ export default function PropostaForm() {
         const it = next[idx];
         const q = Number(it.quantidade) || 0;
         const v = Number(it.valor_unitario) || 0;
-        next[idx] = { ...next[idx], valor_total: q * v };
+        next[idx] = { ...next[idx], valor_total: q * v, desconto_percentual: descontoDoItem(it) };
       }
       return next;
     });
@@ -381,10 +394,14 @@ export default function PropostaForm() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // maxDesc = o desconto GERAL gravado (o da proposta), como sempre. maxDescAprovacao decide a aprovação: o maior entre ele e o de
+    // um item com preço baixado à mão abaixo da tabela. Gravar o do item no desconto geral faria o documento descontar duas vezes —
+    // o preço já reduzido e mais a porcentagem sobre o total.
     const maxDesc = Number(form.margem_desconto) || 0;
+    const maxDescAprovacao = Math.max(maxDesc, ...itens.map(descontoDoItem));
     let statusSalvar = form.status;
     const statusJaLiberado = ['desconto_aprovado', 'enviada', 'visualizada', 'aceita', 'aprovada'].includes(form.status);
-    if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO && !statusJaLiberado) {
+    if (maxDescAprovacao > DESCONTO_LIMITE_SEM_APROVACAO && !statusJaLiberado) {
       statusSalvar = 'rascunho';
       if (form.status !== 'rascunho') {
         toast.info(`Desconto acima de ${DESCONTO_LIMITE_SEM_APROVACAO}% exige aprovação. A proposta será salva como rascunho.`);
@@ -411,19 +428,19 @@ export default function PropostaForm() {
         }
       }
 
-      if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO && propostaId && user?.id && statusSalvar === 'rascunho') {
+      if (maxDescAprovacao > DESCONTO_LIMITE_SEM_APROVACAO && propostaId && user?.id && statusSalvar === 'rascunho') {
         try {
-          const valorDescontoRs = valorTotal * (maxDesc / 100);
+          const valorDescontoRs = valorTotal * (maxDescAprovacao / 100);
           await api.post('/aprovacoes', {
             proposta_id: propostaId,
             tipo: 'desconto',
-            valor_desconto: maxDesc,
+            valor_desconto: maxDescAprovacao,
             valor_total: valorTotal,
             valor_com_desconto: valorTotal - valorDescontoRs,
             valor_desconto_rs: valorDescontoRs,
             solicitado_por: user.id,
             status: 'pendente',
-            observacoes: `Solicitação automática: desconto de ${maxDesc.toFixed(2)}% (acima do limite de ${DESCONTO_LIMITE_SEM_APROVACAO}%)`
+            observacoes: `Solicitação automática: desconto de ${maxDescAprovacao.toFixed(2)}% (acima do limite de ${DESCONTO_LIMITE_SEM_APROVACAO}%)${maxDescAprovacao > maxDesc ? ' — preço de item baixado abaixo da tabela' : ''}`
           });
           toast.success('Proposta salva. Solicitação de aprovação de desconto enviada.');
         } catch (aprovErr) {
@@ -857,24 +874,26 @@ export default function PropostaForm() {
                       </label>
 
                       <div className="proposta-form-item-field field-preco">
-                        <span>{item.manual ? 'Valor unitário' : 'Preço tabela'}</span>
-                        {item.manual ? (
-                          <div className="proposta-form-money-input">
-                            <span className="proposta-form-money-prefix" aria-hidden="true">R$</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={item.valor_unitario}
-                              onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
-                              className="input-money"
-                              aria-label="Valor unitário"
-                            />
-                          </div>
-                        ) : (
-                          <div className="proposta-form-price-block">
-                            <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
-                          </div>
+                        <span>Valor unitário</span>
+                        {/* Editável também no item do catálogo (24/11/2026): vem do cadastro e pode ser mudado à mão. */}
+                        <div className="proposta-form-money-input">
+                          <span className="proposta-form-money-prefix" aria-hidden="true">R$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={item.valor_unitario}
+                            onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
+                            className="input-money"
+                            aria-label="Valor unitário"
+                          />
+                        </div>
+                        {!item.manual && (
+                          <small className="proposta-form-preco-tabela">
+                            Tabela: {formatMoney(item.preco_tabela)}
+                            {descontoDoItem(item) > 0 && ` · ${descontoDoItem(item).toFixed(2).replace('.', ',')}% abaixo`}
+                            {descontoDoItem(item) > DESCONTO_LIMITE_SEM_APROVACAO && ' — exige aprovação'}
+                          </small>
                         )}
                       </div>
 
