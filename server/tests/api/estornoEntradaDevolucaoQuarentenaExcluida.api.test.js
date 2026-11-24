@@ -175,6 +175,37 @@ const MSG_ANDAMENTO = (dev) => `Não é possível estornar agora: o estorno do b
     assert.deepStrictEqual(await estado(m), [10, 2]);
   });
 
+  // ── Fase 5 (revisor adversarial) ──────────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 achado 1] uma reprovacao liberada pela NC antes (DESBLOQUEIO sem lote no livro): a quarentena de pe continua recusando', async () => {
+    const m = await material();
+    await mov(m, { tipo: 'ENTRADA', quantidade: 10 });
+    // a reprovacao soma no bloqueado sem livro; a liberacao grava o DESBLOQUEIO sem lote (o livro sem lote vai a -2)
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 2 WHERE id = ?', [m.id]);
+    assert.strictEqual((await desbloquear(m, 2)).status, 200);
+    const saidaId = await mov(m, { tipo: 'SAIDA', quantidade: 2 });
+    const { devId, entradaId } = await devolver(m, saidaId, 2, 'QUARENTENA');
+    assert.deepStrictEqual(await estado(m), [10, 2]);
+    const e = await estornar(entradaId);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, MSG_QUARENTENA(devId));
+    assert.deepStrictEqual(await estado(m), [10, 2]);
+  });
+
+  await test('[Fase 5 achado 2] o estorno de um bloqueio avulso parado no claim (depois da perna) nao esconde o bloqueio da conta', async () => {
+    const { m, devId, entradaId } = await quarentena();
+    const bl = await request(app).post(`/api/almoxarifado/materiais/${m.id}/bloquear`).send({ quantidade: 2, justificativa: 'avulso' });
+    assert.strictEqual(bl.status, 200, JSON.stringify(bl.body));
+    assert.strictEqual((await desbloquear(m, 2)).status, 200);
+    assert.deepStrictEqual(await estado(m), [10, 2]);
+    const avulso = await ultima(m, 'BLOQUEIO');
+    await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET cancelado = 1 WHERE id = ?', [avulso]); // o claim provisorio do estorno dele
+    const e = await estornar(entradaId);
+    await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET cancelado = 0 WHERE id = ?', [avulso]);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, MSG_QUARENTENA(devId));
+    assert.deepStrictEqual(await estado(m), [10, 2]);
+  });
+
   // ── RN-262.03 — o que nao trava ──────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-262.03] quarentena ja liberada (Desbloquear 2): o estorno do bloqueio recusa e o da entrada passa ([8, 0])', async () => {
     const { m, entradaId, bloqueioId } = await quarentena();

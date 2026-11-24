@@ -3037,12 +3037,21 @@ async function recusaDaDevolucaoEmQuarentena(db, mov, dev, unidade) {
     return `Não é possível estornar agora: o estorno do bloqueio da devolução ${mov.referencia} está em andamento — tente de novo em instantes.`;
   }
   const loteId = perna.lote_id ? Number(perna.lote_id) : null;
+  // Fase 5 da 262: (achado 1) o livro conta so DA PERNA EM DIANTE — um DESBLOQUEIO anterior (a liberacao da NC de uma reprovacao, que
+  // somou no bloqueado sem livro) deixava o livro sem lote em -2 e a regua em 0: a entrada estornava com a quarentena de pe (8/2).
+  // (achado 2) o claim provisorio de OUTRO estorno nao some da conta: o BLOQUEIO conta enquanto o estorno dele nao concluiu e o
+  // DESBLOQUEIO so com `cancelado = 0` (a regua que mais bloqueia); o Σ com lote, ao contrario (ele e subtraido). Sem isto, o estorno de um
+  // bloqueio avulso parado no claim fazia a entrada passar (20/20) e, se ele falhasse depois, ficava 8/2.
+  const somaLivro = (filtro, desde, maximo) => `(SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade
+      ELSE -b.quantidade END), 0)`)} FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND ${filtro} AND b.id >= ${desde}
+      AND ${maximo
+    ? `((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0))`
+    : `((b.tipo = 'BLOQUEIO' AND COALESCE(b.cancelado, 0) = 0) OR (b.tipo = 'DESBLOQUEIO' AND NOT ${estornoConcluidoSql('b')}))`})`;
+  const desde = Number(perna.id);
   const r = await dbGet(db, `SELECT COALESCE(mq.quantidade_bloqueada, 0) AS total,
-      ${loteId ? bloqueioPorLote.bloqueadoDoLoteSql('mq.id', String(loteId)) : '0'} AS no_lote,
-      ${bloqueioPorLote.bloqueadoComLoteSql('mq.id')} AS com_lote,
-      (SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END), 0)`)}
-        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id IS NULL AND b.cancelado = 0
-          AND b.tipo IN ('BLOQUEIO', 'DESBLOQUEIO')) AS livro_sem_lote
+      ${loteId ? somaLivro(`b.lote_id = ${loteId}`, desde, true) : '0'} AS no_lote,
+      ${somaLivro('b.lote_id IS NOT NULL', 0, false)} AS com_lote,
+      ${somaLivro('b.lote_id IS NULL', desde, true)} AS livro_sem_lote
     FROM materiais_almoxarifado mq WHERE mq.id = ?`, [mov.material_id]);
   if (!r) return null;
   const total = Number(r.total) || 0;
