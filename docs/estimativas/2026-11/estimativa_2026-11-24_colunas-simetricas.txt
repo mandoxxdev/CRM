@@ -1,0 +1,9 @@
+*Planejamento — Colunas simétricas na proposta em duas línguas*
+_24/11/2026_
+
+*1. As duas colunas terminam na mesma altura*
+Quando a tradução fica mais comprida que o português (comum no espanhol), a coluna da esquerda deixava um buraco embaixo de cada parágrafo. O sistema passa a ajustar sozinho o tamanho da letra do lado mais comprido, só o necessário e com um limite, para os dois lados terminarem juntos, na tela e no PDF.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
