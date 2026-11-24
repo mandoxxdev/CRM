@@ -18,6 +18,9 @@ import {
 } from '../../constants/propostaComercial';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { formatarMoedaBR, digitadoParaValor } from '../../utils/moeda';
+import {
+  IDIOMAS_PROPOSTA, MOEDAS_PROPOSTA, INCOTERMS, separarIncoterm, montarIncoterm, idiomaDoBanco, moedaDoBanco,
+} from './idiomaProposta';
 import { lerAcessoriosParaEdicao, totalAcessoriosDosItens } from '../../utils/acessoriosItem';
 import { montarPayloadProposta } from './payloadProposta';
 import { hojeLocalISO } from '../../utils/dataLocal';
@@ -52,7 +55,11 @@ const defaultForm = {
   lembrete_data: '',
   lembrete_mensagem: '',
   probabilidade: 50,
-  data_fechamento: ''
+  data_fechamento: '',
+  // Proposta para fora do Brasil (RN-BI.01/08/09) — o servidor ja gravava as tres colunas; faltava a tela.
+  idioma: 'pt-BR',
+  moeda: 'BRL',
+  incoterm: ''
 };
 
 const DESCONTO_LIMITE_SEM_APROVACAO = 5;
@@ -227,7 +234,10 @@ export default function PropostaForm() {
           lembrete_data: data.lembrete_data ? data.lembrete_data.split('T')[0] : '',
           lembrete_mensagem: data.lembrete_mensagem ?? '',
           probabilidade: data.probabilidade != null ? Number(data.probabilidade) : 50,
-          data_fechamento: data.data_fechamento ? data.data_fechamento.split('T')[0] : ''
+          data_fechamento: data.data_fechamento ? data.data_fechamento.split('T')[0] : '',
+          idioma: idiomaDoBanco(data.idioma),
+          moeda: moedaDoBanco(data.moeda),
+          incoterm: data.incoterm ?? ''
         });
         setStatusGravado(data.status ?? 'rascunho');
         setPdfAnexo(data.pdf_proposta_cliente || null);
@@ -655,6 +665,49 @@ export default function PropostaForm() {
             <div className="proposta-form-field">
               <label>Garantia</label>
               <input type="text" value={form.garantia} onChange={(e) => setForm((f) => ({ ...f, garantia: e.target.value }))} />
+            </div>
+          </div>
+        </section>
+
+        <section className="proposta-form-section">
+          <h2>Cliente de fora do Brasil</h2>
+          <p className="proposta-form-section-desc">
+            Em outro idioma, o documento sai em duas colunas: português à esquerda e a outra língua à direita. O que for escrito em
+            português é traduzido sozinho ao abrir a pré-visualização no Chrome, e a tradução pode ser corrigida ali.
+          </p>
+          <div className="proposta-form-grid">
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-idioma">Idioma do documento</label>
+              <select id="proposta-idioma" value={form.idioma} onChange={(e) => setForm((f) => ({ ...f, idioma: e.target.value }))}>
+                {IDIOMAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-moeda">Moeda</label>
+              <select id="proposta-moeda" value={form.moeda} onChange={(e) => setForm((f) => ({ ...f, moeda: e.target.value }))}>
+                {MOEDAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-incoterm">Incoterm</label>
+              <select
+                id="proposta-incoterm"
+                value={separarIncoterm(form.incoterm).codigo}
+                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(e.target.value, separarIncoterm(f.incoterm).local) }))}
+              >
+                <option value="">—</option>
+                {INCOTERMS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-incoterm-local">Local de entrega (incoterm)</label>
+              <input
+                id="proposta-incoterm-local"
+                type="text"
+                value={separarIncoterm(form.incoterm).local}
+                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(separarIncoterm(f.incoterm).codigo, e.target.value) }))}
+                placeholder="Ex.: Porto de Santos"
+              />
             </div>
           </div>
         </section>

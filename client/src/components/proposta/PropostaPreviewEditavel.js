@@ -3,10 +3,11 @@ import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
 import {
-  FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag, FiMoreHorizontal,
+  FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag, FiMoreHorizontal, FiColumns, FiGlobe,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
+import PainelTraducoes from './PainelTraducoes';
 import {
   lerClausulasDoSource,
   sincronizarCampoParaSource,
@@ -91,6 +92,13 @@ export default function PropostaPreviewEditavel() {
   const textosIniciaisRef = useRef(new Map());
 
   const [html, setHtml] = useState('');
+  // Proposta bilíngue (specs/proposta-bilingue): o EDITOR é sempre em PT; "Ver em duas colunas" troca o documento por outra
+  // renderização, somente leitura (Fase 2, C1-C3: tradução dentro do documento editável corrompia o salvamento).
+  const [idiomaProposta, setIdiomaProposta] = useState('pt-BR');
+  const [modoBilingue, setModoBilingue] = useState(false);
+  const [htmlBilingue, setHtmlBilingue] = useState('');
+  const [mostrarTraducoes, setMostrarTraducoes] = useState(false);
+  const ehBilingue = idiomaProposta === 'en' || idiomaProposta === 'es';
   // Celular: a folha de acoes que substitui a parede de seis botoes.
   const [acoesAbertas, setAcoesAbertas] = useState(false);
 
@@ -148,6 +156,8 @@ export default function PropostaPreviewEditavel() {
         api.get(`/propostas/${id}/clausulas`),
       ]);
       setHtml(htmlRes.data);
+      setIdiomaProposta((htmlRes.headers && htmlRes.headers['x-proposta-idioma']) || 'pt-BR');
+      setModoBilingue(false);
       setClausulas(clausulasRes.data?.clausulas || []);
       setClausulasIsDefault(clausulasRes.data?.isDefault ?? true);
       setCamposEditados({});
@@ -1460,6 +1470,11 @@ export default function PropostaPreviewEditavel() {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
+      // Proposta bilíngue (RN-BI.04): o PDF sai com o português no lugar da tradução que falta — avisa antes de ele ir ao cliente.
+      const pendentes = Number(res.headers && res.headers['x-traducoes-pendentes']) || 0;
+      if (pendentes > 0) {
+        toast.warning(`O PDF saiu com ${pendentes} texto(s) sem tradução (aparecem em português, marcados). Abra "Traduções" para completar.`);
+      }
     } catch (e) {
       console.error('baixarPdf error:', e);
       toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')); // RN-141.07: o erro vem dentro do Blob
@@ -1479,14 +1494,49 @@ export default function PropostaPreviewEditavel() {
     }
   }
 
+  async function carregarBilingue() {
+    const res = await api.get(`/propostas/${id}/premium?embed=1&bilingue=1`, { responseType: 'text' });
+    setHtmlBilingue(res.data);
+  }
+
+  async function alternarBilingue() {
+    if (modoBilingue) { setModoBilingue(false); return; }
+    // O documento bilíngue é montado do que está SALVO: com alteração pendente, ele mostraria o texto antigo.
+    if (mudancasPendentes) { toast.warning('Salve as alterações antes de ver em duas colunas.'); return; }
+    try {
+      await carregarBilingue();
+      setModoBilingue(true);
+    } catch (e) {
+      toast.error(await mensagemDoErroEmBlob(e, 'Erro ao montar a proposta em duas colunas.'));
+    }
+  }
+
   // Fonte unica das acoes da proposta (ver comentario no JSX).
+  const acoesBilingue = ehBilingue ? [
+    {
+      chave: 'bilingue',
+      icone: <FiColumns />,
+      rotulo: modoBilingue ? 'Voltar a editar' : 'Ver em duas colunas',
+      dica: modoBilingue ? 'Voltar ao documento em português, que é o editável' : 'Ver o documento como sai no PDF: português e a outra língua lado a lado',
+      onClick: alternarBilingue,
+    },
+    {
+      chave: 'traducoes',
+      icone: <FiGlobe />,
+      rotulo: 'Traduções',
+      dica: 'Traduzir os textos pendentes e revisar ou corrigir a tradução',
+      onClick: () => setMostrarTraducoes(true),
+    },
+  ] : [];
   const acoes = [
+    ...acoesBilingue,
     {
       chave: 'reset',
       icone: <FiRefreshCw />,
       rotulo: 'Resetar cláusulas',
       dica: 'Resetar cláusulas para o padrão',
       onClick: resetarClausulas,
+      desabilitada: modoBilingue,
     },
     {
       chave: 'foto',
@@ -1494,7 +1544,7 @@ export default function PropostaPreviewEditavel() {
       rotulo: enviandoFotos ? 'Enviando...' : 'Adicionar foto',
       dica: 'Adicionar foto(s) à proposta — depois arraste para posicionar onde quiser',
       onClick: () => fotoInputRef.current && fotoInputRef.current.click(),
-      desabilitada: enviandoFotos,
+      desabilitada: enviandoFotos || modoBilingue,
     },
     {
       chave: 'historico',
@@ -1623,10 +1673,12 @@ export default function PropostaPreviewEditavel() {
             ref={iframeRef}
             className="ppe-iframe"
             title="Preview da proposta"
-            srcDoc={html}
+            srcDoc={modoBilingue ? htmlBilingue : html}
             sandbox="allow-same-origin allow-scripts"
             onLoad={() => {
               const doc = iframeRef.current?.contentDocument;
+              // Duas colunas = somente leitura: nada do editor é ligado (Fase 2, C1-C3).
+              if (modoBilingue) { if (doc) ajustarEscalaCelular(doc); return; }
               if (doc) {
                 textosIniciaisRef.current = lerTextosIniciaisDasClausulas(doc);
                 injetarAtributosEdicao(doc);
@@ -1640,6 +1692,15 @@ export default function PropostaPreviewEditavel() {
           />
         )}
       </div>
+
+      {mostrarTraducoes && (
+        <PainelTraducoes
+          propostaId={id}
+          idioma={idiomaProposta}
+          onFechar={() => setMostrarTraducoes(false)}
+          onAtualizou={() => { if (modoBilingue) carregarBilingue().catch(() => {}); }}
+        />
+      )}
 
       {/* Painel de histórico */}
       {mostrarHistorico && (
