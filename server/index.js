@@ -11,6 +11,9 @@ const { prepareDatabaseOnStartup, pruneOldBackups, opcoesDeRetencao, fileSizeIfE
 const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
 const { getClausulasHelices } = require('./clausulasHelices');
 const { getClausulasProjetoConceitual } = require('./clausulasProjetoConceitual');
+// Proposta bilingue (specs/proposta-bilingue/README.md): memoria de traducao e o que o template usa.
+const traducoesSvc = require('./services/traducoes');
+const propostaBilingue = require('./propostaBilingue');
 
 // Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
 // nao mexe nele — para nao desfazer edicoes que o usuario tenha feito depois.
@@ -1542,6 +1545,11 @@ function initializeDatabase(onReadyCallback) {
   // Valores das variáveis técnicas do tipo "Manual na Proposta" (manual_proposta):
   // preenchidos pelo vendedor direto no preview editável, por item da proposta.
   // item_id = proposta_itens.id (cada equipamento 4.x tem seus próprios valores).
+  // Memoria de traducao da proposta bilingue (RN-BI.04/05/06): (idioma, texto PT) -> traducao, auto ou manual.
+  traducoesSvc.criarTabelaTraducoes(db, (errTr) => {
+    if (errTr) console.error('❌ Erro ao criar tabela traducoes:', errTr.message);
+  });
+
   // ---------------------------------------------------------------------------
   // Modelos de contrato (conjuntos de clausulas)
   // ---------------------------------------------------------------------------
@@ -6113,6 +6121,21 @@ app.get('/api/clausulas-modelos/:id/clausulas', authenticateToken, exigirComerci
     });
 });
 
+// POST /api/traducoes — grava traducoes na memoria da proposta bilingue (RN-BI.05/06). Contrato congelado no plano
+// docs/superpowers/plans/2026-11-24-propostas-etapa1-proposta-bilingue.md; mensagens em services/traducoes.js (ERROS).
+// 'auto' nao sobrescreve 'manual' (conta em ignoradas); 'manual' sobrescreve qualquer uma.
+app.post('/api/traducoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const pedido = traducoesSvc.validarGravacao(req.body);
+  if (pedido.erro) return res.status(400).json({ error: pedido.erro });
+  traducoesSvc.gravarTraducoes(db, { ...pedido, usuarioId: req.user && req.user.id }, (err, resultado) => {
+    if (err) return respondDbError(res, err, 'traducoes:gravar');
+    // Rastro (Fase 5, 4): a memória é global; quem mudou o que fica na coluna updated_by e no log do servidor.
+    console.log(`[traducoes] ${pedido.origem} ${pedido.idioma}: ${resultado.gravadas} gravada(s), ${resultado.ignoradas} ignorada(s) por usuario ${req.user && req.user.id}`);
+    res.json(resultado);
+  });
+});
+
 // PUT /api/familias/:id/clausulas-modelo — vincula (ou desvincula) o modelo da família
 app.put('/api/familias/:id/clausulas-modelo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -7486,6 +7509,8 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
 
 app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
+    const erroIdioma = propostaBilingue.erroIdiomaMoeda(req.body);
+    if (erroIdioma) return res.status(400).json({ error: erroIdioma });
     normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
     if (req.body.itens && Array.isArray(req.body.itens)) {
       for (var i = 0; i < req.body.itens.length; i++) {
@@ -7747,6 +7772,8 @@ app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req,
 
 app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
+  const erroIdioma = propostaBilingue.erroIdiomaMoeda(req.body);
+  if (erroIdioma) return res.status(400).json({ error: erroIdioma });
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
   if (req.body.itens && Array.isArray(req.body.itens)) {
     for (var i = 0; i < req.body.itens.length; i++) {
@@ -9234,6 +9261,13 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
           templateConfig.margin_impressao_lateral = templateConfig.margin_impressao_lateral != null ? Number(templateConfig.margin_impressao_lateral) : 20;
           templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
           templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
+          // Proposta bilingue: a moeda e o incoterm valem sempre (RN-BI.08/09); as duas colunas so com ?bilingue=1 — o preview do
+          // EDITOR continua so em PT (Fase 2, C1-C3: traducao dentro do documento editavel corrompia o salvamento).
+          templateConfig.moeda = proposta.moeda;
+          templateConfig.incoterm = proposta.incoterm;
+          templateConfig.idioma = (req.query.bilingue === '1' || req.query.bilingue === 'true')
+            ? propostaBilingue.idiomaDaProposta(proposta.idioma)
+            : 'pt-BR';
 
           // Fotos avulsas posicionadas no documento (o template resolve URL no preview / base64 no PDF)
           db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [id], (errF, fotosRows) => {
@@ -9296,13 +9330,16 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
             try {
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+              // Proposta bilingue: o editor (sempre em PT) descobre o idioma por aqui — no HTML nao, que o pt-BR tem de sair igual.
+              res.setHeader('X-Proposta-Idioma', propostaBilingue.idiomaDaProposta(proposta.idioma));
+              res.setHeader('Access-Control-Expose-Headers', 'X-Proposta-Idioma');
               sendOnce(200, html);
             } catch (sendError) {
               console.error('Erro ao enviar resposta:', sendError);
               sendOnce(500, { error: 'Erro ao enviar preview: ' + (sendError && sendError.message ? sendError.message : String(sendError)) });
             }
           }
-          function runGerarSafe() {
+          function runGerarProtegido() {
             try {
               runGerar();
             } catch (err) {
@@ -9310,6 +9347,15 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
               console.error(err && err.stack);
               sendOnce(500, { error: 'Erro ao abrir proposta. Tente novamente.' });
             }
+          }
+          // No bilingue a memoria de traducao vai junto; falha ao le-la nao derruba o preview (sai tudo como pendente, RN-BI.04).
+          function runGerarSafe() {
+            if (!propostaBilingue.ehBilingue(templateConfig.idioma)) return runGerarProtegido();
+            traducoesSvc.carregarMapaTraducoes(db, templateConfig.idioma, (errTr, mapa) => {
+              if (errTr) console.error('Erro ao ler a memoria de traducao (preview segue com pendentes):', errTr.message);
+              templateConfig.traducoes = mapa || {};
+              runGerarProtegido();
+            });
           }
           let chaves = [];
           if (templateConfig && templateConfig.variaveis_proposta_tecnica != null) {
@@ -9654,6 +9700,21 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
       templateConfig.variaveis_manuais = repararVariaveisManuais(variaveisManuaisPdf, itens);
     }
 
+    // Proposta bilingue: o PDF de proposta en/es sai em duas colunas (RN-BI.02), com a memoria de traducao; moeda e incoterm
+    // valem em qualquer idioma (RN-BI.08/09). Falha ao ler a memoria: o PDF sai com os pendentes marcados (RN-BI.04).
+    templateConfig = templateConfig || {};
+    templateConfig.moeda = proposta.moeda;
+    templateConfig.incoterm = proposta.incoterm;
+    templateConfig.idioma = propostaBilingue.idiomaDaProposta(proposta.idioma);
+    if (propostaBilingue.ehBilingue(templateConfig.idioma)) {
+      templateConfig.traducoes = await new Promise((resolve) => {
+        traducoesSvc.carregarMapaTraducoes(db, templateConfig.idioma, (errTr, mapa) => {
+          if (errTr) console.error('Erro ao ler a memoria de traducao (PDF segue com pendentes):', errTr.message);
+          resolve(mapa || {});
+        });
+      });
+    }
+
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
     let html;
     const usouSnapshot = proposta.html_rendered && String(proposta.html_rendered).trim().length > 0;
@@ -9790,6 +9851,9 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdfProposta(proposta, id)}"`);
+    // Proposta bilingue: quantos textos sairam sem traducao (RN-BI.04) — a tela avisa antes de o vendedor mandar o PDF.
+    res.setHeader('X-Traducoes-Pendentes', String((html.match(/ data-traduzir="/g) || []).length));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Traducoes-Pendentes, Content-Disposition');
     res.end(pdfBuffer);
     
   } catch (error) {
