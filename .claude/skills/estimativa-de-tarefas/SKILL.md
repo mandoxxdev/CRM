@@ -85,6 +85,10 @@ a, b, c (pode subdividir uma só se ela for claramente duas mudanças diferentes
   | Fatia do almoxarifado (tela ou regra, com teste e documentação) | Etapas 230, 233, 236, 237: 0,7 a 1,1 h | ~45 min a 1h |
   | Fatia do almoxarifado no motor, trava ou estorno | Etapas 217-234 de motor | ~1h15 a 1h30 |
 
+  Medida de 23/11/2026 (Etapa 260): três itens de tela e leitura em pacote (busca de materiais pelo fornecedor; projeto na requisição;
+  Fila agrupada), estimados em 1h15 + 1h15 + 1h30, mediram **0,8 h juntos** no `horas.js`. Para fatias de tela sem motor que rodam no mesmo
+  pacote, estime o **pacote** (~45 min a 1h para três) e rateie, em vez de somar 45 min a 1h por fatia.
+
   Fatia que passar de 2 h: quebre (veja abaixo).
 
   **Por que a regra anterior estava errada (corrigida em 18/11/2026):** até aqui o tempo informado era

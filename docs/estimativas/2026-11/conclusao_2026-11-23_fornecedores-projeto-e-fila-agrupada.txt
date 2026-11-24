@@ -1,0 +1,8 @@
+*Concluído — busca de materiais pelo fornecedor, projeto na requisição e fila de separação agrupada*
+_23/11/2026_
+
+1. Busca e lista de materiais com os fornecedores cadastrados — estimado 1h15 · realizado 30 min
+2. Projeto na requisição — estimado 1h15 · realizado 30 min
+3. Fila de separação agrupada por setor ou por projeto — estimado 1h30 · realizado 30 min
+
+*Total: estimado 4h · realizado 1h30*
