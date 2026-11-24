@@ -157,3 +157,18 @@ test('tradutor do Chrome: so com window.Translator.create', () => {
   expect(temTradutorDoChrome({ Translator: { create: () => {} } })).toBe(true);
   expect(GLOSSARIO.every((g) => g.en && g.es)).toBe(true);
 });
+
+// "A tradução de excel ficou sobresalir? não faz sentido, isso não pode ocorrer" (24/11/2026).
+test('[termos fixos] Excel, PDF, DWG saem iguais; "Excelência" continua sendo traduzida', async () => {
+  // Erra como o de verdade: "excel" (a palavra) vira "Sobresalir".
+  const literal = { translate: async (t) => t.replace(/Excelência/g, 'Excelencia').replace(/excel(?![a-zà-ÿ])/gi, 'Sobresalir') };
+  expect(await traduzirTexto(literal, '✓ Excel;', 'es')).toBe('✓ Excel;');
+  expect(await traduzirTexto(literal, 'Planilhas em Excel e PDF, plantas em DWG.', 'en')).toBe('Planilhas em Excel e PDF, plantas em DWG.');
+  expect(await traduzirTexto(literal, 'Excelência Operacional', 'es')).toBe('Excelencia Operacional');
+});
+
+test('[termos fixos] o espaço em volta do termo volta quando o tradutor o cola ("✓PDF;")', async () => {
+  const cola = { translate: async (t) => t.replace(/\s+⟦/g, '⟦').replace(/⟧\s+/g, '⟧') };
+  expect(await traduzirTexto(cola, '✓ PDF;', 'es')).toBe('✓ PDF;');
+  expect(await traduzirTexto(cola, 'Arquivos PDF editáveis', 'en')).toBe('Arquivos PDF editáveis');
+});

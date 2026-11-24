@@ -19,6 +19,28 @@ const ERROS = {
   marcadores: 'A tradução tem de manter os mesmos marcadores {{…}} do texto em português.',
 };
 
+// Nomes de programa e de formato que nunca se traduzem — a mesma lista do cliente (client/.../traducaoChrome.js, TERMOS_FIXOS).
+const TERMOS_FIXOS = ['Excel', 'Word', 'PowerPoint', 'PDF', 'DWG', 'DXF', 'AutoCAD', 'Revit', 'SolidWorks'];
+const LETRA = 'A-Za-zÀ-ÖØ-öø-ÿ';
+const temTermo = (texto, t) => new RegExp(`(?<![${LETRA}])${t}(?![${LETRA}])`, 'i').test(String(texto || ''));
+
+/**
+ * Apaga as traduções AUTOMÁTICAS que perderam um termo fixo ("✓ Excel;" -> "✓ Sobresalir;", 24/11/2026). Elas voltam a ficar
+ * pendentes e a tela as traduz de novo, já com o termo protegido. A correção manual (origem 'manual') nunca é apagada.
+ * callback(err, apagadas).
+ */
+function limparTraducoesSemTermoFixo(db, callback = () => {}) {
+  db.all("SELECT id, texto_origem, texto_traduzido FROM traducoes WHERE origem = 'auto'", [], (err, rows) => {
+    if (err) return callback(err, 0);
+    const ids = (rows || []).filter((r) => TERMOS_FIXOS.some((t) => temTermo(r.texto_origem, t) && !temTermo(r.texto_traduzido, t)))
+      .map((r) => r.id);
+    if (!ids.length) return callback(null, 0);
+    db.run(`DELETE FROM traducoes WHERE origem = 'auto' AND id IN (SELECT value FROM json_each(?))`, [JSON.stringify(ids)], function feito(e) {
+      callback(e || null, e ? 0 : this.changes);
+    });
+  });
+}
+
 function criarTabelaTraducoes(db, callback = () => {}) {
   db.run(`CREATE TABLE IF NOT EXISTS traducoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,4 +118,4 @@ function carregarMapaTraducoes(db, idioma, callback) {
   });
 }
 
-module.exports = { ERROS, MAX_ITENS, MAX_CARACTERES, criarTabelaTraducoes, validarGravacao, gravarTraducoes, carregarMapaTraducoes };
+module.exports = { ERROS, MAX_ITENS, MAX_CARACTERES, TERMOS_FIXOS, limparTraducoesSemTermoFixo, criarTabelaTraducoes, validarGravacao, gravarTraducoes, carregarMapaTraducoes };

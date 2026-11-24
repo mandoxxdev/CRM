@@ -57,18 +57,19 @@ function hashDoCaso(nome, extraConfig = {}, forPdfServer = true) {
 }
 
 // Tirados do template em 4de32918 (antes da etapa bilingue), 24/11/2026. EXCETO projetoConceitual: regerado em 24/11/2026 (tarde)
-// porque a proposta de servico passou a seguir a proposta de origem (1 a 20, sem secao de equipamento) — mudanca INTENCIONAL. Se uma mudanca INTENCIONAL do documento pt-BR
+// porque a proposta de servico passou a seguir a proposta de origem (1 a 20, sem secao de equipamento), e de novo (noite) porque
+// "DWG versao 2010" saiu da clausula 9 a pedido do Comercial — mudancas INTENCIONAIS. Se uma mudanca INTENCIONAL do documento pt-BR
 // alterar estes hashes, regere-os e diga no commit o que mudou — nunca regere para fazer o teste passar.
 const BASE = {
   pdf: {
     equipamento: '65d5a26b985a8fe7794cacc4b255ee685402ac62251c0846aa0390c4a222e88d',
     pecas: '6afe985d246b28512741aa854054b5678a273d871f0c860433eddbc4538b0ba3',
-    projetoConceitual: '52460a1f2f054fe757d1c555eabf71935318b58e3fa5ec383ef3b910bc3d2d4a',
+    projetoConceitual: 'c0cf4ea4423da8dea0fa67ce4378a6b5ec9223f0d35ddc39a3929c1115dc7c0c',
   },
   preview: {
     equipamento: 'fdbc1279703e0d596c5620bf3a51190a154a3f1bc61d9ebe8ed296657daa5ed9',
     pecas: '36ab5fcd6c0d76279d6cbc2ceaa5c9bcb609ac71bce03d04ac12dea1031b1645',
-    projetoConceitual: 'dd446e900954627afe607b98dfeffd9bd8f6ad009b5bd77f0f22c712d101cbf2',
+    projetoConceitual: '90609ef4985f0724d537566667cf83e75eac9d1f8dad2cff6b104462c84286bf',
   },
 };
 

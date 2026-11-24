@@ -113,7 +113,7 @@ const CLAUSULAS_PROJETO_CONCEITUAL = [
       + '<p>Não está prevista visita técnica às instalações do CLIENTE.</p>'
       + '<p>Caso seja necessária, deverá ser previamente acordada, ficando despesas de transporte, hospedagem, alimentação, traslados e demais custos relacionados sob responsabilidade do CLIENTE ou objeto de proposta complementar.</p>'
       + '<p>Os documentos poderão ser fornecidos em:</p>'
-      + lista(['Excel;', 'PDF;', 'DWG versão 2010;', 'Português – Brasil.']),
+      + lista(['Excel;', 'PDF;', 'Português – Brasil.']) /* 'DWG versão 2010' saiu a pedido do Comercial (24/11/2026) */,
   },
   {
     numero: '10.',

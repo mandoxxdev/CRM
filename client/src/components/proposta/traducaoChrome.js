@@ -11,6 +11,8 @@
  *   maiúsculas: o tradutor erra mais com CAIXA ALTA (Fase 2, I18).
  */
 
+export const TERMOS_FIXOS = ['Excel', 'Word', 'PowerPoint', 'PDF', 'DWG', 'DXF', 'AutoCAD', 'Revit', 'SolidWorks'];
+
 // Fronteira de palavra com letras acentuadas: SUBCONTRATADA não casa CONTRATADA.
 const LETRA = 'A-Za-zÀ-ÖØ-öø-ÿ';
 // O termo vai num grupo: sem ele, com alternativas ("nota fiscal|notas fiscais") a fronteira grudava numa só e "nota fiscalizada"
@@ -24,6 +26,9 @@ export const GLOSSARIO = [
   { re: termo('notas? fiscal|notas fiscais'), en: 'invoice', es: 'factura' },
   { re: termo('MOINHO YPIRANGA'), en: 'MOINHO YPIRANGA', es: 'MOINHO YPIRANGA' },
   { re: termo('GMP INDUSTRIAIS'), en: 'GMP INDUSTRIAIS', es: 'GMP INDUSTRIAIS' },
+  // Nomes de programa e de formato de arquivo ficam iguais: "Excel" saiu "Sobresalir" no espanhol (24/11/2026: "não faz sentido,
+  // isso não pode ocorrer"). A mesma lista está em server/services/traducoes.js (TERMOS_FIXOS), que limpa a memória ao subir.
+  ...TERMOS_FIXOS.map((t) => ({ re: termo(t), en: t, es: t, manterCaixa: true })),
 ];
 
 const ehTudoMaiusculo = (s) => /[A-Za-zÀ-ÿ]/.test(s) && s === s.toLocaleUpperCase('pt-BR') && s.replace(/[^A-Za-zÀ-ÿ]/g, '').length > 3;
@@ -36,6 +41,7 @@ export function protegerTexto(texto, idioma) {
   GLOSSARIO.forEach((g) => {
     t = t.replace(g.re, (m) => {
       const alvo = g[idioma] || m;
+      if (g.manterCaixa) return ficha(m); // nome de programa: sai como foi escrito (Excel, PDF, AutoCAD)
       // mantém a caixa do original: CONTRATANTE -> CONTRACTING PARTY; contratante -> contracting party
       return ficha(m === m.toLocaleUpperCase('pt-BR') ? alvo.toUpperCase() : alvo.toLowerCase());
     });
@@ -67,7 +73,13 @@ export function prepararTexto(textoPt, idioma) {
 export function finalizarTexto(saida, preparo, idioma) {
   if (!saida || !String(saida).trim()) return null;
   // Maiúsculas ANTES de devolver as fichas: o marcador {{…}} volta com a caixa original.
-  const base = preparo.maiusculo ? String(saida).toLocaleUpperCase(idioma === 'es' ? 'es-ES' : 'en-US') : saida;
+  let base = preparo.maiusculo ? String(saida).toLocaleUpperCase(idioma === 'es' ? 'es-ES' : 'en-US') : String(saida);
+  // O tradutor às vezes cola a ficha na palavra vizinha ("✓ ⟦0⟧;" voltava "✓⟦0⟧;" e saía "✓PDF;"): o espaço que havia no português
+  // em volta da ficha volta.
+  preparo.fichas.forEach((_, i) => {
+    if (new RegExp(`\\s⟦${i}⟧`).test(preparo.entrada)) base = base.replace(new RegExp(`(\\S)⟦\\s*${i}\\s*⟧`, 'g'), `$1 ⟦${i}⟧`);
+    if (new RegExp(`⟦${i}⟧\\s`).test(preparo.entrada)) base = base.replace(new RegExp(`⟦\\s*${i}\\s*⟧(?=[^\\s.,;:!?)])`, 'g'), `⟦${i}⟧ `);
+  });
   return restaurarTexto(base, preparo.fichas);
 }
 

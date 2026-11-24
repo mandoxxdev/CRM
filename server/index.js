@@ -1570,7 +1570,12 @@ function initializeDatabase(onReadyCallback) {
   // item_id = proposta_itens.id (cada equipamento 4.x tem seus próprios valores).
   // Memoria de traducao da proposta bilingue (RN-BI.04/05/06): (idioma, texto PT) -> traducao, auto ou manual.
   traducoesSvc.criarTabelaTraducoes(db, (errTr) => {
-    if (errTr) console.error('❌ Erro ao criar tabela traducoes:', errTr.message);
+    if (errTr) return console.error('❌ Erro ao criar tabela traducoes:', errTr.message);
+    // "Excel" virava "Sobresalir": a traducao automatica que perdeu um termo fixo e apagada e refeita pela tela (24/11/2026).
+    traducoesSvc.limparTraducoesSemTermoFixo(db, (errL, n) => {
+      if (errL) console.error('❌ Erro ao limpar traducoes:', errL.message);
+      else if (n) console.log(`[traducoes] ${n} traducao(oes) automatica(s) sem termo fixo apagada(s) para refazer`);
+    });
   });
 
   // ---------------------------------------------------------------------------
