@@ -849,6 +849,14 @@ const MovimentacoesAlmoxarifado = () => {
                       }}>
                         {delta === 0 ? `${m.quantidade} ${m.unidade}` : `${delta > 0 ? '+' : '−'}${m.quantidade} ${m.unidade}`}
                       </span>
+                      {/* Etapa 261 (RN-261.05; B1615): de quais prateleiras a Saída e o Ajuste tiraram as peças — o registro do
+                          servidor (`prateleiras`); sem registro, nada, como antes. */}
+                      {Array.isArray(m.prateleiras) && m.prateleiras.length > 0 && (
+                        <div data-testid="mov-prateleiras" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                          {`Saiu de: ${m.prateleiras.map((p) => `${p.padrao ? 'posição padrão' : (p.codigo || 'sem endereço')} ${
+                            Number(p.quantidade).toLocaleString('pt-BR', { maximumFractionDigits: 6 })}`).join(' · ')}`}
+                        </div>
+                      )}
                     </td>
                     <td style={{ color: 'var(--gmp-text-light)' }}>{m.saldo_anterior} {m.unidade}</td>
                     <td style={{ fontWeight: 600 }}>{m.saldo_posterior} {m.unidade}</td>
