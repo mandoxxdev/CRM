@@ -141,6 +141,30 @@ const API = '/api/almoxarifado';
     assert.ok(r.body.every((x) => Array.isArray(x.prateleiras)), 'alguma linha sem `prateleiras`');
   });
 
+  await test('[integracao 261] Saida de A e B, Ajuste de B, Ajuste do total: o estorno do Ajuste de B e recusado, o da Saida devolve, e o '
+    + 'historico continua dizendo A 3 · B 3', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 3);
+    await mov(m, 'ENTRADA', 5, { localizacao_destino_id: B.id });
+    const s = await mov(m, 'SAIDA', 6); // A 0, B 2
+    const ajB = await mov(m, 'AJUSTE', 1, { localizacao_destino_id: B.id }); // B 1, total 1
+    const ajT = await mov(m, 'AJUSTE', 4); // total 4 (a padrao A sobe)
+    const r1 = await post(`${API}/movimentacoes/${ajB}/cancelar`, { motivo: 'teste 261' });
+    assert.strictEqual(r1.status, 400, JSON.stringify(r1.body));
+    assert.strictEqual(r1.body.error, `Não é possível estornar: há um ajuste deste material feito depois deste (movimentação #${ajT}) `
+      + '— a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste.');
+    const r2 = await post(`${API}/movimentacoes/${s}/cancelar`, { motivo: 'teste 261' });
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    const linhas = await dbGet(db, `SELECT SUM(CASE WHEN localizacao_id = ? THEN quantidade END) a, SUM(CASE WHEN localizacao_id = ? THEN
+      quantidade END) b FROM estoque_saldo_almoxarifado WHERE material_id = ?`, [A.id, B.id, m]);
+    assert.deepStrictEqual([linhas.a, linhas.b], [6, 4], 'o estorno da Saida devolveu a cada prateleira (A 3+3, B 1+3)');
+    const h = await historico(m);
+    assert.strictEqual(texto(h.get(s).prateleiras), 'A261H 3 · B261H 3');
+    assert.ok(h.get(s).cancelado, 'premissa: a Saida esta estornada');
+    const estorno = [...h.values()].find((x) => x.tipo === 'ESTORNO');
+    assert.deepStrictEqual(estorno.prateleiras, [], 'o estorno nao tem baixa');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
