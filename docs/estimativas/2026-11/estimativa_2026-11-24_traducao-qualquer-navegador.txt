@@ -5,5 +5,10 @@ _24/11/2026_
 A proposta em inglês ou espanhol passa a ser traduzida pelo próprio sistema, sem depender do Chrome atualizado: funciona no Edge, no Firefox, no Chrome antigo e no celular, sem custo. Os termos do contrato (contratante, contratada, nota fiscal) continuam com a tradução fixa, e a correção feita à mão em "Traduções" continua valendo.
 Tempo estimado: *1h30*
 
-*Total estimado: 1h30*
+*2. Espaçamento da proposta em duas colunas igual ao da proposta em português*
+O espaço entre o título, os parágrafos e os itens passa a ser o mesmo da proposta em português, e as duas colunas ficam com a mesma largura, sem buracos na coluna da esquerda. O texto ainda sem tradução fica marcado só pela cor.
+Tempo estimado: *45min*
+
+*Total estimado: 2h15*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
+_Revisado: o item 2 chegou durante o trabalho._

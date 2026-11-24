@@ -550,22 +550,24 @@ em qualquer proposta.
 |---|---|
 | A proposta só saía em português, em real, sem incoterm. | Na proposta, a seção **Cliente de fora do Brasil** escolhe o **idioma do documento** (só português; português + inglês; português + espanhol), a **moeda** (real, dólar, euro) e o **incoterm** com o local de entrega. |
 | — | Em inglês ou espanhol, o PDF sai **todo em duas colunas**: português à esquerda, a outra língua à direita — capa, textos, cláusulas e tabelas. Um parágrafo nunca fica numa página e a tradução dele na outra. |
-| — | O que o vendedor escreve em português é traduzido pelo **tradutor do próprio Chrome**, de graça, no botão **Traduções → Traduzir pendentes** do preview. A tradução fica guardada e pode ser corrigida ali; a correção vale para as próximas propostas. |
+| — | O que o vendedor escreve em português é traduzido **sozinho pelo sistema**, de graça, em **qualquer navegador** (Chrome, Edge, Firefox, celular). A tradução fica guardada e pode ser corrigida em **Traduções**; a correção vale para as próximas propostas. |
+| A tradução só rodava no Chrome atualizado; em outro navegador aparecia *"A tradução automática não rodou (precisa do Chrome atualizado)"*. | Funciona em qualquer navegador, sem clique nem download (24/11/2026, noite). |
+| As colunas tinham espaços diferentes: buracos na coluna da esquerda, título longe do texto. | O espaço entre título, parágrafos e itens é o mesmo da proposta em português, e as duas colunas têm a mesma largura. |
 
 Como usar:
 1. Na proposta, em **Cliente de fora do Brasil**, escolha o idioma, a moeda e, se houver, o incoterm (ex.: *FOB* + *Porto de Santos*). Salve.
 2. Abra a **pré-visualização**. O editor continua em português — é nele que se mexe no texto. Salve as alterações.
-3. A tradução é **automática** (desde 24/11/2026, à tarde): acontece sozinha ao **Salvar alterações**, ao clicar em **Ver em duas
-   colunas** e ao **Baixar PDF** — e ao abrir o preview, quando a língua já foi baixada neste computador. Na primeira vez, o Chrome baixa
-   a língua (alguns segundos); um aviso "Traduzindo…" aparece no topo enquanto isso.
+3. A tradução é **automática**: acontece sozinha ao abrir o preview, ao **Salvar alterações**, ao clicar em **Ver em duas colunas** e
+   ao **Baixar PDF**, em qualquer navegador. Um aviso "Traduzindo…" aparece no topo enquanto isso.
 4. Para revisar ou corrigir uma tradução: **Traduções** → corrija a coluna da direita → **Salvar correções**.
 5. **Ver em duas colunas** mostra o documento como ele sai no PDF. Depois, **Baixar PDF**.
 
 O que saber:
-- A tradução automática só funciona no **Chrome 138 ou mais novo**. Em outro navegador, o painel **Traduções** continua funcionando, mas
-  a tradução é preenchida à mão.
-- Texto **sem tradução** sai no PDF em português, em itálico e marcado *"(tradução pendente)"*, e o sistema avisa quantos são ao baixar o
-  PDF. Confira antes de mandar ao cliente.
+- A tradução usa o Google Tradutor gratuito, pela internet do servidor. Se ele não responder, aparece *"A tradução automática não
+  respondeu agora"*: tente de novo em instantes, ou preencha em **Traduções**.
+- Texto **sem tradução** sai no PDF em português, em laranja com fundo claro, e o sistema avisa quantos são ao baixar o PDF. Confira
+  antes de mandar ao cliente.
+- A tradução vem sem negrito: um trecho em negrito no português (ex.: **Elaboração:**) sai sem negrito na outra coluna.
 - Termos de contrato seguem um glossário fixo: **CONTRATANTE** = *Contracting Party* / *Contratante*, **CONTRATADA** = *Contractor* /
   *Contratista*, **Escopo de Fornecimento** = *Scope of Supply* / *Alcance del Suministro*. O tradutor automático trocava CONTRATANTE
   por *Contractor* — que inverteria as partes do contrato.

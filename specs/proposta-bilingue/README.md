@@ -23,10 +23,16 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 
 ## Decisões técnicas (reversíveis) e o que foi descartado
 
-- **Tradutor do próprio Chrome** (`Translator` API, no PC do vendedor): grátis, sem chave, sem servidor, sem download feito pelo CRM.
-  Descartados no spike de 24/11/2026: modelo local OPUS-MT/NLLB no servidor (~1 GB de memória, ~5 s por frase, **não roda no Alpine**
-  da produção, e invertia CONTRATANTE→"CONTRACTOR"); serviço de tradução separado (LibreTranslate) e API paga (fora do "sem gastar").
-  Consequência aceita: **a tradução automática só acontece no Chrome**; em outro navegador a coluna traduzida é preenchida à mão.
+- **Tradutor no SERVIDOR** (desde 24/11/2026, noite — `services/tradutorWeb.js`, `POST /api/traducoes/automatica`): o endereço público e
+  gratuito do Google Tradutor (`translate_a/t?client=gtx`, sem chave), em lote. Funciona em **qualquer navegador**. O pedido: *"erro na
+  tradução, deve funcionar em qualquer navegador"* — o usuário recebeu "precisa do Chrome atualizado".
+  **Esta linha dizia "Tradutor do próprio Chrome … consequência aceita: a tradução automática só acontece no Chrome" e deixou de valer.**
+  O tradutor do Chrome (`Translator` API) ficou só como **reserva** no painel Traduções, se o servidor falhar.
+  Consequência aceita (reversível: `TRADUTOR_WEB_URL` aponta para outro serviço com o mesmo formato): o texto das cláusulas sai do
+  servidor para o Google; os dados do cliente não (a chave da memória é o texto antes da troca dos marcadores `{{…}}`). Endereço não
+  oficial: pode limitar ou mudar sem aviso — aí a tela avisa e o texto fica pendente.
+  Continuam descartados: modelo local OPUS-MT/NLLB no servidor (~1 GB de memória, ~5 s por frase, **não roda no Alpine** da produção,
+  e invertia CONTRATANTE→"CONTRACTOR"); LibreTranslate e API paga (fora do "sem gastar").
 - **Memória de tradução no servidor** (`traducoes`, por idioma e texto de origem): cada texto é traduzido uma vez; texto em PT mudou →
   é outro texto, traduz de novo; a correção do vendedor (`origem = 'manual'`) vence a automática e vale para as próximas propostas.
 - **Textos fixos do documento** (capa, títulos, cabeçalhos, assinatura) num **dicionário no código**, não no tradutor: o PDF é gerado no
@@ -47,12 +53,13 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - **RN-BI.03** — Um parágrafo e a sua tradução nunca ficam em páginas diferentes; uma linha de tabela também não.
 - **RN-BI.04** — Texto fixo do documento sai do dicionário; o que vem de dado (cláusulas, itens, variáveis, título) sai da memória de
   tradução. Sem tradução na memória, a coluna da outra língua mostra o PT-BR marcado como *pendente de tradução* — o documento nunca sai
-  com a metade em branco calada.
-- **RN-BI.05** — A tradução é **automática**: o que estiver pendente é traduzido pelo tradutor do Chrome e gravado (`origem = 'auto'`) ao
-  **Salvar alterações**, ao **Ver em duas colunas** e ao **Baixar PDF** (o tradutor é criado dentro do clique — o gesto que o Chrome exige
-  para baixar a língua na 1ª vez) e, sem clique, ao abrir o preview quando a língua já está baixada (`availability() === 'available'`).
-  **Traduzir pendentes** no painel continua existindo. *(Esta linha dizia só "no painel, Traduzir pendentes" — o usuário, 24/11/2026: "a
-  tradução não está automática!!!!!". Antes disso dizia "ao abrir o preview", o que sem gesto não funciona na 1ª vez — Fase 2, I11.)*
+  com a metade em branco calada. O pendente é marcado só com cor e fundo (o texto "(tradução pendente)" e o itálico alargavam a coluna e
+  abriam buracos na outra — 24/11/2026, noite).
+- **RN-BI.05** — A tradução é **automática e em qualquer navegador**: o que estiver pendente é traduzido pelo **servidor** e gravado
+  (`origem = 'auto'`) ao abrir o preview, ao **Salvar alterações**, ao **Ver em duas colunas** e ao **Baixar PDF**, sem clique.
+  **Traduzir pendentes** no painel continua existindo (com o Chrome como reserva). Servidor sem resposta → aviso na tela, texto pendente.
+  *(Esta linha dizia "pelo tradutor do Chrome … o tradutor é criado dentro do clique" — o usuário, 24/11/2026, noite: "deve funcionar em
+  qualquer navegador". Antes dizia só "no painel, Traduzir pendentes" — "a tradução não está automática!!!!!".)*
 - **RN-BI.06** — O vendedor corrige a tradução no painel **Traduções**; a correção grava `origem = 'manual'` e **não** é sobrescrita por
   tradução automática. *(Dizia "na coluna traduzida do preview" — corrigido pela Fase 2, C1–C3.)*
 - **RN-BI.07** — Os termos do glossário saem sempre com a tradução fixa, na tradução automática.
@@ -70,4 +77,5 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - [x] 4. Duas colunas — tabelas (preços com 10 colunas, fiscais) (`b8bd5add`)
 - [x] 5. Tradução automática no Chrome, memória e correção — `traducoes` + `POST /api/traducoes` (`40cb21ff`) + painel **Traduções** (`6f80f20c`)
 - [x] 6. Moeda e incoterm na tabela de preços; FINAME fora (`b8bd5add`)
+- [x] 8. Tradução pelo servidor, em qualquer navegador (`a9fab2fb`); espaçamento igual ao da proposta em português (`749b0fc6`)
 - [ ] 7. Teste de clique de um vendedor com uma proposta real no Chrome — **não feito** (ver Status)

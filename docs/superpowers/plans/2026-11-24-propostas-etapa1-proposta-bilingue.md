@@ -197,6 +197,23 @@ Revisor fresco, instruído a refutar; cada achado com cenário e, quando possív
 - **Nenhum clique de usuário real.** O `Translator` do Chrome só foi exercitado por um falso nos testes: no navegador embutido ele existe
   (Chrome 156), mas exige gesto do usuário na primeira vez e não foi acionado. A paginação foi conferida no navegador com amostras.
 
+## Correção de 24/11/2026, noite — tradução em qualquer navegador e espaçamento (`a9fab2fb`, `749b0fc6`)
+
+Estimativa `docs/estimativas/2026-11/estimativa_2026-11-24_traducao-qualquer-navegador.md`.
+
+- [x] Tradutor no servidor: `server/services/tradutorWeb.js` + `POST /api/traducoes/automatica` (contrato: corpo `{ idioma: 'en'|'es',
+  textos: [até 500, cada um até 5.000] }` → `{ traducoes: [texto|null] }`, mesma ordem; 400 corpo inválido; 502 serviço fora do ar). Não
+  grava — o cliente confere as fichas e grava em `POST /api/traducoes` como `auto`. `TRADUTOR_WEB_URL` troca o serviço (os testes usam um
+  falso). `a9fab2fb`
+- [x] Tela: `traduzirPendentesDaProposta` usa o servidor; `traduzirComReserva` cai no Chrome só no painel Traduções. O preview traduz ao
+  abrir, salvar, ver em duas colunas e baixar PDF, sem clique (o `tradutorDoClique` saiu). `a9fab2fb`
+- [x] Espaçamento: medido na proposta em português (título → texto 15px, parágrafo 12px, item 0) e copiado; as duas metades com o mesmo
+  recuo e o filete como sombra; pendente só com cor e fundo. `749b0fc6`
+- Testes: `tests/tradutorWeb.test.js` 6/6 (+ rede real com `TRADUTOR_WEB_REAL=1`: fichas intactas em en/es); `traducaoAutomaticaServidor`
+  API 3/3; `traducaoChrome.test.js` 15/15; paginação bilíngue 0 falhas; template 8/8 (hash pt-BR igual); módulo 8/8. Controle positivo:
+  sem a inicial maiúscula no lote e sem a reserva do Chrome, um teste de cada lado falha.
+- Não feito: clique real de um vendedor em outro navegador; o negrito dentro do parágrafo continua não indo para a tradução.
+
 ## Retro (4 números)
 
 - Rodadas de correção até verde: 4 (Fase 2 — redesenho para o editor só PT; navegador — linha partida, tabela vazando, célula invadida;
@@ -209,9 +226,10 @@ Revisor fresco, instruído a refutar; cada achado com cenário e, quando possív
 
 ## Próxima tarefa detalhada
 
-**Teste de clique com o Comercial** (o que falta para 🟢): uma proposta real em inglês no Chrome do vendedor — idioma/moeda/incoterm no
-formulário → salvar → preview → **Traduções → Traduzir pendentes** (a 1ª vez o Chrome baixa a língua) → revisar → **Ver em duas colunas** →
-**Baixar PDF** (o aviso de pendentes tem de zerar). Pontos de atenção: a qualidade da tradução do Chrome nos textos dos contratos (o glossário
+**Teste de clique com o Comercial** (o que falta para 🟢): uma proposta real em inglês em qualquer navegador — idioma/moeda/incoterm no
+formulário → salvar → abrir o preview (traduz sozinho pelo servidor, `POST /api/traducoes/automatica`) → revisar em **Traduções** → **Ver em
+duas colunas** → **Baixar PDF** (o aviso de pendentes tem de zerar). Conferir que o servidor da produção alcança `translate.googleapis.com`
+(sem isso: 502 e o aviso "não respondeu agora"). Pontos de atenção: a qualidade da tradução nos textos dos contratos (o glossário
 cobre só os termos de contrato); fotos posicionadas à mão mudam de página no bilíngue; marcadores de valor `{{…}}` nas cláusulas continuam
 em real. Depois disso, a próxima candidata é a **tributação de exportação** nas tabelas fiscais do bilíngue (hoje saem as alíquotas do Brasil).
 
