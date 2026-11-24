@@ -1,0 +1,9 @@
+*Planejamento — Negrito na tradução da proposta*
+_24/11/2026_
+
+*1. Negrito também na coluna traduzida*
+Os trechos em negrito do português (como "PROJETO CONCEITUAL" e "Excelência Operacional") não saíam em negrito no espanhol. A tradução passa a ser feita com o negrito marcado dentro da frase, e as traduções já feitas sem negrito são refeitas sozinhas. Correções feitas à mão não são mexidas.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
