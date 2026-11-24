@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — Semana de 15/11 a 21/11/2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa; --tela:#2f80ed; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  td:last-child, th:last-child { white-space:nowrap; }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figure.estreita img { width:auto; max-width:100%; }
+  figcaption { color:var(--suave); font-size:14px; }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } tr { break-inside:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 15/11 a 21/11/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">A Fila de separação ganhou filtros por setor, projeto e localização, a tela Devoluções ganhou a busca da entrega, o
+  Compras passou a ser avisado do material criado pelo Almoxarifado que precisa ter o cadastro completado, e o cadastro de material de EPI
+  passou a explicar o CA. Por baixo, a entrega e a separação passaram a mostrar exatamente o que pode sair, e desfazer um ajuste, uma saída
+  ou excluir uma requisição passou a devolver as peças às prateleiras de onde saíram. No total, 21h de trabalho, a maior parte no cuidado
+  com peças de lote bloqueado e com número de série.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Filtros na Fila de separação</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Fila de separação</b>, no topo da tela.</p>
+    <p><span class="rotulo">Antes:</span> a Fila mostrava todas as requisições juntas. Quem cuida de um setor, de um projeto ou de um
+    corredor do galpão tinha de ler a lista inteira para achar o seu trabalho.</p>
+    <p><span class="rotulo">Agora:</span> três filtros — <b>Setor</b>, <b>Projeto</b> e <b>Localização</b>. Escolher um corredor mostra
+    também as prateleiras dentro dele. Com filtro ligado aparece "Mostrando 3 de 12 requisições." e o botão <b>Limpar filtros</b>. A ordem
+    de urgência não muda, cada requisição mostra o projeto, e <b>Imprimir lista de coleta (todas)</b> imprime só o que está na tela. Os
+    filtros continuam escolhidos ao abrir uma requisição e voltar.</p>
+    <figure><img src="prints/fila-separacao-filtros.png" alt="Fila de separação com o filtro Localização em ALM-GERAL / B-01 e a frase Mostrando 3 de 12 requisições"><figcaption>Filtrando pelo corredor B-01: ficam 3 das 12 requisições, cada uma com o lugar onde pegar.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Buscar a entrega na devolução</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Devoluções → Nova Devolução</b>, campo <b>Entrega de origem</b>.</p>
+    <p><span class="rotulo">Antes:</span> para devolver material de uma entrega antiga, era preciso clicar várias vezes em "Carregar
+    entregas mais antigas" e procurar na lista.</p>
+    <p><span class="rotulo">Agora:</span> um campo de busca acha a entrega pelo número da requisição, pela OS ou pela data (DD/MM/AAAA).
+    Enter também busca. Sem resultado, a tela diz "Nenhuma entrega deste material para …", e <b>Limpar</b> volta à lista completa.</p>
+    <figure class="estreita"><img src="prints/devolucoes-buscar-entrega.png" alt="Janela Nova devolução com a busca X3SU e a entrega encontrada escolhida"><figcaption>Digitando parte do número da requisição, só a entrega dela fica na lista.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>O Compras é avisado do material com cadastro a completar</h3>
+    <p><span class="rotulo">Onde:</span> <b>Compras → Materiais</b>.</p>
+    <p><span class="rotulo">Antes:</span> ao registrar uma sobra ou uma remessa a terceiros de um material que ainda não existia, o
+    Almoxarifado criava o material com poucos dados (sem NCM, custo nem fornecedor), e o Compras não ficava sabendo.</p>
+    <p><span class="rotulo">Agora:</span> esse material chega ao Compras marcado. A lista mostra um aviso com quantos são, o botão
+    <b>Ver só esses</b> e o selo "Cadastro a completar" ao lado do nome. O formulário do material também avisa. Quando o Compras salva o
+    cadastro, a marca sai.</p>
+    <figure><img src="prints/compras-cadastro-a-completar.png" alt="Compras, Materiais: aviso de 2 materiais com o cadastro a completar e o selo no motorredutor"><figcaption>O aviso no topo da lista e o selo "Cadastro a completar" no motorredutor.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>O cadastro de EPI explica o CA</h3>
+    <p><span class="rotulo">Onde:</span> <b>Compras → Materiais</b>, lápis de um material do tipo EPI.</p>
+    <p><span class="rotulo">Antes:</span> os campos "Nº do CA" e "Validade do CA" apareciam em todo material, sem explicar o que eram.</p>
+    <p><span class="rotulo">Agora:</span> os dois campos aparecem só quando o tipo de material é EPI, com a explicação embaixo: CA é o
+    Certificado de Aprovação do equipamento de proteção, com o número e a validade que constam nele. O que já estava preenchido em material
+    de outro tipo continua guardado.</p>
+    <figure><img src="prints/material-epi-ca.png" alt="Cadastro da luva de vaqueta com Nº do CA, Validade do CA e a explicação embaixo"><figcaption>A luva de vaqueta, com o número e a validade do CA e a explicação.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as informações. Quando ele erra, o erro
+  aparece depois, em forma de estoque que não bate ou de material que some. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>A tela de entrega mostra o que de fato pode sair</h3>
+    <p><span class="rotulo">O problema:</span> dois itens da mesma requisição tiravam do mesmo lote, e a tela dizia que cada um podia
+    entregar 3, quando só havia 3 para os dois; a entrega dos dois juntos era recusada. Quando o lote da separação ficava bloqueado depois,
+    a tela ainda contava aquelas peças. E a entrega pulava para outro lote sem dizer por quê.</p>
+    <p><span class="rotulo">O que foi feito:</span> a janela de entrega e a Fila dividem o lote entre os itens, na ordem do pedido, e
+    deixam de contar a parte separada que não pode mais sair. A entrega diz quantas peças de cada lote estão bloqueadas ou em inspeção, e a
+    recusa de dois itens na mesma prateleira explica a conta ("sobra 1, que não cobre a quantidade"). A dica "Pegar em" da Fila deixou de
+    mandar a um lote com peça presa que não cobre o pedido. A troca para a saída automática passou a dizer de qual prateleira a peça saiu,
+    e a peça com número de série deixou de levar a peça que outro item já tinha separado.</p>
+    <p><span class="rotulo">O que isso evita:</span> o almoxarife confiar num número da tela e levar uma recusa na hora de entregar.</p>
+  </div>
+
+  <div class="item">
+    <h3>Desfazer um lançamento devolve as peças ao lugar certo</h3>
+    <p><span class="rotulo">O problema:</span> uma saída tirava 3 peças da prateleira A e 3 da B. Ao desfazer, as 6 voltavam todas para
+    uma prateleira só, e a outra ficava vazia no sistema, embora as peças estivessem lá. O mesmo acontecia ao desfazer um ajuste de saldo
+    e ao excluir uma requisição já entregue. Pior: desfazer um ajuste depois de outros movimentos voltava o total a um número antigo, e as
+    entradas e saídas feitas depois sumiam da conta (o total ficava 2 quando o certo era 8).</p>
+    <p><span class="rotulo">O que foi feito:</span> o sistema passou a guardar de quais prateleiras cada saída, ajuste ou entrega tirou as
+    peças, e o desfazer devolve a essas mesmas prateleiras. Desfazer um ajuste passou a desfazer só a diferença que ele fez; quando isso
+    deixaria o saldo negativo, é recusado com "o saldo já foi consumido". O ajuste de saldo para baixo também passou a tirar primeiro das
+    peças que não estão separadas para uma requisição, e o ajuste num lote não deixa mais o lote negativo.</p>
+    <p><span class="rotulo">O que isso evita:</span> saldo por prateleira que não bate com o que está no galpão, e um total errado depois
+    de desfazer um lançamento antigo. Lançamentos feitos antes desta semana continuam voltando como antes.</p>
+  </div>
+
+  <div class="item">
+    <h3>Peças com número de série e de lote bloqueado saem e voltam pelo lote certo</h3>
+    <p><span class="rotulo">O problema:</span> a devolução de uma peça com número de série para a quarentena ou a sucata não guardava de
+    qual lote ela era. A devolução ao cliente era recusada só porque a prateleira padrão estava bloqueada, mesmo com o lote guardado em
+    outro lugar. O bloqueio feito em Inspeções ficava sempre "Sem lote". E o desfazer de uma nota era recusado quando o lote tinha
+    peças de duas notas.</p>
+    <p><span class="rotulo">O que foi feito:</span> as devoluções passaram a guardar o lote da peça. A saída confere a prateleira onde o
+    lote está. <b>Bloquear Material</b> aceita a indicação do lote. A janela <b>Devolver ao cliente</b> ganhou a escolha da prateleira, a
+    lista de lotes mostra quanto de cada um está livre, e a janela avisa logo ao abrir quando o material está reservado para uma OS. As
+    janelas de retalho e de devolução ao fornecedor avisam logo ao abrir que a peça com número de série é baixada em Movimentações. A
+    liberação de um lote com peças de duas notas guarda de qual nota veio cada parte, e o desfazer da nota espera a liberação do lote que
+    está acontecendo ao mesmo tempo.</p>
+    <p><span class="rotulo">O que isso evita:</span> saldo por lote que não fecha, recusas sem motivo e aviso que só aparece depois de o
+    formulário inteiro estar preenchido.</p>
+  </div>
+
+  <h2>Tempo gasto</h2>
+  <table>
+    <tr><th>O que foi feito</th><th>Tempo</th></tr>
+    <tr><td>Planejamento das alterações e estimativas de tempo</td><td>2h</td></tr>
+    <tr><td>Cadastro de material de EPI: explicação do CA</td><td>45 min</td></tr>
+    <tr><td>Almoxarifado: peças com número de série e de lote bloqueado (devoluções, saída, bloqueio e liberação de lote)</td><td>10h30</td></tr>
+    <tr><td>Almoxarifado: entrega e Fila de separação (números certos e filtros)</td><td>2h45</td></tr>
+    <tr><td>Almoxarifado: ajuste de saldo, desfazer lançamentos, busca na devolução; material da sobra avisado no Compras</td><td>5h</td></tr>
+    <tr><th>Total</th><th>21h</th></tr>
+  </table>
+  <p>Tempo medido pelo registro do trabalho feito na semana.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <b>Almoxarifado → Fila de separação</b> e escolha uma localização no filtro: a frase "Mostrando N de M requisições" aparece e
+    só ficam as requisições daquele lugar. Clique em <b>Abrir</b> numa delas e volte: o filtro continua escolhido.</li>
+    <li>Abra <b>Almoxarifado → Devoluções → Nova Devolução</b>, escolha um material que já foi entregue, digite parte do número da
+    requisição no campo de busca e aperte Enter: a lista de entregas fica só com ela.</li>
+    <li>Abra <b>Compras → Materiais</b>: se houver material criado numa sobra ou remessa, o aviso aparece no topo. Clique em <b>Ver só
+    esses</b>, abra um deles e salve: o selo sai.</li>
+    <li>Em <b>Compras → Materiais</b>, abra um material do tipo EPI: os campos do CA aparecem com a explicação. Troque o tipo para outro:
+    os campos somem.</li>
+    <li>Abra <b>Almoxarifado → Inspeções → Bloquear Material</b> num material com lote: o campo do lote aparece.</li>
+  </ol>
+</main>
+</body>
+</html>
