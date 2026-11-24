@@ -54,22 +54,74 @@ export function restaurarTexto(traduzido, fichas) {
   return t.replace(/⟦\s*\d+\s*⟧/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Traduz um texto PT com o tradutor do Chrome (`tradutor.translate`). null = não traduziu (ficha perdida, erro, vazio).
- * Recebe o tradutor pronto para testar sem o Chrome.
- */
-export async function traduzirTexto(tradutor, textoPt, idioma) {
+/** Prepara o texto PT para o tradutor: fichas no lugar de marcadores e glossário; caixa alta vira minúscula (Fase 2, I18). */
+export function prepararTexto(textoPt, idioma) {
   // Protege PRIMEIRO (marcadores e glossário saem do texto como fichas) e só então decide a caixa: o marcador {{cliente.nome}} é
   // minúsculo e fazia um título todo em maiúsculas parecer misto (achado pelo teste [I18]).
   const { texto, fichas } = protegerTexto(textoPt, idioma);
   const maiusculo = ehTudoMaiusculo(texto.replace(/⟦\d+⟧/g, ''));
-  const entrada = maiusculo ? texto.toLocaleLowerCase('pt-BR') : texto;
-  let saida;
-  try { saida = await tradutor.translate(entrada); } catch (e) { return null; }
+  return { entrada: maiusculo ? texto.toLocaleLowerCase('pt-BR') : texto, fichas, maiusculo };
+}
+
+/** Devolve a saída do tradutor à forma final. null = não traduziu (vazio ou ficha perdida). */
+export function finalizarTexto(saida, preparo, idioma) {
   if (!saida || !String(saida).trim()) return null;
   // Maiúsculas ANTES de devolver as fichas: o marcador {{…}} volta com a caixa original.
-  const base = maiusculo ? String(saida).toLocaleUpperCase(idioma === 'es' ? 'es-ES' : 'en-US') : saida;
-  return restaurarTexto(base, fichas);
+  const base = preparo.maiusculo ? String(saida).toLocaleUpperCase(idioma === 'es' ? 'es-ES' : 'en-US') : saida;
+  return restaurarTexto(base, preparo.fichas);
+}
+
+/**
+ * Traduz um texto PT com um tradutor que tem `translate(texto)` (o do Chrome). null = não traduziu (ficha perdida, erro, vazio).
+ * Recebe o tradutor pronto para testar sem o Chrome.
+ */
+export async function traduzirTexto(tradutor, textoPt, idioma) {
+  const preparo = prepararTexto(textoPt, idioma);
+  let saida;
+  try { saida = await tradutor.translate(preparo.entrada); } catch (e) { return null; }
+  return finalizarTexto(saida, preparo, idioma);
+}
+
+const LOTE_SERVIDOR = 100;
+
+/**
+ * Tradutor que roda NO SERVIDOR do CRM (POST /api/traducoes/automatica) — funciona em QUALQUER navegador (pedido de 24/11/2026:
+ * "deve funcionar em qualquer navegador"). Traduz em lote (`traduzirVarios`); não precisa de clique nem de download.
+ * Falha do servidor = exceção (quem chama tenta o do Chrome, se houver).
+ */
+export function tradutorDoServidor(api, idioma) {
+  return {
+    async traduzirVarios(textos) {
+      const saida = [];
+      for (let i = 0; i < textos.length; i += LOTE_SERVIDOR) {
+        // eslint-disable-next-line no-await-in-loop
+        const { data } = await api.post('/traducoes/automatica', { idioma, textos: textos.slice(i, i + LOTE_SERVIDOR) });
+        const lote = (data && Array.isArray(data.traducoes)) ? data.traducoes : [];
+        textos.slice(i, i + LOTE_SERVIDOR).forEach((_, k) => saida.push(typeof lote[k] === 'string' ? lote[k] : null));
+      }
+      return saida;
+    },
+  };
+}
+
+/**
+ * Traduz vários textos PT. Usa `traduzirVarios` (lote, o do servidor) se o tradutor tiver; senão um a um com `translate` (o do Chrome).
+ * Devolve [texto traduzido | null], na mesma ordem. Erro do tradutor em lote sobe (para cair no do Chrome).
+ */
+export async function traduzirTextos(tradutor, textosPt, idioma, aoProgredir) {
+  if (tradutor && typeof tradutor.traduzirVarios === 'function') {
+    const preparos = textosPt.map((t) => prepararTexto(t, idioma));
+    const saidas = await tradutor.traduzirVarios(preparos.map((p) => p.entrada));
+    if (aoProgredir) aoProgredir(textosPt.length, textosPt.length);
+    return preparos.map((p, i) => finalizarTexto(saidas[i], p, idioma));
+  }
+  const saida = [];
+  for (let i = 0; i < textosPt.length; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    saida.push(await traduzirTexto(tradutor, textosPt[i], idioma));
+    if (aoProgredir) aoProgredir(i + 1, textosPt.length);
+  }
+  return saida;
 }
 
 /** O tradutor do Chrome está neste navegador? (só existe no Chrome 138+). */
@@ -110,24 +162,35 @@ const MAX_CARACTERES = 5000; // limite de cada texto no POST /api/traducoes
 const LOTE = 200;
 
 /**
+ * Traduz `textos` pelo SERVIDOR do CRM (qualquer navegador); se ele falhar e houver tradutor do Chrome (`tradutorPromessa`, criado
+ * no clique), tenta por ele. Sem nenhum dos dois, a exceção sobe. Devolve [texto | null] na mesma ordem.
+ */
+export async function traduzirComReserva({ api, idioma, tradutorPromessa, textos, aoProgredir }) {
+  try {
+    return await traduzirTextos(tradutorDoServidor(api, idioma), textos, idioma, aoProgredir);
+  } catch (e) {
+    if (!tradutorPromessa) throw e;
+    return traduzirTextos(await tradutorPromessa, textos, idioma, aoProgredir);
+  }
+}
+
+/**
  * Tradução AUTOMÁTICA dos pendentes de uma proposta (o pedido: "ao vendedor digitar em PT já suba em ESP ou ING" — e, em
- * 24/11/2026, "a tradução não está automática!!!!!"). Lê o documento bilíngue do servidor, traduz o que está pendente com o
- * tradutor do Chrome e grava como 'auto'. Recebe o tradutor PRONTO (`tradutorPromessa`): quem chama o cria no clique (gesto) ou
- * só quando a língua já está baixada. Devolve { traduzidos, falhas, pendentes }.
+ * 24/11/2026, "a tradução não está automática!!!!!" e "deve funcionar em qualquer navegador"). Lê o documento bilíngue do servidor,
+ * traduz o que está pendente — pelo SERVIDOR do CRM; se ele falhar, pelo tradutor do Chrome (`tradutorPromessa`, opcional, criado no
+ * clique) — e grava como 'auto'. Devolve { traduzidos, falhas, pendentes }.
  */
 export async function traduzirPendentesDaProposta({ api, propostaId, idioma, tradutorPromessa, aoProgredir }) {
   const res = await api.get(`/propostas/${propostaId}/premium?embed=1&bilingue=1`, { responseType: 'text' });
   const pendentes = textosDoDocumento(res.data).filter((t) => t.pendente);
   if (pendentes.length === 0) return { traduzidos: 0, falhas: 0, pendentes: 0 };
-  const tradutor = await tradutorPromessa;
+  const traducoes = await traduzirComReserva({ api, idioma, tradutorPromessa, textos: pendentes.map((p) => p.chave), aoProgredir });
   const prontos = [];
   let falhas = 0;
-  for (let i = 0; i < pendentes.length; i++) {
-    // eslint-disable-next-line no-await-in-loop
-    const tr = await traduzirTexto(tradutor, pendentes[i].chave, idioma);
-    if (tr && tr.length <= MAX_CARACTERES) prontos.push({ texto_origem: pendentes[i].chave, texto_traduzido: tr }); else falhas++;
-    if (aoProgredir) aoProgredir(i + 1, pendentes.length);
-  }
+  pendentes.forEach((p, i) => {
+    const tr = traducoes[i];
+    if (tr && tr.length <= MAX_CARACTERES) prontos.push({ texto_origem: p.chave, texto_traduzido: tr }); else falhas++;
+  });
   for (let i = 0; i < prontos.length; i += LOTE) {
     // eslint-disable-next-line no-await-in-loop
     await api.post('/traducoes', { idioma, origem: 'auto', itens: prontos.slice(i, i + LOTE) });

@@ -1,9 +1,9 @@
 /**
  * Painel "Traduções" da proposta bilíngue (specs/proposta-bilingue/README.md, RN-BI.04/05/06).
  *
- * Lista cada texto em português do documento ao lado da tradução, para revisar e corrigir. "Traduzir pendentes" usa o tradutor do
- * próprio Chrome (grátis, no PC do vendedor) — o clique é o gesto que o Chrome exige para baixar a língua na primeira vez (Fase 2,
- * I11). A correção do vendedor grava como 'manual' e a automática nunca a sobrescreve (RN-BI.06).
+ * Lista cada texto em português do documento ao lado da tradução, para revisar e corrigir. "Traduzir pendentes" traduz pelo SERVIDOR
+ * do CRM (qualquer navegador, pedido de 24/11/2026); se ele falhar, pelo tradutor do Chrome, quando houver (criado no clique — o gesto
+ * que o Chrome exige na 1ª vez, Fase 2, I11). A correção do vendedor grava como 'manual' e a automática nunca a sobrescreve (RN-BI.06).
  *
  * Os textos vêm do documento bilíngue que o SERVIDOR montou (/premium?bilingue=1): a chave de cada um é a que o servidor procura na
  * memória — nunca há texto que o painel traduz e o documento não acha (Fase 2, I5).
@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { FiX, FiGlobe, FiSave } from 'react-icons/fi';
 import api from '../../services/api';
-import { textosDoDocumento, temTradutorDoChrome, criarTradutor, traduzirTexto } from './traducaoChrome';
+import { textosDoDocumento, temTradutorDoChrome, criarTradutor, traduzirComReserva } from './traducaoChrome';
 
 const NOME_IDIOMA = { en: 'inglês', es: 'espanhol' };
 const LOTE = 200;
@@ -33,7 +33,6 @@ export default function PainelTraducoes({ propostaId, idioma, onFechar, onAtuali
   const [carregando, setCarregando] = useState(true);
   const [traduzindo, setTraduzindo] = useState(null); // { feitos, total } | null
   const [salvando, setSalvando] = useState(false);
-  const temChrome = temTradutorDoChrome();
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -57,25 +56,29 @@ export default function PainelTraducoes({ propostaId, idioma, onFechar, onAtuali
   });
 
   async function traduzirPendentes() {
-    if (!temChrome || pendentes.length === 0) return;
+    if (pendentes.length === 0) return;
+    // Reserva do Chrome criada AQUI, no clique (o gesto); só é usada se o servidor falhar.
+    let tradutorPromessa = null;
+    if (temTradutorDoChrome()) { tradutorPromessa = criarTradutor(idioma); tradutorPromessa.catch(() => {}); }
     setTraduzindo({ feitos: 0, total: pendentes.length });
     try {
-      let tradutor;
+      let traducoes;
       try {
-        tradutor = await criarTradutor(idioma);
+        traducoes = await traduzirComReserva({
+          api, idioma, tradutorPromessa, textos: pendentes.map((p) => p.chave),
+          aoProgredir: (feitos, total) => setTraduzindo({ feitos, total }),
+        });
       } catch (e) {
-        toast.error('Não foi possível usar o tradutor do Chrome. Confira se o Chrome está atualizado, ou preencha a tradução à mão.');
+        toast.error('A tradução automática não respondeu agora. Tente de novo em instantes, ou preencha a tradução à mão.');
         return;
       }
       const prontos = [];
       let falhas = 0;
-      for (let i = 0; i < pendentes.length; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        const tr = await traduzirTexto(tradutor, pendentes[i].chave, idioma);
+      pendentes.forEach((p, i) => {
+        const tr = traducoes[i];
         // Acima do limite do servidor o item derrubaria o lote inteiro (Fase 5, 7): fica pendente, para preencher à mão.
-        if (tr && tr.length <= MAX_CARACTERES) prontos.push({ texto_origem: pendentes[i].chave, texto_traduzido: tr }); else falhas++;
-        setTraduzindo({ feitos: i + 1, total: pendentes.length });
-      }
+        if (tr && tr.length <= MAX_CARACTERES) prontos.push({ texto_origem: p.chave, texto_traduzido: tr }); else falhas++;
+      });
       try {
         if (prontos.length) await gravar(idioma, 'auto', prontos);
       } catch (e) {
@@ -118,18 +121,13 @@ export default function PainelTraducoes({ propostaId, idioma, onFechar, onAtuali
             {carregando ? 'Carregando…' : `${textos.length} texto(s) · ${pendentes.length} sem tradução`}
           </span>
           <button type="button" className="ppe-btn" onClick={traduzirPendentes}
-            disabled={!temChrome || carregando || !!traduzindo || pendentes.length === 0}>
+            disabled={carregando || !!traduzindo || pendentes.length === 0}>
             <FiGlobe /> {traduzindo ? `Traduzindo ${traduzindo.feitos}/${traduzindo.total}…` : `Traduzir pendentes (${pendentes.length})`}
           </button>
           <button type="button" className="ppe-btn ppe-btn-salvar" onClick={salvarCorrecoes} disabled={alterados.length === 0 || salvando}>
             <FiSave /> {salvando ? 'Salvando…' : `Salvar correções (${alterados.length})`}
           </button>
         </div>
-        {!temChrome && (
-          <p className="ppe-traducoes-aviso">
-            A tradução automática usa o tradutor do próprio Chrome (versão 138 ou mais nova). Neste navegador, preencha a tradução à mão.
-          </p>
-        )}
         <p className="ppe-traducoes-aviso">
           A tradução vale para todas as propostas: corrigir um texto aqui corrige o mesmo texto onde ele aparecer.
         </p>

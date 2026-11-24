@@ -13,6 +13,7 @@ const { getClausulasHelices } = require('./clausulasHelices');
 const { getClausulasProjetoConceitual } = require('./clausulasProjetoConceitual');
 // Proposta bilingue (specs/proposta-bilingue/README.md): memoria de traducao e o que o template usa.
 const traducoesSvc = require('./services/traducoes');
+const tradutorWeb = require('./services/tradutorWeb');
 const propostaBilingue = require('./propostaBilingue');
 
 // Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
@@ -6180,6 +6181,27 @@ app.post('/api/traducoes', authenticateToken, exigirComercialNasPropostas, (req,
     console.log(`[traducoes] ${pedido.origem} ${pedido.idioma}: ${resultado.gravadas} gravada(s), ${resultado.ignoradas} ignorada(s) por usuario ${req.user && req.user.id}`);
     res.json(resultado);
   });
+});
+
+// POST /api/traducoes/automatica — traduz no SERVIDOR (qualquer navegador; pedido de 24/11/2026). Corpo { idioma, textos: [...] },
+// textos ja protegidos pelo cliente (fichas no lugar de {{...}} e do glossario). Resposta { traducoes: [texto|null] }, mesma ordem.
+// Nao grava: quem chama confere as fichas e grava como 'auto' no POST /api/traducoes (a manual continua protegida la).
+app.post('/api/traducoes/automatica', authenticateToken, exigirComercialNasPropostas, async (req, res) => {
+  const b = req.body || {};
+  const textos = b.textos;
+  if (!['en', 'es'].includes(b.idioma)) return res.status(400).json({ error: traducoesSvc.ERROS.idioma });
+  if (!Array.isArray(textos) || textos.length === 0 || textos.length > traducoesSvc.MAX_ITENS
+    || textos.some((t) => typeof t !== 'string' || !t.trim() || t.length > traducoesSvc.MAX_CARACTERES)) {
+    return res.status(400).json({ error: 'Envie os textos (até 500), cada um com até 5.000 caracteres.' });
+  }
+  try {
+    const traducoes = await tradutorWeb.traduzirLote(textos, b.idioma);
+    console.log(`[traducoes] automatica ${b.idioma}: ${textos.length} texto(s) por usuario ${req.user && req.user.id}`);
+    res.json({ traducoes });
+  } catch (e) {
+    console.warn(`[traducoes] tradutor web falhou: ${e && e.message}`);
+    res.status(502).json({ error: 'O serviço de tradução não respondeu agora. Tente de novo em instantes, ou preencha em "Traduções".' });
+  }
 });
 
 // PUT /api/familias/:id/clausulas-modelo — vincula (ou desvincula) o modelo da família

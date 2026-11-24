@@ -7,23 +7,66 @@ import {
   linguaJaBaixada, traduzirPendentesDaProposta,
 } from './traducaoChrome';
 
-test('[automatica] traduz SO os pendentes do documento do servidor e grava como auto, em lote', async () => {
-  const html = `<div id="proposalSource">
+const htmlComPendentes = `<div id="proposalSource">
     <p data-tr-origem="Garantia." data-tr-texto="Warranty.">Warranty.</p>
     <p class="bi-pendente" data-tr-origem="A CONTRATANTE pagará." data-traduzir="A CONTRATANTE pagará.">x</p>
     <span class="bi-pendente" data-tr-origem="METODOLOGIA" data-traduzir="METODOLOGIA">x</span></div>`;
-  const api = { get: jest.fn(async () => ({ data: html })), post: jest.fn(async () => ({ data: { gravadas: 2 } })) };
+
+// API falsa: o /traducoes/automatica (o tradutor do SERVIDOR) traduz com o `falso` — ou falha, com `servidorFalha`.
+function apiFalsa({ servidorFalha = false } = {}) {
+  return {
+    get: jest.fn(async () => ({ data: htmlComPendentes })),
+    post: jest.fn(async (url, corpo) => {
+      if (url === '/traducoes/automatica') {
+        if (servidorFalha) throw Object.assign(new Error('502'), { response: { status: 502 } });
+        return { data: { traducoes: await Promise.all(corpo.textos.map((t) => falso.translate(t))) } };
+      }
+      return { data: { gravadas: corpo.itens.length } };
+    }),
+  };
+}
+
+test('[qualquer navegador] traduz SO os pendentes pelo SERVIDOR, num pedido so, e grava como auto — sem tradutor do Chrome', async () => {
+  const api = apiFalsa();
   const progresso = [];
-  const r = await traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en', tradutorPromessa: Promise.resolve(falso),
-    aoProgredir: (f, t) => progresso.push(`${f}/${t}`) });
+  const r = await traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en', aoProgredir: (f, t) => progresso.push(`${f}/${t}`) });
   expect(api.get).toHaveBeenCalledWith('/propostas/7/premium?embed=1&bilingue=1', { responseType: 'text' });
   expect(r).toEqual({ traduzidos: 2, falhas: 0, pendentes: 2 });
-  expect(progresso).toEqual(['1/2', '2/2']);
-  expect(api.post).toHaveBeenCalledTimes(1);
-  const [, corpo] = api.post.mock.calls[0];
+  expect(progresso).toEqual(['2/2']);
+  const [url1, pedido] = api.post.mock.calls[0];
+  expect(url1).toBe('/traducoes/automatica');
+  // O servidor recebe o texto PROTEGIDO: o glossário vai como ficha, e caixa alta vai em minúsculas (I18).
+  expect(pedido).toEqual({ idioma: 'en', textos: ['A ⟦0⟧ pagará.', 'metodologia'] });
+  const [url2, corpo] = api.post.mock.calls[1];
+  expect(url2).toBe('/traducoes');
   expect(corpo.origem).toBe('auto');
   expect(corpo.itens.map((i) => i.texto_origem)).toEqual(['A CONTRATANTE pagará.', 'METODOLOGIA']);
-  expect(corpo.itens[0].texto_traduzido).toContain('CONTRACTING PARTY');
+  expect(corpo.itens[0].texto_traduzido).toBe('the CONTRACTING PARTY pagará.'); // o falso não conhece "pagará." (com ponto)
+  expect(corpo.itens[1].texto_traduzido).toBe('METODOLOGIA');
+});
+
+test('[qualquer navegador] servidor fora do ar: usa o tradutor do Chrome, se houver', async () => {
+  const api = apiFalsa({ servidorFalha: true });
+  const chrome = { translate: jest.fn(falso.translate) };
+  const r = await traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en', tradutorPromessa: Promise.resolve(chrome) });
+  expect(r).toEqual({ traduzidos: 2, falhas: 0, pendentes: 2 });
+  expect(chrome.translate).toHaveBeenCalledTimes(2);
+});
+
+test('[qualquer navegador] servidor fora do ar e sem Chrome: o erro sobe (a tela avisa) e nada é gravado', async () => {
+  const api = apiFalsa({ servidorFalha: true });
+  await expect(traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en' })).rejects.toThrow('502');
+  expect(api.post.mock.calls.filter(([u]) => u === '/traducoes')).toHaveLength(0);
+});
+
+test('[qualquer navegador] o servidor perdeu uma ficha num texto: SO esse fica pendente', async () => {
+  const api = apiFalsa();
+  api.post.mockImplementation(async (url, corpo) => (url === '/traducoes/automatica'
+    ? { data: { traducoes: ['The contractor shall pay.', 'methodology'] } } // a ficha do glossário sumiu no 1º
+    : { data: { gravadas: corpo.itens.length } }));
+  const r = await traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en' });
+  expect(r).toEqual({ traduzidos: 1, falhas: 1, pendentes: 2 });
+  expect(api.post.mock.calls[1][1].itens).toEqual([{ texto_origem: 'METODOLOGIA', texto_traduzido: 'METHODOLOGY' }]);
 });
 
 test('[automatica] sem pendente: nem cria nada nem grava', async () => {
