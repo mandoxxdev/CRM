@@ -1,0 +1,9 @@
+*Planejamento — Capa da proposta de Projeto Conceitual*
+_24/11/2026_
+
+*1. Capa de serviços e sem a tabela FINAME no Projeto Conceitual*
+A proposta feita só com itens de famílias ligadas ao contrato Projeto Conceitual passa a ter na capa "Proposta para fornecimento de serviços especializados", no lugar de "equipamentos industriais", e deixa de mostrar a tabela de referência FINAME / Cartão BNDES, que só vale para equipamento. Proposta que mistura equipamento continua como hoje.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
