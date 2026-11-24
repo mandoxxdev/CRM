@@ -5,5 +5,30 @@ _24/11/2026_
 Quando a tradução fica mais comprida que o português (comum no espanhol), a coluna da esquerda deixava um buraco embaixo de cada parágrafo. O sistema passa a ajustar sozinho o tamanho da letra do lado mais comprido, só o necessário e com um limite, para os dois lados terminarem juntos, na tela e no PDF.
 Tempo estimado: *1h*
 
-*Total estimado: 1h*
+*2. Página de apresentação maior, com a imagem*
+Na proposta em duas línguas, a apresentação da empresa volta a ter a imagem do modelo e a letra fica do maior tamanho que cabe na página.
+Tempo estimado: *30min*
+
+*3. Assinaturas no fim do documento*
+As assinaturas do final da proposta de Projeto Conceitual saíam desmontadas, com só um nome no alto da página. Voltam a sair como no modelo.
+Tempo estimado: *45min*
+
+*4. Negritos como no modelo, também na tradução*
+Os destaques em negrito do documento da empresa (termos, rótulos como "Elaboração:") passam a sair na proposta e também na coluna traduzida.
+Tempo estimado: *1h30*
+
+*5. Termos que não se traduzem*
+Excel, PDF, DWG e nomes de programas passam a ficar iguais na tradução ("Excel" saía "Sobresalir"), e as traduções já feitas com esse erro são refeitas. O item "DWG versão 2010" sai do modelo de Projeto Conceitual.
+Tempo estimado: *45min*
+
+*6. Editar os textos do Projeto Conceitual com a tradução acompanhando*
+Todos os textos da proposta de Projeto Conceitual podem ser mudados no editor, e a coluna traduzida acompanha logo depois de salvar.
+Tempo estimado: *1h30*
+
+*7. Cores e acabamento do documento*
+Acabamento visual da proposta em duas línguas, com cores que separam as duas colunas e destaques como no modelo.
+Tempo estimado: *45min*
+
+*Total estimado: 6h45*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
+_Revisado: os itens 2 a 7 chegaram durante o trabalho._
