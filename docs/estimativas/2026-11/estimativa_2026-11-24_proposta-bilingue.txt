@@ -1,0 +1,30 @@
+*Planejamento — Proposta para clientes de fora do Brasil (inglês e espanhol)*
+_24/11/2026_
+
+*1. Idioma, moeda e incoterm na proposta*
+No cadastro da proposta passam a existir a escolha do idioma (só português, português + inglês ou português + espanhol), da moeda (real, dólar ou euro) e do incoterm com o local de entrega.
+Tempo estimado: *1h*
+
+*2. Textos fixos do documento em inglês e espanhol*
+Capa, títulos das seções, cabeçalhos das tabelas, apresentação da empresa e página de assinatura ganham a versão em inglês e em espanhol.
+Tempo estimado: *1h30*
+
+*3. Proposta em duas colunas — capa, textos e cláusulas*
+Na proposta em outro idioma, cada parágrafo e cada cláusula saem lado a lado: português à esquerda, a outra língua à direita, sem nunca separar um parágrafo da sua tradução na troca de página.
+Tempo estimado: *2h*
+
+*4. Proposta em duas colunas — tabelas*
+Escopo de fornecimento, tabela de preços e tabelas fiscais também saem nas duas línguas lado a lado.
+Tempo estimado: *2h*
+
+*5. Tradução automática do que o vendedor escreve*
+O que o vendedor escreve em português na proposta (cláusulas, descrições, itens) é traduzido sozinho pelo tradutor do próprio Chrome, sem custo, e fica guardado. A coluna traduzida pode ser corrigida, e a correção vale para as próximas propostas. Termos de contrato (contratante, contratada, escopo de fornecimento) seguem um glossário fixo.
+Tempo estimado: *2h*
+
+*6. Moeda e incoterm na tabela de preços*
+Os valores saem na moeda escolhida e o incoterm com o local de entrega aparece junto da tabela de preços. A tabela de referência FINAME, que só vale no Brasil, não sai na proposta em outro idioma.
+Tempo estimado: *1h30*
+
+*Total estimado: 10h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
+_A tradução automática depende do Chrome atualizado no computador do vendedor; em outro navegador, a coluna traduzida é preenchida à mão._
