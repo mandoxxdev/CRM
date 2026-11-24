@@ -397,20 +397,22 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(await fisico(m), 5);
   });
 
-  await test('[R6/C239 declarado] QUARENTENA: cada volta devolver -> estornar a entrada deixa o bloqueio; estornar os bloqueios os tira', async () => {
+  // Etapa 262 (C239 resolvida, RN-262.02): ate a 262 cada volta devolver -> estornar a entrada deixava um bloqueio (8 com 4 bloqueados).
+  await test('[R6/C239, Etapa 262] QUARENTENA: a entrada so estorna depois do bloqueio; cada volta fecha em [8, 0]', async () => {
     const m = await material();
     await mov(m, { tipo: 'ENTRADA', quantidade: 10 });
     const saidaId = await mov(m, { tipo: 'SAIDA', quantidade: 2 });
-    const bloqueios = [];
+    const est = async () => { const r = await dbGet(db, 'SELECT quantidade_atual q, quantidade_bloqueada b FROM materiais_almoxarifado WHERE id = ?', [m.id]); return [r.q, r.b]; };
     for (let i = 0; i < 2; i += 1) {
       assert.strictEqual((await devolver(m, saidaId, 2, 'QUARENTENA')).status, 201);
-      bloqueios.push(await ultima(m, 'BLOQUEIO'));
-      assert.strictEqual((await estornar(await ultima(m, 'ENTRADA_DEVOLUCAO'))).status, 200);
+      const entrada = await ultima(m, 'ENTRADA_DEVOLUCAO');
+      const recusa = await estornar(entrada);
+      assert.strictEqual(recusa.status, 400, JSON.stringify(recusa.body));
+      assert.deepStrictEqual(await est(), [10, 2]);
+      assert.strictEqual((await estornar(await ultima(m, 'BLOQUEIO'))).status, 200);
+      assert.strictEqual((await estornar(entrada)).status, 200);
+      assert.deepStrictEqual(await est(), [8, 0]);
     }
-    const est = async () => { const r = await dbGet(db, 'SELECT quantidade_atual q, quantidade_bloqueada b FROM materiais_almoxarifado WHERE id = ?', [m.id]); return [r.q, r.b]; };
-    assert.deepStrictEqual(await est(), [8, 4], 'o comportamento declarado na C239 mudou — atualize a C239');
-    for (const b of bloqueios) assert.strictEqual((await estornar(b)).status, 200);
-    assert.deepStrictEqual(await est(), [8, 0]);
   });
 
   await test('[R7] devolucao para SUCATA que ficou parcial (a perna SUCATA nao gravou): a entrada estorna (200), sem a E1', async () => {

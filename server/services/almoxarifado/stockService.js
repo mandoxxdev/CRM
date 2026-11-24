@@ -2998,6 +2998,69 @@ function mensagemEntradaDaSucata(referencia) {
     + 'tiraria do estoque de novo o que já saiu pela sucata. Estorne primeiro a sucata desta devolução e depois esta entrada.';
 }
 
+/**
+ * Etapa 262 (C552, RN-262.01; B1618): a recusa do estorno da entrada de uma devolucao que cita a saida de uma requisicao EXCLUIDA, ou
+ * null. A exclusao (`requisitionService.excluirSemTrava`) credita o liquido de cada saida DESCONTADA a devolucao viva e grava `ativo = 0`
+ * na mesma secao da trava do material; estornar depois a entrada da devolucao dizia que as pecas nao voltaram e as tirava de novo
+ * (medido: entrega 2, devolucao 2, excluir -> 5; estorno -> 3). Todos os destinos. O caminho e um Ajuste.
+ */
+async function recusaDaDevolucaoDeRequisicaoExcluida(db, mov, dev) {
+  if (!dev || !dev.movimentacao_saida_id) return null;
+  const rq = await dbGet(db, `SELECT r.numero, r.id FROM movimentacoes_almoxarifado s
+    JOIN requisicoes_almoxarifado r ON r.id = s.requisicao_id
+    WHERE s.id = ? AND COALESCE(r.ativo, 1) = 0`, [dev.movimentacao_saida_id]);
+  if (!rq) return null;
+  return `Não é possível estornar: esta entrada é da devolução ${mov.referencia}, de uma entrega da requisição ${rq.numero || `#${rq.id}`}, `
+    + 'que foi excluída — a exclusão já devolveu ao estoque o resto da entrega contando com esta devolução, e estornar a entrada tiraria '
+    + 'estas peças de novo. Se a devolução foi registrada errada, acerte o estoque com um Ajuste.';
+}
+
+/**
+ * Etapa 262 (C239, RN-262.02; B1617, revê a B761): a recusa do estorno da entrada de uma devolucao para QUARENTENA com o bloqueio dela
+ * de pe, ou null. A devolucao grava ENTRADA_DEVOLUCAO + BLOQUEIO (a mesma `referencia DEV-<id>`, returnService); estornar so a entrada
+ * deixava o bloqueado sem as pecas (medido: 10/2 -> 8/2). A perna e a PRIMEIRA BLOQUEIO do material com a referencia e id maior que a
+ * entrada (so a devolucao grava BLOQUEIO com referencia). Estorno da perna concluido -> passa; em andamento (claim provisorio) -> recusa
+ * propria (o claim tira a perna da soma do lote sem ter desfeito nada). De pe: o ALCANCE dela = min(q, regua) — com lote, o bloqueado
+ * do lote pelo livro; sem lote, min(bloqueado − Σ com lote, o livro sem lote) (Fase 2, achado 2: a reprovacao da inspecao entra em
+ * `quantidade_bloqueada` sem livro — so o total a contaria, e a mensagem mandaria tirar o bloqueio da reprovacao). Alcance 0 (a
+ * quarentena liberada: Desbloquear) -> passa, so o fisico sai; alcance q -> estorne o bloqueio; parte (Fase 2, achado 1: liberada pela
+ * metade, a entrada passava e ficava 1 bloqueado sem peca) -> desbloqueie o resto.
+ */
+async function recusaDaDevolucaoEmQuarentena(db, mov, dev, unidade) {
+  if (!dev || dev.destino !== 'QUARENTENA') return null;
+  const perna = await dbGet(db, `SELECT id, lote_id, COALESCE(cancelado, 0) AS cancelado, movimento_estorno_id
+    FROM movimentacoes_almoxarifado WHERE id = (SELECT MIN(b.id) FROM movimentacoes_almoxarifado b
+      WHERE b.referencia = ? AND b.tipo = 'BLOQUEIO' AND b.material_id = ? AND b.id > ?)`, [mov.referencia, mov.material_id, mov.id]);
+  if (!perna) return null;
+  if (Number(perna.cancelado) === 1) {
+    if (perna.movimento_estorno_id != null) return null;
+    return `Não é possível estornar agora: o estorno do bloqueio da devolução ${mov.referencia} está em andamento — tente de novo em instantes.`;
+  }
+  const loteId = perna.lote_id ? Number(perna.lote_id) : null;
+  const r = await dbGet(db, `SELECT COALESCE(mq.quantidade_bloqueada, 0) AS total,
+      ${loteId ? bloqueioPorLote.bloqueadoDoLoteSql('mq.id', String(loteId)) : '0'} AS no_lote,
+      ${bloqueioPorLote.bloqueadoComLoteSql('mq.id')} AS com_lote,
+      (SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END), 0)`)}
+        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id IS NULL AND b.cancelado = 0
+          AND b.tipo IN ('BLOQUEIO', 'DESBLOQUEIO')) AS livro_sem_lote
+    FROM materiais_almoxarifado mq WHERE mq.id = ?`, [mov.material_id]);
+  if (!r) return null;
+  const total = Number(r.total) || 0;
+  const regua = loteId
+    ? Math.min(total, Number(r.no_lote) || 0)
+    : Math.min(total - (Number(r.com_lote) || 0), Number(r.livro_sem_lote) || 0);
+  const alcance = Q.qtd(Math.max(0, Math.min(Number(mov.quantidade), regua)));
+  if (!(alcance > Q.QTD_FOLGA)) return null;
+  if (Q.cabe(mov.quantidade, alcance)) {
+    return `Não é possível estornar: esta entrada é da devolução ${mov.referencia}, que foi para a quarentena, e o bloqueio dela continua `
+      + 'de pé — estornar só a entrada deixaria bloqueadas peças que não estão mais no estoque. Estorne primeiro o bloqueio desta '
+      + 'devolução e depois esta entrada.';
+  }
+  return `Não é possível estornar: esta entrada é da devolução ${mov.referencia}, que foi para a quarentena, e ainda há ${alcance} `
+    + `${unidade || 'un'} dela no bloqueio — estornar só a entrada deixaria bloqueadas peças que não estão mais no estoque. Desbloqueie `
+    + `${alcance} ${unidade || 'un'} e depois estorne esta entrada.`;
+}
+
 /** E2 da Etapa 116 (400, contrato congelado no plano). */
 function mensagemEstornoSemSerie(codigo, n) {
   return `Não é possível estornar: esta saída baixou ${n} série(s) do material ${codigo} e o controle por número de série `
@@ -3241,6 +3304,23 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     }
   }
 
+  // Etapa 117: a devolucao a que esta ENTRADA_DEVOLUCAO pertence (identidade: a primeira ENTRADA_DEVOLUCAO com a referencia, do mesmo
+  // material — Fase 2, R2: uma entrada digitada com a referencia DEV-<id> nao e da devolucao). Lida aqui desde a Etapa 262 (antes, la
+  // embaixo, junto da guarda da Sucata): a RN-262.01 vem antes das guardas de serie (Fase 2 da 262, achado 4 — numa requisicao excluida
+  // a guarda de serie mandaria estornar saidas a toa e depois recusaria do mesmo jeito).
+  const devolucaoDaEntrada = mov.tipo === 'ENTRADA_DEVOLUCAO' && /^DEV-\d+$/.test(String(mov.referencia || ''))
+    ? await dbGet(db, `SELECT d.id, d.destino, d.movimentacao_saida_id FROM devolucoes_material_almoxarifado d
+        WHERE d.id = ? AND d.material_id = ? AND ${ENTRADA_DA_DEVOLUCAO_SQL} = ?`,
+    [Number(String(mov.referencia).slice(4)), mov.material_id, mov.id])
+    : null;
+  // Etapa 262 (C552, RN-262.01; B1618): a devolucao de uma requisicao excluida — antes de tudo da entrada da devolucao (Sucata,
+  // Quarentena, series): nenhum outro estorno a destrava. De novo dentro da secao da trava (RN-262.04: a exclusao pega a mesma trava).
+  const guardaDaDevolucao = !!devolucaoDaEntrada && opcoesEstorno.compensacao !== true;
+  if (guardaDaDevolucao) {
+    const msg = await recusaDaDevolucaoDeRequisicaoExcluida(db, mov, devolucaoDaEntrada);
+    if (msg) throw Object.assign(new Error(msg), { status: 400 });
+  }
+
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a
   // movimentação como cancelada, precisa ficar claro que a reversão é possível. Estornar uma
   // ENTRADA de material com série só é seguro se TODAS as unidades daquela entrada ainda
@@ -3289,17 +3369,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // sucata nao pode voltar a ficar de pe entre esta leitura e a gravacao — o estorno dela que falha desfaz o proprio claim).
   // A compensacao interna nao passa. So a entrada DA devolucao (identidade: a primeira ENTRADA_DEVOLUCAO com a referencia,
   // do mesmo material — Fase 2, R2): uma entrada digitada com a referencia DEV-<id> nao e da devolucao.
-  // Lida aqui tambem para as series (Fase 2, R1): o estorno da entrada de uma devolucao que citou a saida devolve as series
-  // a "Entregue" naquela saida (o material nao voltou), em vez de "Estornada".
-  const devolucaoDaEntrada = mov.tipo === 'ENTRADA_DEVOLUCAO' && /^DEV-\d+$/.test(String(mov.referencia || ''))
-    ? await dbGet(db, `SELECT d.id, d.destino, d.movimentacao_saida_id FROM devolucoes_material_almoxarifado d
-        WHERE d.id = ? AND d.material_id = ? AND ${ENTRADA_DA_DEVOLUCAO_SQL} = ?`,
-    [Number(String(mov.referencia).slice(4)), mov.material_id, mov.id])
-    : null;
+  // `devolucaoDaEntrada` (lida la em cima desde a 262) serve tambem as series (Fase 2, R1): o estorno da entrada de uma devolucao que
+  // citou a saida devolve as series a "Entregue" naquela saida (o material nao voltou), em vez de "Estornada".
   const entradaDaSucata = !!devolucaoDaEntrada && devolucaoDaEntrada.destino === 'SUCATA' && opcoesEstorno.compensacao !== true;
   if (entradaDaSucata) {
     const viva = await dbGet(db, `SELECT 1 AS v WHERE ${sucataViva('?', '?')}`, [mov.referencia, mov.material_id]);
     if (viva) throw Object.assign(new Error(mensagemEntradaDaSucata(mov.referencia)), { status: 400 });
+  }
+  // Etapa 262 (C239, RN-262.02; B1617): a devolucao para Quarentena com o bloqueio dela de pe. De novo dentro da secao (RN-262.04: o
+  // estorno do Desbloquear e o do Bloqueio pegam a mesma trava).
+  if (guardaDaDevolucao) {
+    const msg = await recusaDaDevolucaoEmQuarentena(db, mov, devolucaoDaEntrada, material.unidade);
+    if (msg) throw Object.assign(new Error(msg), { status: 400 });
   }
 
   if (tiposSaida.includes(mov.tipo) && material.controle_serie) {
@@ -3557,6 +3638,15 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       try {
         // Etapa 248 (C525 + C534): a conta do estorno da nota (pre-checagem do lote + soltar a reserva da chegada) sob a trava,
         // colada no debito — a liberacao, o bloqueio e a correcao de validade do lote (que pegam esta trava) esperam o estorno inteiro.
+        // Etapa 262 (RN-262.04): as duas guardas da entrada da devolucao de novo, sob a trava e antes de qualquer efeito (o catch desfaz
+        // o claim). Fora dela, a exclusao da requisicao (que conta este claim provisorio como devolucao viva e a desconta) ou o estorno do
+        // Desbloquear (que poe o bloqueio da quarentena de pe de novo) cabiam entre a guarda la de cima e o debito: fisico 3 em vez de 5;
+        // bloqueado 2 sem as pecas.
+        if (guardaDaDevolucao) {
+          const msgSecao = await recusaDaDevolucaoDeRequisicaoExcluida(db, mov, devolucaoDaEntrada)
+            || await recusaDaDevolucaoEmQuarentena(db, mov, devolucaoDaEntrada, material.unidade);
+          if (msgSecao) throw Object.assign(new Error(msgSecao), { status: 400 });
+        }
         await contaDaNotaSobTrava();
         if (tiposEntrada.includes(mov.tipo)) {
           // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).

@@ -258,8 +258,12 @@ process.on('exit', (code) => {
     await devolverRota(m, 2, s);
     const L1 = await loteId(m, 'L1'); const L2 = await loteId(m, 'L2');
     const ed = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ENTRADA_DEVOLUCAO'", [m.id]);
+    // Etapa 262 (C239, RN-262.02): pela rota o estorno da entrada com o bloqueio de pe e recusado — o estado da C504 (o de antes da 262,
+    // dado antigo) e montado pela compensacao, que nao passa pela guarda.
     const r = await post(`${API}/movimentacoes/${ed.id}/cancelar`, { motivo: 'estorno 209 c504' });
-    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/foi para a quarentena, e o bloqueio dela continua de pé/.test(r.body.error), r.body.error);
+    await stockService.cancelarMovimentacao(db, ADMIN, ed.id, 'estorno 209 c504 (estado de antes da 262)', { compensacao: true });
     const linhas = (await dbAll(db, 'SELECT lote_id, SUM(quantidade) q FROM estoque_saldo_almoxarifado WHERE material_id = ? GROUP BY lote_id', [m.id]))
       .filter((x) => Math.abs(Number(x.q)) > 1e-9).map((x) => [x.lote_id, Number(x.q)]);
     assert.deepStrictEqual(linhas, [[L2, 5]], 'fisico 5 todo em L2');

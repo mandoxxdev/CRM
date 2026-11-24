@@ -61,6 +61,31 @@
   a seção → o estorno recusa com a RN-262.01 e o físico fica o da exclusão.
 - **RN-262.05 (ordem)** RN-262.01 → Sucata (E1 da 117) → RN-262.02 → as de série de sempre.
 
+- **RN-262.02, revista pela Fase 2 (achados 1, 2 e 5):** o que conta é o **alcance** da perna — `min(q, régua)`, com a régua do lote pelo
+  livro e, sem lote, `min(bloqueado − Σ com lote, livro sem lote)` (a reprovação da inspeção soma no bloqueado sem livro e não entra). Alcance
+  `q` → a literal acima; alcance entre 0 e `q` (quarentena liberada pela metade) → *"Não é possível estornar: esta entrada é da devolução
+  DEV-⟨n⟩, que foi para a quarentena, e ainda há ⟨N⟩ ⟨un⟩ dela no bloqueio — estornar só a entrada deixaria bloqueadas peças que não estão
+  mais no estoque. Desbloqueie ⟨N⟩ ⟨un⟩ e depois estorne esta entrada."*; alcance 0 → passa. Estorno da perna em andamento (claim provisório)
+  → *"Não é possível estornar agora: o estorno do bloqueio da devolução DEV-⟨n⟩ está em andamento — tente de novo em instantes."*
+- **RN-262.05, revista (Fase 2, achado 4):** a RN-262.01 vem antes também das guardas de **série** da entrada (a leitura da devolução subiu
+  para antes delas); a da Quarentena fica depois da Sucata.
+
+## Fase 2 (revisor fresco, 24/11; sonda `scratchpad/fase2-262-b.js`, pela rota)
+
+1. **[importante, reproduzido]** Quarentena liberada pela metade (Desbloquear 1): pela régua "cobre q" a entrada passava e ficava **1 bloqueado
+   sem peça** (o estorno do bloqueio recusa depois). → **consertado**: o alcance parcial recusa e manda desbloquear o resto (cenário + S8).
+2. **[importante, reproduzido com bloqueio avulso]** Sem lote, a régua do total contava o bloqueado da **reprovação** (sem livro): a mensagem
+   mandaria estornar o bloqueio da devolução, que comeria o da reprovação, e a NC recusaria depois (*"O material já havia saído do bloqueio"*).
+   → **consertado**: sem lote, o menor entre o total − lotes e o livro sem lote (cenários + S5/S6). O bloqueio **avulso** sem lote continua
+   contando (está no livro) — preço declarado na B1617.
+3. **[importante]** `bloqueioSabeOLote` [RN-217.05] estornava pela rota a entrada com o bloqueio de L1 de pé (o estado da C504). → o teste
+   prova a recusa e monta o estado antigo pela compensação.
+4. **[menor]** A ordem: as guardas de série rodavam antes de onde se lia a devolução. → a leitura subiu; a RN-262.01 vem antes delas.
+5. **[menor]** Claim provisório do bloqueio com a mensagem "continua de pé". → literal própria ("em andamento").
+6. **[ruído, conferido]** só a devolução grava BLOQUEIO com `DEV-n`; só a exclusão grava `ativo = 0`, dentro da trava do material; o caso
+  (i) é necessário (a soma do lote ignora `cancelado = 1`); nenhuma compensação estorna entrada de devolução. Último gesto: depois da
+  RN-262.01 resta o Ajuste (ninguém preso); depois da RN-262.02, estornar o bloqueio ou desbloquear destrava.
+
 ## Contratos
 
 - `POST /api/almoxarifado/movimentacoes/:id/cancelar` — resposta igual; recusas novas (400) as literais acima. Nada mais muda.
