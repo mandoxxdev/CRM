@@ -56,6 +56,80 @@ export const passaNosFiltros = (r, filtros) => {
 
 export const filtroAtivo = (filtros) => !!filtros && (filtros.setor !== TODOS || filtros.projeto !== TODOS || filtros.local !== TODOS);
 
+/** Fase 5 da 255: rótulos repetidos (dois projetos com o mesmo nome) ganham o número — "Linha 2 (#7)". Muda o Map id -> rótulo. */
+const desempatarRotulos = (rotulos) => {
+  const vezes = new Map();
+  for (const r of rotulos.values()) vezes.set(r, (vezes.get(r) || 0) + 1);
+  for (const [id, r] of rotulos) if (vezes.get(r) > 1) rotulos.set(id, `${r} (#${id})`);
+  return rotulos;
+};
+
+/** Os rótulos dos projetos da fila (id -> rótulo), com o desempate — os mesmos do filtro (RN-255.03) e dos blocos (RN-260.08). */
+export const rotulosDosProjetos = (fila) => {
+  const projetos = new Map();
+  for (const r of Array.isArray(fila) ? fila : []) {
+    if (r.projeto_id == null) continue;
+    const id = String(r.projeto_id);
+    if (!projetos.has(id) || r.projeto_nome) projetos.set(id, rotuloProjeto(id, r.projeto_nome));
+  }
+  return desempatarRotulos(projetos);
+};
+
+// ── Etapa 260 (RN-260.07..09): agrupar a fila por setor ou por projeto ─────────────────────────────────────────────────────────────
+export const AGRUPAR_NADA = '';
+export const AGRUPAR_SETOR = 'setor';
+export const AGRUPAR_PROJETO = 'projeto';
+export const CHAVE_AGRUPAR = 'almox.filaSeparacao.agrupar';
+const MODOS_AGRUPAR = [AGRUPAR_NADA, AGRUPAR_SETOR, AGRUPAR_PROJETO];
+
+const contagem = (n) => `${n} ${n === 1 ? 'requisição' : 'requisições'}`;
+
+/**
+ * RN-260.08: os blocos de uma lista JÁ na ordem do servidor (e já filtrada). Bloco por setor (aparado, a régua da 255; vazio = "Sem
+ * setor") ou por projeto (`projeto_id`; sem = "Sem projeto"). A ordem dos blocos é a da PRIMEIRA requisição de cada um (o bloco com a
+ * mais urgente vem primeiro); dentro do bloco, a ordem do servidor. `rotulos` = `rotulosDosProjetos(fila inteira)`, para o desempate ser
+ * o do filtro. Sem agrupar (ou modo desconhecido): um bloco só, sem título.
+ */
+export const agruparFila = (lista, modo, rotulos) => {
+  const reqs = Array.isArray(lista) ? lista : [];
+  if (modo !== AGRUPAR_SETOR && modo !== AGRUPAR_PROJETO) return reqs.length ? [{ chave: '', titulo: null, requisicoes: reqs }] : [];
+  const blocos = new Map();
+  for (const r of reqs) {
+    let chave;
+    let nome;
+    if (modo === AGRUPAR_SETOR) {
+      const s = setorDe(r);
+      chave = s ? `s:${s}` : SEM;
+      nome = s ? `Setor: ${s}` : 'Sem setor';
+    } else {
+      const id = r && r.projeto_id != null ? String(r.projeto_id) : '';
+      chave = id ? `p:${id}` : SEM;
+      const rotulo = id ? ((rotulos && rotulos.get(id)) || rotuloProjeto(id, r.projeto_nome)) : '';
+      nome = id ? `Projeto: ${rotulo}` : 'Sem projeto';
+    }
+    if (!blocos.has(chave)) blocos.set(chave, { chave, nome, requisicoes: [] });
+    blocos.get(chave).requisicoes.push(r);
+  }
+  return [...blocos.values()].map((b) => ({ chave: b.chave, titulo: `${b.nome} — ${contagem(b.requisicoes.length)}`, requisicoes: b.requisicoes }));
+};
+
+/** RN-260.07: a opção guardada no navegador (try/catch; valor desconhecido ou sem armazenamento = sem agrupar). */
+export const lerAgruparGuardado = () => {
+  try {
+    const v = window.localStorage.getItem(CHAVE_AGRUPAR);
+    return MODOS_AGRUPAR.includes(v) ? v : AGRUPAR_NADA;
+  } catch (e) {
+    return AGRUPAR_NADA;
+  }
+};
+export const guardarAgrupar = (modo) => {
+  try {
+    window.localStorage.setItem(CHAVE_AGRUPAR, modo);
+  } catch (e) {
+    // sem armazenamento: a tela funciona sem lembrar
+  }
+};
+
 /**
  * RN-255.03/04/09: as opções de cada filtro, tiradas da fila carregada, em ordem alfabética (número como número), com "Sem …" no fim
  * quando alguma requisição cai nele. Um valor escolhido que sumiu da fila continua na lista (RN-255.09).
@@ -91,9 +165,7 @@ export const opcoesDosFiltros = (fila, filtros) => {
   };
 
   // Fase 5: dois projetos com o mesmo nome viravam duas opções iguais — o repetido ganha o número, "Linha 2 (#7)".
-  const vezes = new Map();
-  for (const r of projetos.values()) vezes.set(r, (vezes.get(r) || 0) + 1);
-  for (const [id, r] of projetos) if (vezes.get(r) > 1) projetos.set(id, `${r} (#${id})`);
+  desempatarRotulos(projetos);
 
   return {
     setor: montar(setores, semSetor, 'Sem setor', f.setor, (v) => v),

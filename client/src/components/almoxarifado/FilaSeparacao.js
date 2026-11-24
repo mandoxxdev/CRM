@@ -14,6 +14,8 @@ import {
 // Etapa 255 (RN-255.03..09): os filtros por setor, projeto e localização — só escondem, na ordem do servidor.
 import {
   TODOS, FILTROS_VAZIOS, passaNosFiltros, filtroAtivo, opcoesDosFiltros, lerFiltrosGuardados, guardarFiltros, rotuloProjeto,
+  // Etapa 260 (RN-260.07..09): agrupar por setor ou por projeto
+  AGRUPAR_NADA, AGRUPAR_SETOR, AGRUPAR_PROJETO, agruparFila, rotulosDosProjetos, lerAgruparGuardado, guardarAgrupar,
 } from '../../utils/filtrosFilaSeparacao';
 import './Almoxarifado.css';
 
@@ -248,6 +250,18 @@ const SeletorFiltro = ({ rotulo, valor, opcoes, onChange, testid }) => (
   </label>
 );
 
+// Etapa 260 (RN-260.08): os blocos de um grupo — sem agrupar, um bloco só, sem título (a tela de antes).
+const Blocos = ({ blocos, grupo, onAbrir, onImprimir }) => blocos.map((b, i) => (
+  <div key={b.chave || 'todos'} data-testid={b.titulo ? `fila-bloco-${grupo}-${i}` : undefined} style={b.titulo ? { marginTop: i ? 14 : 0 } : undefined}>
+    {b.titulo && (
+      <h3 data-testid={`fila-bloco-titulo-${grupo}-${i}`} style={{ fontSize: '0.95rem', margin: '0 0 8px', color: 'var(--gmp-text)' }}>{b.titulo}</h3>
+    )}
+    <ul style={{ padding: 0, margin: 0 }}>
+      {b.requisicoes.map((r) => <LinhaFila key={r.id} req={r} onAbrir={onAbrir} onImprimir={onImprimir} />)}
+    </ul>
+  </div>
+));
+
 const FilaSeparacao = () => {
   const navigate = useNavigate();
   const [fila, setFila] = useState([]);
@@ -256,6 +270,9 @@ const FilaSeparacao = () => {
   useEffect(() => { guardarFiltros(filtros); }, [filtros]);
   const mudarFiltro = (campo) => (valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
   const limparFiltros = () => setFiltros({ ...FILTROS_VAZIOS });
+  // Etapa 260 (RN-260.07): Agrupar não é filtro — guardado à parte, e Limpar filtros não mexe nele.
+  const [agrupar, setAgrupar] = useState(lerAgruparGuardado);
+  useEffect(() => { guardarAgrupar(agrupar); }, [agrupar]);
   const [loading, setLoading] = useState(true);
   const [semPermissao, setSemPermissao] = useState(null); // null | { detalhe }
   const [erro, setErro] = useState(null);
@@ -298,15 +315,18 @@ const FilaSeparacao = () => {
   const visiveis = fila.filter((r) => passaNosFiltros(r, filtros));
   const opcoes = opcoesDosFiltros(fila, filtros);
   const comFiltro = filtroAtivo(filtros);
-  const imprimiveis = requisicoesParaImprimir(visiveis);
+  // Filtra preservando a ordem do servidor dentro de cada grupo; com Agrupar, cada grupo vira blocos (RN-260.08).
+  const rotulos = rotulosDosProjetos(fila);
+  const blocosAcionaveis = agruparFila(visiveis.filter((r) => r.acionavel !== false), agrupar, rotulos);
+  const blocosAguardando = agruparFila(visiveis.filter((r) => r.acionavel === false), agrupar, rotulos);
+  // RN-260.09: a lista de coleta de todas na ordem da tela — os blocos dos acionáveis, depois os do Aguardando.
+  const naOrdemDaTela = [...blocosAcionaveis, ...blocosAguardando].flatMap((b) => b.requisicoes);
+  const imprimiveis = requisicoesParaImprimir(naOrdemDaTela);
   const imprimirTodas = () => {
     if (!imprimiveis.length) return;
     gerarListaColetaPDF({ requisicoes: imprimiveis, carregadaEm, nomeArquivo: nomeArquivoListaColetaFila(carregadaEm) });
   };
 
-  // Filtra preservando a ordem do servidor dentro de cada grupo.
-  const acionaveis = visiveis.filter((r) => r.acionavel !== false);
-  const aguardando = visiveis.filter((r) => r.acionavel === false);
 
   return (
     <div className="almox-page">
@@ -360,6 +380,14 @@ const FilaSeparacao = () => {
             <SeletorFiltro
               rotulo="Localização" valor={filtros.local} opcoes={opcoes.local} onChange={mudarFiltro('local')} testid="fila-filtro-local"
             />
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.85rem', minWidth: 160, flex: '0 1 180px' }}>
+              Agrupar
+              <select value={agrupar} onChange={(e) => setAgrupar(e.target.value)} data-testid="fila-agrupar" className="almox-form-select">
+                <option value={AGRUPAR_NADA}>Sem agrupar</option>
+                <option value={AGRUPAR_SETOR}>Por setor</option>
+                <option value={AGRUPAR_PROJETO}>Por projeto</option>
+              </select>
+            </label>
             {comFiltro && (
               <button type="button" className="btn-almox-secondary" onClick={limparFiltros} data-testid="fila-limpar-filtros">
                 Limpar filtros
@@ -377,17 +405,15 @@ const FilaSeparacao = () => {
               <p>Nenhuma requisição da fila com estes filtros.</p>
             </div>
           )}
-          {acionaveis.length > 0 && (
-            <ul style={{ padding: 0, margin: 0 }} data-testid="fila-acionaveis">
-              {acionaveis.map((r) => <LinhaFila key={r.id} req={r} onAbrir={abrir} onImprimir={imprimir} />)}
-            </ul>
+          {blocosAcionaveis.length > 0 && (
+            <div data-testid="fila-acionaveis">
+              <Blocos blocos={blocosAcionaveis} grupo="acionaveis" onAbrir={abrir} onImprimir={imprimir} />
+            </div>
           )}
-          {aguardando.length > 0 && (
+          {blocosAguardando.length > 0 && (
             <section style={{ marginTop: 20 }} data-testid="fila-aguardando">
               <h2 style={{ fontSize: '1rem', marginBottom: 8 }}>Aguardando</h2>
-              <ul style={{ padding: 0, margin: 0 }}>
-                {aguardando.map((r) => <LinhaFila key={r.id} req={r} onAbrir={abrir} onImprimir={imprimir} />)}
-              </ul>
+              <Blocos blocos={blocosAguardando} grupo="aguardando" onAbrir={abrir} onImprimir={imprimir} />
             </section>
           )}
         </>
