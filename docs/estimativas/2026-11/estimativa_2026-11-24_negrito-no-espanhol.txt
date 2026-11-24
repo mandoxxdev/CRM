@@ -5,5 +5,10 @@ _24/11/2026_
 Os trechos em negrito do português (como "PROJETO CONCEITUAL" e "Excelência Operacional") não saíam em negrito no espanhol. A tradução passa a ser feita com o negrito marcado dentro da frase, e as traduções já feitas sem negrito são refeitas sozinhas. Correções feitas à mão não são mexidas.
 Tempo estimado: *1h*
 
-*Total estimado: 1h*
+*2. Nota legal na proposta em outra língua*
+Na proposta em inglês ou espanhol, um aviso em duas colunas antes das assinaturas diz que vale a versão em português em caso de divergência. Na proposta só em português nada muda.
+Tempo estimado: *30min*
+
+*Total estimado: 1h30*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
+_Revisado: o item 2 chegou durante o trabalho._
