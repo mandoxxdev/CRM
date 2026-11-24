@@ -6,7 +6,11 @@ Pedido do Matheus (Comercial), 24/11/2026: acrescentar o modelo de contrato "Pro
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Modelo de contrato Projeto Conceitual | 1h30 | 1h30 | 1h30 | Propostas — modelo de contrato por família (mesmo molde do "Hélices e Discos", `server/clausulasHelices.js`) | Alteração de cadastro (~1h a 1h30), arredondada para cima pela transcrição de 17 cláusulas e o teste do encaixe no template | — | — | — |
+| 1 | Modelo de contrato Projeto Conceitual | 1h30 | 1h30 | 1h30 | Propostas — modelo de contrato por família (mesmo molde do "Hélices e Discos", `server/clausulasHelices.js`) | Alteração de cadastro (~1h a 1h30), arredondada para cima pela transcrição das cláusulas e o teste do encaixe no template | 0,7 h | 45min | `b62fd5c5`, `a6bdd09b` |
+
+Fechamento (24/11/2026): `horas.js --grupos` mediu 0,7 h. Abaixo do estimado: o encaixe no template seguiu o molde do de hélices sem
+mudar o template. O `horas.js` mede pelo intervalo entre commits e não conta a espera das subidas do servidor nos testes (mais de 60 s
+cada, nesta pasta do OneDrive).
 
 ## Como foi medido
 
