@@ -1590,6 +1590,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           };
           const corpoHtml = corpoLista.map((c, i) => renderServico(c, i, i === 0)).join('\n          ');
           const fimHtml = fimLista.map((c, i) => renderServico(c, corpoLista.length + i, false)).join('');
+          // Bilíngue: a 19 e a 20 em duas colunas passam de uma página — a página de assinatura era dividida pelo paginador e o
+          // cartão de uma assinatura saía partido, só o nome no alto de uma página vazia (o usuário, 24/11/2026: "as assinaturas
+          // saíram bugadas"). Aqui elas seguem no texto, e campos + assinaturas vão num bloco só, inteiro, logo depois.
+          if (bi) {
+            return `
+          ${corpoHtml}
+          ${fimHtml}
+          <section class="block avoid-break assinatura-bi">
+            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-rodape">
+              ${biFixo('p', 'Atenciosamente,')}
+              ${assinaturasDoDoc}
+            </div>
+          </section>`;
+          }
           return `
           ${corpoHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">

@@ -6,6 +6,8 @@
  *          do piso de 88%) termina junto dela (diferença ≤ 6px)
  *   BI-S02 o ajuste só diminui altura: nenhuma página transborda
  *   BI-S03 apresentação: com a imagem, sem passar do rodapé, letra ≥ 9,5pt (era 9pt fixo, com um terço da página vazio)
+ *   BI-S04 assinaturas: as quatro inteiras (nome, cargo, telefone, e-mail) na MESMA página do "Atenciosamente" — a 19 e a 20 em duas
+ *          colunas passavam de uma página e o cartão saía partido, só o nome no alto de uma página vazia ("saíram bugadas", 24/11/2026)
  *
  * Executar: node tests/propostaBilingueSimetria.test.js  (PUPPETEER_EXECUTABLE_PATH apontando para um Chrome, se preciso)
  */
@@ -52,13 +54,20 @@ const desfazerEntidades = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'"
       const transbordam = [...document.querySelectorAll('.proposal-page .page-content')]
         .filter((c) => c.offsetParent !== null && c.scrollHeight > c.clientHeight + 1).length;
       const pres = document.querySelector('.bi-pres'); const pc = pres.closest('.page-content');
-      return { total: pares.length, desiguais, ajustados, exemplos, transbordam,
+      const nomes = [...document.querySelectorAll('.proposal-page[data-generated="1"] .sig-name')];
+      const paginaDe = (el) => el.closest('.proposal-page');
+      const atenc = [...document.querySelectorAll('.proposal-page[data-generated="1"] p')].find((x) => /Atenciosamente/.test(x.textContent));
+      const assin = { nomes: nomes.length,
+        inteiras: nomes.filter((n) => { const card = n.parentElement; return card.querySelector('.sig-role') && card.querySelector('.sig-email') && paginaDe(card.querySelector('.sig-email')) === paginaDe(n); }).length,
+        mesmaPagina: !!atenc && nomes.every((n) => paginaDe(n) === paginaDe(atenc)) };
+      return { assin, total: pares.length, desiguais, ajustados, exemplos, transbordam,
         presFs: parseFloat(pres.style.getPropertyValue('--pres-fs')), presImg: !!pc.querySelector('img'), presCabe: pc.scrollHeight <= pc.clientHeight + 1 };
     });
     console.log(`projetoConceitual es, tradução 20% mais longa — ${r.total} pares, ${r.ajustados} ajustados`);
     checar(r.ajustados > 0, `BI-S01 o ajuste rodou (${r.ajustados} pares)`);
     checar(r.desiguais === 0, `BI-S01 nenhum par que podia igualar ficou desigual ${r.exemplos.join(' | ')}`);
     checar(r.transbordam === 0, `BI-S02 nenhuma página transborda (${r.transbordam})`);
+    checar(r.assin.nomes === 4 && r.assin.inteiras === 4 && r.assin.mesmaPagina, `BI-S04 assinaturas inteiras e juntas do "Atenciosamente" (${JSON.stringify(r.assin)})`);
     checar(r.presImg && r.presCabe && r.presFs >= 9.5, `BI-S03 apresentação com imagem, cabe, letra ${r.presFs}pt ≥ 9,5pt`);
   } finally {
     await browser.close();
