@@ -3812,10 +3812,15 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // que contam. Lido sob a trava do material: nenhum ajuste dele grava no meio. Antes de qualquer efeito (o claim volta pelo catch).
           const recusarSeContagemDepois = async (condicaoDaLinha, paramsDaLinha) => {
             if (opcoesEstorno.compensacao === true) return;
-            const contagemDepois = await dbGet(db, `SELECT id, tipo FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
-              AND COALESCE(cancelado, 0) = 0 AND (tipo = 'AJUSTE_INVENTARIO' OR (tipo = 'AJUSTE' AND (localizacao_destino_id IS NULL
+            // Etapa 261 (Fase 5, achado 1): "vivo" e "o estorno dele nao CONCLUIU" (a regua de `devolucaoViva.js`), nao `cancelado = 0`:
+            // o claim do estorno roda fora da trava do material, e o `cancelado = 1` provisorio de um estorno do ajuste mais recente que
+            // ainda vai falhar o escondia — os dois estornos juntos (A 5, Ajuste de A para 8, Ajuste de A para 10, Saida 6) deixavam o mais
+            // antigo estornado com o mais recente vivo, total 1 (o certo, 2): 17/30 rodadas, nos dois ramos. Agora, enquanto o estorno do
+            // mais recente esta em andamento, este e recusado e a pessoa tenta de novo.
+            const contagemDepois = await dbGet(db, `SELECT mc.id, mc.tipo FROM movimentacoes_almoxarifado mc WHERE mc.material_id = ? AND mc.id > ?
+              AND NOT ${estornoConcluidoSql('mc')} AND (tipo = 'AJUSTE_INVENTARIO' OR (tipo = 'AJUSTE' AND (localizacao_destino_id IS NULL
                 OR ${condicaoDaLinha})))
-              ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id, ...paramsDaLinha]);
+              ORDER BY mc.id DESC LIMIT 1`, [mov.material_id, mov.id, ...paramsDaLinha]);
             if (contagemDepois && contagemDepois.tipo === 'AJUSTE_INVENTARIO') {
               throw Object.assign(new Error(`Não é possível estornar: há uma conferência de inventário deste material feita depois deste `
                 + `ajuste (movimentação #${contagemDepois.id}) — a contagem mais recente vale. Faça um novo ajuste.`), { status: 400 });

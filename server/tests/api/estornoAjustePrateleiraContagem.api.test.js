@@ -18,6 +18,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
+const trava = require('../../services/almoxarifado/travaPorMaterial');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -209,6 +210,75 @@ const INVENTARIO_DEPOIS = (id) => 'Não é possível estornar: há uma conferên
     assert.strictEqual(erro.message, AJUSTE_DEPOIS(ajT));
     assert.strictEqual(await fis(m), 7);
     assert.ok(await vivo(ajA));
+  });
+
+  // ── Fase 5, achado 1: o claim provisorio de outro estorno nao esconde a contagem mais recente ─────────────────────────────
+  // Molde do CLAUDE.md: os dois estornos disparados do CONTEXTO DO TESTE; a trava do material segura pelo teste (sem gancho no motor). O
+  // claim de cada estorno roda fora da trava, entao os dois ficam com `cancelado = 1` e esperam na fila; o de aj1 entra primeiro.
+  const ate = async (cond, rotulo) => {
+    for (let i = 0; i < 300; i++) { if (await cond()) return; await new Promise((r) => setTimeout(r, 10)); }
+    throw new Error(`esperou demais: ${rotulo}`);
+  };
+  const claim = async (id) => Number((await dbGet(db, 'SELECT cancelado c FROM movimentacoes_almoxarifado WHERE id=?', [id])).c) === 1;
+  const corrida = async (aj1, aj2, m) => {
+    let soltar;
+    const segura = trava.naTravaDoMaterial(m, () => new Promise((r) => { soltar = r; }));
+    await ate(() => Promise.resolve(typeof soltar === 'function'), 'a trava do teste');
+    const p1 = cancelar(aj1).then((r) => r);
+    await ate(() => claim(aj1), 'o claim do estorno de aj1');
+    const p2 = cancelar(aj2).then((r) => r);
+    await ate(() => claim(aj2), 'o claim do estorno de aj2');
+    soltar(); await segura;
+    return Promise.all([p1, p2]);
+  };
+
+  await test('[RN-261.01, Fase 5 achado 1] dois estornos juntos (A 5, Ajuste de A para 8, para 10, Saida 6): o do mais antigo e recusado '
+    + 'enquanto o do mais recente esta em andamento — total 2 (antes: os dois "passavam" e sobrava 1)', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 5);
+    const aj1 = await mov(m, 'AJUSTE', 8, { localizacao_destino_id: A.id });
+    const aj2 = await mov(m, 'AJUSTE', 10, { localizacao_destino_id: A.id });
+    await mov(m, 'SAIDA', 6); // A 4
+    const [r1, r2] = await corrida(aj1, aj2, m);
+    assert.strictEqual(r1.status, 400, `o estorno do mais antigo passou: ${JSON.stringify(r1.body)} (total ${await fis(m)})`);
+    assert.strictEqual(r1.body.error, AJUSTE_DEPOIS(aj2));
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    assert.strictEqual(await fis(m), 2);
+    assert.ok(await vivo(aj1), 'o mais antigo ficou estornado');
+  });
+
+  await test('[RN-261.01, Fase 5 achado 1] o mesmo no ramo sem localizacao (5, Ajuste para 8, para 10, Saida 6)', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 5);
+    const aj1 = await mov(m, 'AJUSTE', 8);
+    const aj2 = await mov(m, 'AJUSTE', 10);
+    await mov(m, 'SAIDA', 6);
+    const [r1, r2] = await corrida(aj1, aj2, m);
+    assert.strictEqual(r1.status, 400, `o estorno do mais antigo passou: ${JSON.stringify(r1.body)} (total ${await fis(m)})`);
+    assert.strictEqual(r1.body.error, AJUSTE_DEPOIS(aj2));
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    assert.strictEqual(await fis(m), 2);
+  });
+
+  // ── Fase 5, achado 2: a fronteira sem lote x com lote na mesma prateleira ─────────────────────────────────────────────
+  await test('[RN-261.02, Fase 5 achado 2] Ajuste de A sem lote, depois Ajuste de A no lote L1: o estorno do primeiro passa (e o do lote, '
+    + 'com o sem lote depois, tambem)', async () => {
+    const m = await material();
+    await mov(m, 'ENTRADA', 5);
+    await mov(m, 'ENTRADA', 4, { lote: 'L261D' });
+    const L = await loteId(m, 'L261D');
+    const ajSem = await mov(m, 'AJUSTE', 3, { localizacao_destino_id: A.id });
+    await mov(m, 'AJUSTE', 2, { localizacao_destino_id: A.id, lote_id: L });
+    await estornar(ajSem);
+    assert.strictEqual(await linhas(m), 'A261T/-=5 A261T/L261D=2');
+    const m2 = await material();
+    await mov(m2, 'ENTRADA', 5);
+    await mov(m2, 'ENTRADA', 4, { lote: 'L261E' });
+    const L2 = await loteId(m2, 'L261E');
+    const ajLote = await mov(m2, 'AJUSTE', 2, { localizacao_destino_id: A.id, lote_id: L2 });
+    await mov(m2, 'AJUSTE', 3, { localizacao_destino_id: A.id });
+    await estornar(ajLote);
+    assert.strictEqual(await linhas(m2), 'A261T/-=3 A261T/L261E=4');
   });
 
   terminou = true;
