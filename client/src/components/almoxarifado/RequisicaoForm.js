@@ -11,6 +11,20 @@ import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTria
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
 import './Almoxarifado.css';
 
+// Etapa 260 (RN-260.05): o rótulo de um projeto da lista — nome, cliente (a lista do almoxarifado traz) e "(inativo)"; o escolhido que
+// não está na lista (o projeto da OS, fora dela) aparece como "Projeto #<id>".
+export const rotuloDoProjeto = (projetos, id) => {
+  const p = (projetos || []).find((x) => String(x.id) === String(id));
+  if (!p) return `Projeto #${id}`;
+  const inativo = p.status && String(p.status).toLowerCase() !== 'ativo';
+  return `${p.nome}${p.cliente_nome ? ` — ${p.cliente_nome}` : ''}${inativo ? ' (inativo)' : ''}`;
+};
+export const opcoesProjeto = (projetos, escolhido) => {
+  const ops = (projetos || []).map((p) => ({ valor: String(p.id), rotulo: rotuloDoProjeto(projetos, p.id) }));
+  if (escolhido && !ops.some((o) => o.valor === String(escolhido))) ops.push({ valor: String(escolhido), rotulo: `Projeto #${escolhido}` });
+  return ops;
+};
+
 const RequisicaoForm = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -64,10 +78,33 @@ const RequisicaoForm = () => {
     return () => { vivo = false; };
   }, [osListaUrl]);
 
+  // Etapa 260 (RN-260.05): o campo Projeto (opcional). Escolher uma OS cadastrada com projeto preenche e TRAVA o projeto (o servidor
+  // recusa outro, RN-260.06); OS sem projeto, ou "Digitar outro número", destrava e limpa o que tinha vindo da OS.
+  const [projetoId, setProjetoId] = useState('');
+  const [projetoDaOs, setProjetoDaOs] = useState(false);
+  const [projetos, setProjetos] = useState([]);
+  const [projetosFalhou, setProjetosFalhou] = useState(false);
+  const projetosUrl = warehouseMode ? '/almoxarifado/aux/projetos' : '/requisicoes-material/aux/projetos';
+  useEffect(() => {
+    let vivo = true;
+    setProjetosFalhou(false);
+    api.get(projetosUrl)
+      .then((res) => { if (vivo) setProjetos(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (vivo) setProjetosFalhou(true); });
+    return () => { vivo = false; };
+  }, [projetosUrl]);
+
   const escolherOs = (valor) => {
     setOsId(valor);
     const os = valor ? ordensServico.find((o) => String(o.id) === String(valor)) : null;
     setForm((f) => ({ ...f, os_referencia: os?.numero_os || '' }));
+    if (os && os.projeto_id) {
+      setProjetoId(String(os.projeto_id));
+      setProjetoDaOs(true);
+    } else if (projetoDaOs) {
+      setProjetoId('');
+      setProjetoDaOs(false);
+    }
   };
 
   const refreshDisponibilidade = useCallback(async (itensAtuais) => {
@@ -265,6 +302,8 @@ const RequisicaoForm = () => {
         ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
         os_referencia: String(form.os_referencia || '').trim(),
         os_id: osId ? Number(osId) : null,
+        // Etapa 260 (RN-260.05): só quando escolhido
+        ...(projetoId ? { projeto_id: Number(projetoId) } : {}),
         centro_custo_id: form.centro_custo_id || undefined,
         setor: form.departamento,
         modulo_origem: ctx.moduloOrigem,
@@ -371,6 +410,23 @@ const RequisicaoForm = () => {
                     placeholder="Ex: OS 1714" />
                   <small style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
                     obrigatório — é o que permite saber depois em qual serviço o material foi usado
+                  </small>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="req-projeto-select">Projeto</label>
+                  <select id="req-projeto-select" data-testid="req-projeto-select" className="almox-form-select" value={projetoId}
+                    disabled={projetoDaOs} onChange={e => setProjetoId(e.target.value)}>
+                    <option value="">— sem projeto —</option>
+                    {opcoesProjeto(projetos, projetoId).map((p) => (
+                      <option key={p.valor} value={p.valor}>{p.rotulo}</option>
+                    ))}
+                  </select>
+                  <small data-testid="req-projeto-dica" style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    {projetoDaOs
+                      ? 'vem da OS escolhida'
+                      : projetosFalhou
+                        ? 'Não foi possível carregar os projetos.'
+                        : 'opcional'}
                   </small>
                 </div>
                 <div className="almox-field">
@@ -587,6 +643,7 @@ const RequisicaoForm = () => {
                   ['Total de itens', totalItens],
                   ['Urgência', form.urgencia],
                   ['OS / Ref.', form.os_referencia || '—'],
+                  ['Projeto', projetoId ? rotuloDoProjeto(projetos, projetoId) : '—'],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
                     <span style={{ color: 'var(--gmp-text-light)' }}>{k}</span>
