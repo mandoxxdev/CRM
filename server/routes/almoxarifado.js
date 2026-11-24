@@ -1418,11 +1418,52 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     sql += ` ORDER BY m.created_at DESC`;
     if (limit) { sql += ` LIMIT ?`; params.push(parseInt(limit)); }
 
-    db.all(sql, params, (err, rows) => {
+    db.all(sql, params, async (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
+      try {
+        await anexarPrateleirasDaBaixa(rows);
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
       res.json(mascararMovimentacoes(rows, req.user));
     });
   });
+
+  // Etapa 261 (D (252) 1, RN-261.03..06; B1615): de quais prateleiras a Saida e o Ajuste tiraram as pecas. O motor grava desde as Etapas
+  // 256/257 as linhas baixadas em `ajuste_linhas_drenadas_almoxarifado` (a Saida: tudo o que saiu, linha a linha; o AJUSTE sem localizacao:
+  // so as OUTRAS linhas que drenou — a parte da linha padrao fica de fora), mas so o estorno e a exclusao liam. Aqui, uma consulta por
+  // bloco de ate 500 ids da pagina (sem N+1), somada por prateleira (lotes diferentes na mesma prateleira somam), na ordem do registro.
+  // Linha sem endereco ou que nao existe mais: `localizacao_id: null, codigo: null`. No AJUSTE com registro, o que saiu da linha padrao
+  // ((saldo_anterior - saldo_posterior) - soma do registro, quando > 0) entra como `padrao: true` — o endereco padrao da epoca nao e
+  // gravado. Movimento sem registro (antigo, Entrada, Transferencia, Estorno...): `prateleiras: []`. Aditivo, so leitura.
+  async function anexarPrateleirasDaBaixa(rows) {
+    const porMov = new Map();
+    const ids = rows.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += 500) {
+      const bloco = ids.slice(i, i + 500);
+      const linhas = await dbAll(db, `SELECT d.movimentacao_id, s.localizacao_id, l.codigo, SUM(d.quantidade) AS quantidade, MIN(d.id) AS ordem
+        FROM ajuste_linhas_drenadas_almoxarifado d
+        LEFT JOIN estoque_saldo_almoxarifado s ON s.id = d.saldo_id
+        LEFT JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+        WHERE d.movimentacao_id IN (${bloco.map(() => '?').join(',')})
+        GROUP BY d.movimentacao_id, s.localizacao_id
+        ORDER BY d.movimentacao_id, ordem`, bloco);
+      for (const l of linhas) {
+        if (!porMov.has(l.movimentacao_id)) porMov.set(l.movimentacao_id, []);
+        porMov.get(l.movimentacao_id).push({ localizacao_id: l.localizacao_id ?? null, codigo: l.codigo ?? null,
+          quantidade: Math.round(Number(l.quantidade) * 1e6) / 1e6 });
+      }
+    }
+    for (const r of rows) {
+      const partes = porMov.get(r.id) || [];
+      if (partes.length && r.tipo === 'AJUSTE' && !r.localizacao_destino_id) {
+        const drenado = partes.reduce((s, p) => s + p.quantidade, 0);
+        const daPadrao = Math.round((Number(r.saldo_anterior) - Number(r.saldo_posterior) - drenado) * 1e6) / 1e6;
+        if (daPadrao > 1e-6) partes.push({ localizacao_id: null, codigo: null, padrao: true, quantidade: daPadrao });
+      }
+      r.prateleiras = partes;
+    }
+  }
 
   // POST /api/almoxarifado/movimentacoes — registrar movimento
   // Compat v1: contrato antigo, motor novo (stockService = validações + auditoria + saldo por localização)
