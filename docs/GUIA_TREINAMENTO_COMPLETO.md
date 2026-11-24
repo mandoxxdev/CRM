@@ -535,6 +535,41 @@ mesma regra do contrato). *(Antes desta data este parágrafo dizia que a capa e 
 envio do modelo, o mesmo dia.)* O valor total, as tabelas fiscais e a seção 4 (escopo de fornecimento, montada pelos itens) seguem como
 em qualquer proposta.
 
+**Proposta para cliente de fora do Brasil — inglês ou espanhol, em duas colunas** (desde 24/11/2026).
+
+| Antes | Agora |
+|---|---|
+| A proposta só saía em português, em real, sem incoterm. | Na proposta, a seção **Cliente de fora do Brasil** escolhe o **idioma do documento** (só português; português + inglês; português + espanhol), a **moeda** (real, dólar, euro) e o **incoterm** com o local de entrega. |
+| — | Em inglês ou espanhol, o PDF sai **todo em duas colunas**: português à esquerda, a outra língua à direita — capa, textos, cláusulas e tabelas. Um parágrafo nunca fica numa página e a tradução dele na outra. |
+| — | O que o vendedor escreve em português é traduzido pelo **tradutor do próprio Chrome**, de graça, no botão **Traduções → Traduzir pendentes** do preview. A tradução fica guardada e pode ser corrigida ali; a correção vale para as próximas propostas. |
+
+Como usar:
+1. Na proposta, em **Cliente de fora do Brasil**, escolha o idioma, a moeda e, se houver, o incoterm (ex.: *FOB* + *Porto de Santos*). Salve.
+2. Abra a **pré-visualização**. O editor continua em português — é nele que se mexe no texto. Salve as alterações.
+3. Clique em **Traduções** → **Traduzir pendentes**. Na primeira vez, o Chrome pode baixar a língua (alguns segundos). Revise a coluna
+   da direita e corrija o que precisar → **Salvar correções**.
+4. Clique em **Ver em duas colunas** para ver o documento como ele sai no PDF. Depois, **Baixar PDF**.
+
+O que saber:
+- A tradução automática só funciona no **Chrome 138 ou mais novo**. Em outro navegador, o painel **Traduções** continua funcionando, mas
+  a tradução é preenchida à mão.
+- Texto **sem tradução** sai no PDF em português, em itálico e marcado *"(tradução pendente)"*, e o sistema avisa quantos são ao baixar o
+  PDF. Confira antes de mandar ao cliente.
+- Termos de contrato seguem um glossário fixo: **CONTRATANTE** = *Contracting Party* / *Contratante*, **CONTRATADA** = *Contractor* /
+  *Contratista*, **Escopo de Fornecimento** = *Scope of Supply* / *Alcance del Suministro*. O tradutor automático trocava CONTRATANTE
+  por *Contractor* — que inverteria as partes do contrato.
+- Os textos fixos do documento (capa, títulos, cabeçalhos de tabela, apresentação da empresa, assinatura) já vêm traduzidos.
+- Os dados do cliente na capa (empresa, contato, e-mail, CNPJ) **não** são traduzidos.
+- A tabela **FINAME / Cartão BNDES** não sai em inglês nem em espanhol (é financiamento brasileiro). As tabelas fiscais continuam, com o
+  cabeçalho traduzido.
+- A moeda vale também para a proposta só em português (ex.: português em dólar).
+- A tradução é **global**: corrigir um texto corrige o mesmo texto em todas as propostas — inclusive se o PDF de uma proposta antiga
+  for gerado de novo.
+
+O que **não** está coberto: a tabela de dados cadastrais da CONTRATADA é uma imagem e continua em português (só o título dela é
+traduzido); o cabeçalho e o rodapé das páginas seguem em português; fotos posicionadas à mão podem mudar de página no documento em duas
+colunas (ele tem mais páginas); tributação de exportação.
+
 **O cadastro de família de produto.** Criar, editar, renomear e apagar uma família, trocar a foto e o esquemático, escolher as variáveis
 dela e as opções de cada variável exigem o **Comercial** (a regra da seção 3.3) — é em **Comercial → Produtos → um grupo**. As opções por
 família e a leitura das famílias e das variáveis que **Configurações → Comercial** usa (*Opções por família* e *Template de proposta*)
