@@ -5,14 +5,20 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 258 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 259 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 258 fechada — 2026-11-20.** **O estorno de um Ajuste desfaz só a diferença que ele fez.** Estornado
+> **O desenvolvimento parou aqui: Etapa 259 fechada — 2026-11-20.** **Excluir uma requisição entregue devolve cada peça à prateleira de onde
+> ela saiu.** A entrega que tirou de várias prateleiras é desfeita pela exclusão com uma entrada por prateleira (não mais tudo numa só); a
+> prateleira que não aceita mais o material recebe pela regra de antes; excluir de novo depois de uma falha no meio não devolve duas vezes.
+> **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 259). **Onde parou, exatamente:** a **259 está
+> fechada**; os itens 24 a 26 da estimativa de 18/11 **esperam resposta**; sem ela, a próxima está no fim do plano da 259.
+>
+> *(Antes:)* **Etapa 258 fechada — 2026-11-20.** **O estorno de um Ajuste desfaz só a diferença que ele fez.** Estornado
 > depois de outros movimentos do material, o Ajuste do total não volta mais o total a um número fixo: o que entrou e saiu depois continua
 > contando, a posição padrão não fica negativa, e o estorno que deixaria o material negativo é recusado (também enquanto houver um
 > Ajuste do total mais recente). Sem movimento depois do Ajuste, nada
@@ -7437,6 +7443,33 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 259 — Excluir uma requisição entregue devolve cada peça à prateleira de onde ela saiu (ENTREGUE — 2026-11-20)
+
+**Em uma frase:** a exclusão de uma requisição entregue devolve a cada prateleira o que a entrega tirou dela — antes, tudo voltava numa
+prateleira só (a origem informada na entrega ou a posição padrão).
+
+| Antes | Agora |
+|---|---|
+| Padrão *A* 3, *B* 5; entrega de 6 (*A* 0, *B* 2); **Excluir** → *A* 6, *B* 2 | *A* 3, *B* 5 |
+| Padrão *P* vazia, *A* 4, *B* 4; entrega de 6; **Excluir** → *P* 6 | *A* 4, *B* 4, *P* 0 |
+| Falha inesperada no meio da exclusão; **Excluir** de novo → devolvia tudo outra vez | Devolve só o que faltava |
+| Prateleira bloqueada depois da entrega; entrega feita antes desta alteração | **Igual** (a parte vai para a origem ou a padrão) |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *EXD-259* sem lote nem série, com posição padrão *A*; prateleira *B*.
+2. **Movimentações → Entrada**: 3 sem destino (vão para *A*); 5 em *B*.
+3. Crie uma requisição de 6 do material e aprove. Na fila, **Separar** 6 e **Entregar** 6 (sem escolher o **Sai de**) → **Confira:** comece
+   uma **Saída** do material: o **Sai de** mostra *A* com 0 e *B* com 2. Cancele.
+4. Na lista de requisições, **Excluir** a requisição (justificativa *teste*) → confirme.
+5. Comece de novo uma **Saída**: **Confira:** o **Sai de** mostra **A com 3 e B com 5** (antes desta alteração: *A* 6 e *B* 2). Cancele.
+6. No histórico do material, **Confira** duas entradas *"Estorno exclusão requisição ⟨número⟩"*: 3 e 3 em *B*.
+7. (Opcional) Repita até a entrega, bloqueie *B* em **Localizações** e exclua → *A* 6, *B* 2 (a parte de *B* vai para a padrão). Desbloqueie.
+
+**O que esta etapa NÃO cobre:** a entrega feita antes da Etapa 257 é excluída como antes (numa prateleira só); a prateleira bloqueada ou
+inativa depois da entrega não recebe; estornar pelo livro a entrada de uma devolução depois de excluir a requisição tira as peças duas
+vezes (C552); não há tela nova.
 
 ## Etapa 258 — O estorno de um Ajuste desfaz só a diferença que ele fez (ENTREGUE — 2026-11-20)
 

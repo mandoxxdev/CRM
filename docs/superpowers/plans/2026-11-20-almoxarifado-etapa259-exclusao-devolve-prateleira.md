@@ -102,13 +102,87 @@ registrada que é a padrão; trava: nada novo, a leitura fica na seção.
    a devolução. → declarado **C552**.
 8. **[ruído]** A44 (c) soma por material; o alerta de mínimo roda uma vez por ENTRADA.
 
+## Fase 5 (revisor fresco, adversarial, 20/11) — 1 importante (declarado), 1 menor (consertado), 2 de cobertura, ruídos
+
+Sondas executadas numa cópia de `server/` (`git archive` de `8b5de9df`).
+
+1. **[importante, anterior com duas entregas; declarado C553]** Depois de uma falha no meio, uma Devolução citando a saída aceita o que a
+   exclusão já devolveu: *A* 3, *B* 5, entrega de 6, a 2ª ENTRADA falha, Devolução de 6 → 201, excluir de novo → físico 11 (certo 8). A régua
+   do que já voltou (`devolucaoViva.js`, uma só para cinco contas) não conhece a ENTRADA parcial. **Não consertado:** mexe na régua comum; o
+   caminho operacional é excluir de novo logo (B1609). Precisa de falha inesperada.
+2. **[menor]** Série com devolução parcial e a prateleira de origem bloqueada: a série de *B* caía em *A* pela ordem do claim. →
+   **consertado** (`d2d7943b`): a linha que não aceita mais também fica com as séries dela (a parte vai para o destino de hoje).
+3. **[cobertura]** Tirar o `ORDER BY ordem` do registro não derrubava nada (as linhas criadas na ordem do claim) → cenário com *B* criada
+   antes da padrão (S15).
+4. **[cobertura]** Trocar `l.q - l.dado` por `l.q` no laço do claim não derrubava → cenário com uma série gravada em *A* que saiu de *B*
+   (S16; o cenário do revisor deixou de alcançar depois do conserto do 2).
+5. **[ruído]** Com série, depois da falha a requisição fica presa (a nova exclusão recusa: *"… as series desta entrega nao batem com o que
+   falta devolver — use a devolucao"*); nunca credita em dobro. Declarado (D (259)).
+- Sabotagens que sobrevivem e não alcançam nada (o revisor conferiu): destino explícito na fusão, o `|| parte.series` do pulo, o teto da
+  série, o filtro de material e o de `cancelado` no pulo (a ENTRADA com `requisicao_id` não se estorna pelo livro; nenhuma outra porta grava
+  ENTRADA com `requisicao_id`, e a v2 descarta a chave).
+- **Tentado e não quebrou:** B1609 com falha na 2ª e na 3ª ENTRADA, dois materiais, três prateleiras; prateleira bloqueada entre as
+  tentativas; concorrência (Saída, Transferência, Entrada, entrega e separação de outra requisição do mesmo material disparadas do contexto
+  do teste com a exclusão parada antes da 2ª ENTRADA: esperaram a trava; final igual ao serial); lote, negativo, padrão bloqueada.
+
 ## Tasks
 
-- [ ] **T1 (tronco, motor)** — a repartição na exclusão; teste novo `exclusaoDevolvePrateleira.api.test.js` (TDD: vermelho no código de
-  antes; sabotagens com âncora contada, cópia, md5 de volta).
-- [ ] **T2** integração — pela rota (`DELETE /api/almoxarifado/requisicoes/:id`, separação → entrega → excluir → uma transferência a partir
-  de *B* que antes não cabia) e pelo serviço (`requisitionService.excluirRequisicao`).
-- [ ] **T3** os testes que afirmavam o defeito (procurar nos arquivos de exclusão que conferem a linha da padrão depois de excluir).
-- [ ] **T3b** Fase 2 (revisor fresco).
-- [ ] **T4** Fase 5 (revisor fresco, adversarial, sonda executada; falha forçada; concorrência do contexto do teste).
-- [ ] **T5** fechamento (fechar-etapa sem 7½ e 8).
+- [x] **T1 (tronco, motor)** — `e1f4dc82`: `fatiasDaSaidaPorLinha` + a repartição; `exclusaoDevolvePrateleira.api.test.js` (16 no commit; 13
+  vermelhos no código de antes). Sabotagens S1-S11 (harness `scratchpad/sab-259-harness.js`, âncora contada, cópia, md5 de volta): cada uma
+  derruba o seu cenário, menos S8 (sem conferir a linha nula) e S11 (sem conferir o lote) — **inalcançáveis** (a conferência de material já
+  cobre a linha nula; a linha nunca muda de lote); ficam como defesa. A S2 abortou na 1ª vez (âncora 0x depois de uma edição) e foi refeita.
+- [x] **T2** integração — no T1: pela rota (separação → entrega → excluir → transferência de 5 a partir de *B*) e pelo serviço.
+- [x] **T3** os testes que afirmavam o defeito — no T1: `entregaAutomaticaPeloLoteIntegracao` (T2 serviço: o L1 volta a WB-01),
+  `entregaGuardaSemLote` (RN-207.06 controle: a ENTRADA volta a GZ-A), `origemSeparacaoEmDuasVezesIntegracao` (cenário 1 controle: o L1 volta
+  a YB-01). Os 46 arquivos de `tests/api` que excluem requisição, um a um: só esses viraram (o `entregaAutomaticaPeloLote` caiu enquanto o
+  livro gravava a padrão por id e voltou com a padrão sem destino).
+- [x] **T3b** Fase 2 — `8b5de9df` (B1609, a série primeiro, o cenário da RN-259.03 corrigido, a padrão bloqueada). S12, S13.
+- [x] **T4** Fase 5 — `d2d7943b` (a série da linha recusada; cenários S14-S16). Teste da etapa: 24.
+- [x] **T5** fechamento (fechar-etapa sem 7½ e 8) — o commit de fechamento. Primeiro boot: **não se aplica** (nenhuma tabela nem coluna).
+
+## Divergências do plano
+
+- O plano previa a RN-259.07 como "declarado, anterior; a etapa não muda a regra" — **estava errado** (Fase 2): com uma ENTRADA por
+  prateleira a nova tentativa depois de uma falha passou a creditar em dobro numa entrega simples. Virou a B1609 (pular o já creditado).
+- A RN-259.04 ganhou a série primeiro (Fase 2) e a série da linha recusada (Fase 5); o cenário da RN-259.03 estava errado no plano.
+- A linha da padrão vai sem destino no livro (`undefined`) — o plano não dizia; sem isso três testes de histórico viravam sem motivo.
+- **CLAUDE.md:** nenhuma linha ficou errada — a seção das travas diz que a exclusão valida e credita dentro das duas travas (continua), e a
+  regra "gravação que perde depois de mexer em estoque não tenta de novo" fala da nova tentativa **automática** (continua: o UPDATE final
+  perdido responde 409); a B1609 é a nova exclusão **do usuário** depois de uma falha, e pula o que já entrou.
+
+## Próxima tarefa detalhada
+
+1. **Itens 24, 25 e 26 da estimativa de 18/11 — continuam esperando resposta da empresa.** Caminho reversível de cada um no plano da 253.
+   **Não comece sem a resposta.**
+2. **Sem resposta, o próximo do almoxarifado: o estorno do Ajuste COM localização olhar o Ajuste do total feito depois** (D (258) 5,
+   simétrico da RN-258.07; feature 03 🟢 com pendência). **Medido** (Fase 5 da 258, sonda executada): *A* 5; Ajuste de *A* para 3; Ajuste do
+   total para 7; estorno do primeiro → total 9 (a contagem mais recente diz 7). Onde: `stockService.cancelarMovimentacao`, ramo `AJUSTE` com
+   `localizacao_destino_id` (o sem localização já tem a consulta da RN-258.07 — `AJUSTE` sem localização ou `AJUSTE_INVENTARIO`, vivo, do
+   material, id maior; e o com localização na padrão ou nas drenadas). Caminho reversível: a mesma recusa (literal da RN-258.07) quando há um
+   `AJUSTE` sem localização ou `AJUSTE_INVENTARIO` vivo, do material, feito depois; ou um `AJUSTE` com localização na **mesma** posição. Pontos
+   de atenção: a ordem das guardas (contagem mais recente → negativo → retenção → lote), o claim do estorno volta pelo catch, e o
+   `estornoAjusteForaDeOrdem.api.test.js` como molde. Motor: Fase 2 e Fase 5, ~1h15. Sem fatia visível (declarar).
+3. Depois: o **C553** (a Devolução contar a ENTRADA parcial da exclusão — mexe na régua única de `devolucaoViva.js`, cinco contas; só com
+   falha inesperada); o C551 só se aparecer na operação; outras 🟡 medidas nos planos da 254 e 255 (agrupamento da Fila — B1600; dupla
+   aprovação do Ajuste — espera decisão; lista de separação e kits — fora da estimativa).
+- **O que já está pronto e não reabre:** a exclusão devolve às linhas que a entrega baixou (com lote, série, devolução parcial, prateleira
+  recusada) e a nova tentativa não credita em dobro; o registro e a devolução do AJUSTE (256) e da Saída (257); o estorno do Ajuste sem
+  localização pela diferença (258).
+
+## Verificação (medida)
+
+Rodada em 23/11 sobre `d2d7943b` (a sessão de 20/11 caiu no meio do fechamento; a documentação já estava escrita e não commitada — foi
+conferida e commitada junto com esta verificação), cada suíte sozinha:
+
+- `npm run test:api` (`NODE_OPTIONS=--max-old-space-size=4096`): **656/656** arquivos OK.
+- `npm run test:almoxarifado`: **44** passou, 0 falhou. `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**.
+- Cliente: `react-scripts test` **240/240** suítes, **3248/3248** testes; `CI=true react-scripts build`: *Compiled successfully*.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (T1 — o destino da padrão no livro; Fase 2 — B1609 e a série primeiro; Fase 5 — a série da linha recusada).
+- Achados: Fase 2 — 2 importantes (consertados), 4 menores (consertados ou corrigidos no texto), 1 anterior (C552), 1 ruído; Fase 5 — 1
+  importante anterior (declarado C553), 1 menor (consertado), 2 de cobertura (cenários), 1 ruído.
+- Paralelismo: o revisor da Fase 2 rodou enquanto o T1 era escrito (o protótipo dele achou os mesmos 4 testes; sem retrabalho); o da Fase 5
+  em cópia. A suíte inteira foi interrompida uma vez porque o conserto da Fase 5 entrou no meio dela, e rodou de novo do zero.
+- Defeito que escapou: (preencher na etapa seguinte). Da 258: nenhum apontado.

@@ -1,5 +1,7 @@
 # 04 — Requisições de Materiais
 
+> **+ Etapa 259 (2026-11-20, `e1f4dc82`, Fase 2 `8b5de9df`, Fase 5 `d2d7943b`): a exclusão devolve a cada prateleira o que a entrega tirou dela** (D (257) 2; B1607-B1609) — ver a seção "Etapa 259", no fim. Continua 🟢.
+
 > **+ Etapa 172 (2026-10-22, `c34eab10..ffbbaae4`): a requisição ganha OS cadastrada OPCIONAL (`os_id`) ao lado do texto livre da RN-A, e a cesta — que não enviava requisição nenhuma desde a RN-A de 16/09 (C428, provado por execução) — ganha o campo *Número da OS*** — ver a seção "Etapa 172", no fim. Continua 🟢.
 
 > **+ Etapa 160 (2026-10-19, `d5cd52ea`): o seletor de material da Nova requisição apara o termo, mede o mínimo de 2 letras no aparado e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim.
@@ -481,3 +483,32 @@ só do Comercial; não havia 403 (a rota é cross-módulo).
 **Spec errada, dita:** a "próxima tarefa" da Etapa 171 pedia "select de OS na nova requisição" — **como obrigatório, contrariaria a RN-A**
 (decisão do P.O. de 16/09: o número é **digitado**; `OS-QUE-NAO-EXISTE-9999`, `MANUT 22` e `OS-1714/A` são aceitos). Feito **opcional e ao
 lado** do texto (B1103).
+
+## Etapa 259 — a exclusão devolve às prateleiras de onde a entrega tirou (D (257) 2) (2026-11-20)
+
+Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa259-exclusao-devolve-prateleira.md`. Status não muda (🟢).
+
+**Esta spec e o manual diziam (Etapa 58) que a exclusão devolve "por saída, ao endereço de onde saiu, se ainda aceita; senão a padrão". Para a
+saída sem origem no livro (a parte automática da entrega, que baixa de várias prateleiras) isso não era verdade: tudo ia para a padrão
+(padrão *A* 3, *B* 5, entrega de 6, excluir → *A* 6, *B* 2).** Desde a 259, com o registro de linhas baixadas da Etapa 257:
+
+- [x] **RN-259.01** — uma ENTRADA por linha registrada (endereço da linha, lote da saída), na ordem do claim, até o líquido; a linha da padrão
+  vai sem destino no livro, como antes; fatias com o mesmo endereço final viram uma — `e1f4dc82`.
+- [x] **RN-259.02** — linha que não existe mais, de outro material/lote, sem endereço ou cujo endereço não aceita mais (inativo, bloqueado,
+  tipo): a parte vai para o destino de hoje (B1607) — `e1f4dc82`. A conferência de lote e a de linha nula **não** têm cenário que as derrube
+  (inalcançáveis: a linha nunca muda de lote; a conferência de material já cobre a linha nula) — ficam como defesa.
+- [x] **RN-259.03** — devolução viva: o líquido na ordem do claim (B1608) — `e1f4dc82`.
+- [x] **RN-259.04** — série: cada linha recebe primeiro as séries de endereço gravado igual (Fase 2, achado 2), também a linha que não aceita mais (a parte dela vai para o destino de hoje com as suas séries — Fase 5,
+  achado 2); depois a repartição — `e1f4dc82`, `8b5de9df`, `d2d7943b`.
+- [x] **RN-259.05** — saída sem registro e o ramo legado: como antes — `e1f4dc82`.
+- [x] **RN-259.06** — recusas e mensagens iguais, menos a da padrão bloqueada quando nada vai para ela (Fase 2, achado 4) — `e1f4dc82`, `8b5de9df`.
+- [x] **RN-259.07 / B1609** — a nova tentativa depois de uma falha no meio pula o que as ENTRADAs vivas da exclusão já creditaram, por material
+  (sem série; com série a validação das séries já recusa) — `8b5de9df`.
+- [ ] **C553** (Fase 5, achado 1; anterior com duas entregas): depois de uma falha inesperada no meio, a Devolução ainda aceita o que a
+  exclusão já devolveu (a régua de `devolucaoViva.js` não conhece a ENTRADA parcial) — declarado; o caminho é excluir de novo logo.
+- [ ] **C552** (anterior): estornar pelo livro a entrada de uma devolução depois da exclusão tira as peças duas vezes — declarado.
+- [ ] Entrega anterior à 257 (sem registro): como antes — declarado (D (259)).
+
+Teste: `exclusaoDevolvePrateleira.api.test.js`. Quatro testes afirmavam a padrão como destino da parte automática (D (51)) e viraram:
+`entregaAutomaticaPeloLoteIntegracao`, `entregaGuardaSemLote` (RN-207.06 controle), `origemSeparacaoEmDuasVezesIntegracao` (cenário 1,
+controle) e `entregaAutomaticaPeloLote` (RN-197.10, só no protótipo da Fase 2 — com a padrão sem destino passou como estava).
