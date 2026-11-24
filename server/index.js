@@ -78,7 +78,29 @@ function semearModelosClausulas() {
   // insere SO o que falta, casando por titulo, e nao toca no texto do que ja esta la.
   setTimeout(() => {
     completarModeloClausulas('Hélices e Discos', getClausulasHelices());
+    // O Projeto Conceitual mudou de forma no mesmo dia em que nasceu (24/11/2026: passou a seguir a proposta de origem, 1 a 20).
+    // Nenhuma tela edita modelo de contrato, entao o do banco e ressincronizado com o codigo quando diverge.
+    sincronizarModeloClausulas('Projeto Conceitual', getClausulasProjetoConceitual());
   }, 3000).unref?.();
+}
+
+// Substitui as clausulas de um modelo pelas do codigo QUANDO divergem (numero, titulo, conteudo ou ordem). So para modelo que
+// nenhuma tela edita — o de equipamentos e o de helices usam o semear/completar, que preservam edicao.
+function sincronizarModeloClausulas(nome, clausulasDoCodigo) {
+  db.get('SELECT id FROM clausulas_modelo WHERE nome = ?', [nome], (err, modelo) => {
+    if (err || !modelo) return;
+    db.all('SELECT numero, titulo, conteudo FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC, id ASC', [modelo.id], (errI, atuais) => {
+      if (errI) return;
+      const assinatura = (l) => JSON.stringify((l || []).map((c) => [c.numero, c.titulo, c.conteudo]));
+      if (assinatura(atuais) === assinatura(clausulasDoCodigo)) return;
+      db.run('DELETE FROM clausulas_modelo_itens WHERE modelo_id = ?', [modelo.id], (errD) => {
+        if (errD) return console.error('❌ Modelo', nome, ': nao ressincronizou:', errD.message);
+        const stmt = db.prepare('INSERT INTO clausulas_modelo_itens (modelo_id, ordem, numero, titulo, conteudo) VALUES (?, ?, ?, ?, ?)');
+        clausulasDoCodigo.forEach((c, i) => stmt.run([modelo.id, i, c.numero, c.titulo, c.conteudo]));
+        stmt.finalize(() => console.log(`✅ Modelo "${nome}" ressincronizado com o codigo (${clausulasDoCodigo.length} clausulas)`));
+      });
+    });
+  });
 }
 
 function completarModeloClausulas(nome, clausulasDoCodigo) {
@@ -3238,7 +3260,9 @@ function normalizarFamiliaComparacao(str) {
   if (str == null || typeof str !== 'string') return '';
   var s = str.trim().toUpperCase();
   try {
-    s = s.normalize('NFD').replace(/\u0300-\u036f/g, '');
+    // Com colchetes: sem eles a expressao procurava a sequencia literal "acento-hifen-acento" e NAO tirava acento nenhum \u2014
+    // "HELICES" e "H\u00c9LICES" nao casavam (24/11/2026).
+    s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   } catch (e) {}
   return s.replace(/\s+/g, ' ');
 }
@@ -4589,6 +4613,11 @@ app.put('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (re
   }
   sql += ' WHERE id = ?';
   params.push(id);
+  // O produto liga a familia pelo NOME (texto em produtos.familia). Renomear so a familia deixava os produtos presos ao nome antigo:
+  // sumiam do catalogo da proposta ("Nenhum produto encontrado nesta familia"; Comercial, 24/11/2026). Le o nome antes para
+  // levar os produtos junto depois de gravar.
+  db.get('SELECT nome FROM familias_produto WHERE id = ?', [id], function(errAntes, antes) {
+  var nomeAntigo = (!errAntes && antes && antes.nome) ? String(antes.nome) : null;
   db.run(sql, params, function(err) {
     if (err) {
       if (err.message && err.message.indexOf('UNIQUE') !== -1) {
@@ -4610,13 +4639,30 @@ app.put('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (re
       return res.status(500).json({ error: err.message });
     }
     if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
-    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(e, row) {
-      if (e) return res.status(500).json({ error: e.message });
-      if (row && row.marcadores_vista && typeof row.marcadores_vista === 'string') {
-        try { row.marcadores_vista = JSON.parse(row.marcadores_vista); } catch (_) {}
-      }
-      res.json(row);
+    var responder = function(produtosMovidos) {
+      db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(e, row) {
+        if (e) return res.status(500).json({ error: e.message });
+        if (row && row.marcadores_vista && typeof row.marcadores_vista === 'string') {
+          try { row.marcadores_vista = JSON.parse(row.marcadores_vista); } catch (_) {}
+        }
+        if (row) row.produtos_renomeados = produtosMovidos;
+        res.json(row);
+      });
+    };
+    // Nome mudou: os produtos da familia vao junto. Casamento pela mesma regua do catalogo (normalizarFamiliaComparacao), para nao
+    // deixar de fora o produto gravado com outra caixa ou espaco. Propostas ja feitas NAO mudam (guardam o nome no item).
+    if (!nomeAntigo || normalizarFamiliaComparacao(nomeAntigo) === normalizarFamiliaComparacao(nome)) return responder(0);
+    db.all('SELECT id, familia FROM produtos WHERE familia IS NOT NULL', [], function(eP, produtos) {
+      if (eP) { console.error('Familia renomeada, mas os produtos nao foram lidos:', eP.message); return responder(0); }
+      var alvo = normalizarFamiliaComparacao(nomeAntigo);
+      var ids = (produtos || []).filter(function(p) { return normalizarFamiliaComparacao(p.familia || '') === alvo; }).map(function(p) { return p.id; });
+      if (ids.length === 0) return responder(0);
+      db.run('UPDATE produtos SET familia = ? WHERE id IN (SELECT value FROM json_each(?))', [nome, JSON.stringify(ids)], function(eU) {
+        if (eU) { console.error('Familia renomeada, mas os produtos ficaram com o nome antigo:', eU.message); return responder(0); }
+        responder(this.changes);
+      });
     });
+  });
   });
 });
 app.delete('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {

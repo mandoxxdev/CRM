@@ -863,6 +863,12 @@
 
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  /* Linha com a altura do CONTEÚDO, sempre. A grade mora numa coluna flex de altura limitada (o modal) e, por ter overflow,
+     pode ser encolhida; sem isto, com 19 famílias (4 fileiras) o navegador dividia a altura que sobrava entre as fileiras —
+     cartão de 47 a 79px, foto espremida, nome sumido, inicial cortada (print de 24/11/2026). Agora ela ROLA.
+     Coberto por server/tests/catalogoFamiliaVitrine.test.js (grade dentro do modal, 19 famílias). */
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 12px;
   padding: 18px 30px 26px;
   overflow-y: auto;
@@ -1488,3 +1494,10 @@ body.dark-theme .catalogo-familias-grid {
     width: 100%;
   }
 }
+
+/* Família vazia: por que não achou nada (24/11/2026) — produto inativo ou preso a um nome de família que não existe mais. */
+.familia-vazia-diagnostico { margin-top: 14px; max-width: 640px; text-align: left; font-size: 13px; color: var(--gmp-text); background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 12px 16px; }
+.familia-vazia-diagnostico p { margin: 0 0 6px; }
+.familia-vazia-diagnostico ul { margin: 4px 0 0; padding-left: 18px; }
+.familia-vazia-diagnostico code { font-size: 12px; }
+body.dark-theme .familia-vazia-diagnostico { background: #2a2414; border-color: #78590f; }

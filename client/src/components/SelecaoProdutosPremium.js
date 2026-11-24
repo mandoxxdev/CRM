@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import './SelecaoProdutosPremium.css';
+import { diagnosticarFamiliaVazia } from './familiaVaziaDiagnostico';
 
 const baseUploads = () => (api.defaults.baseURL || '/api').replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/';
 
@@ -26,6 +27,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const [currentPage, setCurrentPage] = useState(1);
   const [selecionados, setSelecionados] = useState(new Set(produtosSelecionados.map(p => p.id)));
   const [showFilters, setShowFilters] = useState(false);
+  const [diagnosticoVazio, setDiagnosticoVazio] = useState(null);
   const itemsPerPage = 20;
 
   // Modo "Configurar por marcadores técnicos"
@@ -70,8 +72,19 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     if (!familiaNome) return;
     try {
       setLoadingProdutos(true);
+      setDiagnosticoVazio(null);
       const response = await api.get('/produtos', { params: { ativo: 'true', familia: familiaNome } });
-      setProdutos(response.data || []);
+      const lista = response.data || [];
+      setProdutos(lista);
+      // Família vazia: diz POR QUE (produto inativo ou preso a um nome de família que não existe mais) — 24/11/2026.
+      if (lista.length === 0) {
+        Promise.all([
+          api.get('/produtos', { params: { ativo: 'false', familia: familiaNome } }).catch(() => ({ data: [] })),
+          api.get('/produtos', { params: { ativo: 'true' } }).catch(() => ({ data: [] })),
+        ]).then(([inativos, ativos]) => setDiagnosticoVazio(diagnosticarFamiliaVazia({
+          inativosDaFamilia: inativos.data || [], ativos: ativos.data || [], familias,
+        })));
+      }
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       setProdutos([]);
@@ -709,6 +722,31 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                 <FiPackage size={48} />
                 <p>Nenhum produto encontrado nesta família</p>
                 <p className="empty-hint">Tente ajustar os filtros ou termo de busca</p>
+                {produtos.length === 0 && diagnosticoVazio && (diagnosticoVazio.inativos > 0 || diagnosticoVazio.orfaos.length > 0) && (
+                  <div className="familia-vazia-diagnostico" role="note">
+                    {diagnosticoVazio.inativos > 0 && (
+                      <p>
+                        {diagnosticoVazio.inativos} produto(s) desta família estão <strong>inativos</strong>. Ative no cadastro de produtos
+                        para aparecerem aqui.
+                      </p>
+                    )}
+                    {diagnosticoVazio.orfaos.length > 0 && (
+                      <>
+                        <p>
+                          {diagnosticoVazio.orfaos.length} produto(s) estão gravados com um nome de família que <strong>não existe
+                          mais</strong> (a família foi renomeada). Abra o produto, escolha a família de novo e salve:
+                        </p>
+                        <ul>
+                          {diagnosticoVazio.orfaos.slice(0, 8).map((o) => (
+                            <li key={`${o.codigo}-${o.nome}`}>
+                              {o.codigo ? <code>{o.codigo}</code> : null} {o.nome} — família gravada: “{o.familia}”
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="produtos-grid-premium">

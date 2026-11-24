@@ -35,8 +35,11 @@ const t = (nome, fn) => {
   catch (e) { console.error('  FALHA ' + nome + ': ' + e.message); }
 };
 
-// Famílias como as reais: nomes longos e curtos, com e sem código, e DUAS sem foto.
-const FAMILIAS = [
+// Famílias como as reais: nomes longos e curtos, com e sem código, e famílias sem foto.
+// 19, como no cadastro de 24/11/2026: com 8 tudo cabia na altura máxima da grade e o teste nunca viu o defeito que o usuário
+// mandou em print — com 4 fileiras o navegador ENCOLHIA as linhas para caber (o cartão tem overflow:hidden, mínimo automático 0)
+// em vez de rolar: foto espremida, nome sumido, inicial cortada.
+const BASE = [
   ['Disco Dispersor', '', 'deitada'],
   ['Dispersor Hidropneumático', 'DHY', 'em pe'],
   ['Moinho Vertical de Alto Impacto', 'MPY', 'deitada'],
@@ -46,6 +49,10 @@ const FAMILIAS = [
   ['Tacho Móvel Aço Carbono', '', null],
   ['Tanque Dispersor', 'TQY', 'em pe'],
 ];
+const FAMILIAS = Array.from({ length: 19 }, (_, i) => {
+  const [nome, cod, forma] = BASE[i % BASE.length];
+  return [i < BASE.length ? nome : `${nome} ${i}`, cod, forma];
+});
 
 async function montarHtml() {
   const css = fs.readFileSync(CSS, 'utf8');
@@ -65,8 +72,15 @@ async function montarHtml() {
     (cod ? '<span class="catalogo-familia-codigo">' + cod + '</span>' : '') +
     '</div></div>').join('');
 
+  // A grade DENTRO do modal de verdade (overlay > container > cabeçalho / conteúdo / rodapé). Solta, ela só tinha max-height e
+  // o navegador dava às linhas a altura do conteúdo; no modal, o conteúdo é uma coluna flex de altura limitada e a grade (com
+  // overflow: auto, mínimo automático 0) era ENCOLHIDA para caber — e as linhas dividiam o que sobrava (print de 24/11/2026).
   return '<!doctype html><style>body{margin:0;font-family:system-ui}' + css +
-    '</style><div class="catalogo-familias-grid">' + tiles + '</div>';
+    '</style><div class="selecao-produtos-overlay"><div class="selecao-produtos-container">' +
+    '<div class="selecao-produtos-header" style="padding:20px 30px"><h2>Escolher família</h2></div>' +
+    '<div class="selecao-produtos-content"><div class="familias-busca"><input class="familias-busca-input" placeholder="Buscar família..."></div>' +
+    '<div class="catalogo-familias-grid">' + tiles + '</div></div>' +
+    '<div class="selecao-produtos-footer" style="padding:20px 30px"><button>Cancelar</button></div></div></div>';
 }
 
 function medir() {
@@ -85,9 +99,20 @@ function medir() {
   const desencontradas = Object.values(fileiras).filter((hs) => new Set(hs).size > 1).length;
   const grade = document.querySelector('.catalogo-familias-grid');
   const cs = getComputedStyle(grade);
+  // O NOME e a INICIAL inteiros dentro do cartão (o defeito do print: o cartão encolhia e cortava os dois).
+  const cortados = cards.filter((c) => {
+    const rc = c.getBoundingClientRect();
+    const dentro = (el) => !el || (el.getBoundingClientRect().bottom <= rc.bottom + 1 && el.getBoundingClientRect().top >= rc.top - 1);
+    const nome = c.querySelector('.catalogo-familia-nome');
+    return !dentro(nome) || !dentro(c.querySelector('.catalogo-familia-inicial')) || (nome && nome.scrollHeight > nome.clientHeight + 1);
+  }).length;
   return {
     vazando,
     desencontradas,
+    cortados,
+    // Com mais famílias do que cabe, a grade ROLA (conteúdo maior que a caixa) em vez de achatar os cartões.
+    rola: grade.scrollHeight > grade.clientHeight + 1,
+    alturaPlaca: Math.round(document.querySelector('.catalogo-familia-foto').getBoundingClientRect().height),
     alturas: [...new Set(cards.map((c) => Math.round(c.getBoundingClientRect().height)))],
     // A placa é clara nos dois temas de propósito: as fotos são renders sobre fundo branco.
     placa: getComputedStyle(document.querySelector('.catalogo-familia-foto')).backgroundColor,
@@ -135,6 +160,9 @@ function brilho(cor) {
   Object.entries(resultados).forEach(([caso, r]) => {
     t(`${caso}: nenhuma foto vaza da placa`, () => assert.strictEqual(r.vazando, 0));
     t(`${caso}: nenhuma fileira desencontrada`, () => assert.strictEqual(r.desencontradas, 0));
+    t(`${caso}: nome e inicial inteiros em todo cartão (19 famílias)`, () => assert.strictEqual(r.cortados, 0));
+    t(`${caso}: a placa da foto mantém os 116px (não é achatada)`, () => assert.strictEqual(r.alturaPlaca, 116));
+    t(`${caso}: com 19 famílias a grade rola em vez de achatar`, () => assert.strictEqual(r.rola, true));
   });
 
   console.log('\n[consistência entre telas]');
