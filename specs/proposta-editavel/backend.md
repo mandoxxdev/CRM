@@ -714,3 +714,24 @@ Quando o usuário editar cláusulas pela primeira vez em uma proposta que ainda 
   nenhum, `getClausulasDefault()`), **uma por uma, tudo ou nada** (Etapa 147, RN-147.05). *(Esta linha dizia "copiar todas as cláusulas
   padrão de `condicoesNano4You.js`" — **estava errado** desde a escolha do modelo pela família; corrigido na Etapa 147.)*
 - A partir daí, usar apenas as da tabela para aquela proposta
+
+### Modelos semeados no boot (`semearModelosClausulas`, `server/index.js`)
+
+Idempotentes por `nome`: modelo que já existe não é tocado (preserva edição do usuário). Os três de hoje:
+
+| Modelo | Fonte | `is_padrao` |
+|---|---|---|
+| Equipamentos | `clausulasDefault.js` | 1 |
+| Hélices e Discos | `clausulasHelices.js` (e `completarModeloClausulas`, que acrescenta cláusula nova do código) | 0 |
+| Projeto Conceitual (24/11/2026) | `clausulasProjetoConceitual.js` — 21 registros: as 20 seções da proposta 01260930/R00, com o preço em dois blocos (abertura e condição) | 0 |
+
+O Projeto Conceitual segue o encaixe do template como o de hélices: `1.`–`3.` no slot do começo (`ehSecaoIntro`); 5.1–5.15 antes da
+tabela de preços; o slot de preço pelo título (`PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS` 5.16 e `CONDIÇÃO DE PAGAMENTO:` 5.16.1); a
+`CONSIDERAÇÃO FINAL` (5.17) na página de assinatura. Em relação ao documento de origem (1 a 20): o "4. ESCOPO TÉCNICO" virou 5.1 (a seção 4
+do documento é a dos itens), e FINANCIAMENTO PARA PAGAMENTO, CONFIDENCIALIDADE e VALIDADE E ACEITE subiram para antes do preço (5.13–5.15),
+porque o template desenha toda 5.x abaixo de 5.25 antes da tabela — com o número de origem sairiam fora de ordem. A referência "Item 8 –
+Entregáveis" virou "Item 5.5". Ele **não** entra no `completarModeloClausulas`: sem histórico de cláusula acrescentada depois, ainda não
+precisa. Teste: `tests/api/modeloProjetoConceitual.api.test.js`.
+
+Ainda igual ao de equipamentos numa proposta de Projeto Conceitual (fora deste pedido): o título da capa (`tituloCapa` só distingue
+proposta inteira de peças) e a tabela FINAME/BNDES (`propostaDePecas`).

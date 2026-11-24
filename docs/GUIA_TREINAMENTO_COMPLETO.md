@@ -514,6 +514,23 @@ de modelos e trocar o modelo de uma família exigem o **Comercial** (a regra da 
 A proposta acha o modelo pelo **nome** da família gravado nos itens: renomear uma família muda o modelo que as propostas novas com
 itens daquele nome recebem.
 
+Os modelos que já vêm no sistema (desde 24/11/2026):
+
+| Modelo | Para quê | Cláusulas |
+|---|---|---|
+| **Equipamentos** (padrão) | Equipamentos e sistemas | o contrato completo |
+| **Hélices e Discos** | Peças e acessórios | contrato reduzido |
+| **Projeto Conceitual** | Serviço de engenharia conceitual | 21 (a lista mostra *"Projeto Conceitual (21 cláusulas)"*): objetivo, metodologia e premissas no começo; escopo técnico, oportunidades, potencial de financiamento, normas, entregáveis, reuniões, revisões, responsabilidade do cliente, consideração sobre o trabalho, limitação dos resultados, exclusões, prazo (60 dias úteis), financiamento do pagamento, confidencialidade, validade e aceite; preço com pagamento 40/30/30; consideração final |
+
+Numa proposta que misture famílias de modelos diferentes, vale o **Equipamentos**. Para usar o Projeto Conceitual: na família do
+serviço (ex.: uma família *Projeto Conceitual*), escolha o modelo **Projeto Conceitual** e salve; a proposta nova só com itens dessa família
+já sai com esse contrato. Proposta cujas cláusulas já foram editadas não muda (ela guarda a cópia feita na primeira edição); proposta
+que nunca teve cláusula editada mostra sempre o modelo **atual** da família — trocar o modelo da família muda o contrato dela também.
+
+**O que o modelo não muda:** a capa continua *"Proposta para fornecimento de equipamentos industriais"* e a tabela *Ref. FINAME / Cartão
+BNDES* continua aparecendo — as duas só mudam hoje para proposta inteira de peças. O valor total, as tabelas fiscais e a seção 4 (escopo
+de fornecimento, montada pelos itens) seguem como em qualquer proposta.
+
 **O cadastro de família de produto.** Criar, editar, renomear e apagar uma família, trocar a foto e o esquemático, escolher as variáveis
 dela e as opções de cada variável exigem o **Comercial** (a regra da seção 3.3) — é em **Comercial → Produtos → um grupo**. As opções por
 família e a leitura das famílias e das variáveis que **Configurações → Comercial** usa (*Opções por família* e *Template de proposta*)
