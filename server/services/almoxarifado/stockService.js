@@ -3806,7 +3806,33 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), caixaG);
             if (recusa) throw Object.assign(new Error(`Não é possível estornar: ${recusa}`), { status: 400 });
           };
+          // Etapa 261 (RN-261.01; B1614): a recusa da contagem mais recente (RN-258.07) virou uma funcao — os dois ramos a usam, cada um com
+          // a sua condicao de "esta contagem conta a parte que este estorno mexe" (`condicaoDaLinha`, SQL sobre o movimento posterior). O
+          // AJUSTE_INVENTARIO (sempre do total) e o AJUSTE sem localizacao contam sempre; a condicao acrescenta os ajustes com localizacao
+          // que contam. Lido sob a trava do material: nenhum ajuste dele grava no meio. Antes de qualquer efeito (o claim volta pelo catch).
+          const recusarSeContagemDepois = async (condicaoDaLinha, paramsDaLinha) => {
+            if (opcoesEstorno.compensacao === true) return;
+            const contagemDepois = await dbGet(db, `SELECT id, tipo FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
+              AND COALESCE(cancelado, 0) = 0 AND (tipo = 'AJUSTE_INVENTARIO' OR (tipo = 'AJUSTE' AND (localizacao_destino_id IS NULL
+                OR ${condicaoDaLinha})))
+              ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id, ...paramsDaLinha]);
+            if (contagemDepois && contagemDepois.tipo === 'AJUSTE_INVENTARIO') {
+              throw Object.assign(new Error(`Não é possível estornar: há uma conferência de inventário deste material feita depois deste `
+                + `ajuste (movimentação #${contagemDepois.id}) — a contagem mais recente vale. Faça um novo ajuste.`), { status: 400 });
+            }
+            if (contagemDepois) {
+              throw Object.assign(new Error(`Não é possível estornar: há um ajuste deste material feito depois deste `
+                + `(movimentação #${contagemDepois.id}) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um `
+                + 'novo ajuste.'), { status: 400 });
+            }
+          };
           if (mov.localizacao_destino_id) {
+            // Etapa 261 (D (258) 5, RN-261.01/02; B1614): o Ajuste de PRATELEIRA tambem respeita a contagem feita depois — A 5, Ajuste de A
+            // para 3, Ajuste do total para 7, estorno do primeiro -> 9 (a contagem diz 7); com Ajuste de A para 6 no lugar, 8 (a de A diz 6).
+            // Conta o do total, o inventario e o Ajuste da MESMA linha (prateleira e lote): o de outra prateleira ou de outro lote contou
+            // so a linha dele, e o estorno pela diferenca continua certo ali.
+            await recusarSeContagemDepois('(localizacao_destino_id = ? AND lote_id IS ?)',
+              [mov.localizacao_destino_id, mov.lote_id || null]);
             // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
             // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
             // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
@@ -3876,21 +3902,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             // (Etapa 10): a mensagem dele manda so fazer um novo ajuste (achado 4).
             if (opcoesEstorno.compensacao !== true) {
               const matC = await getMaterial(db, mov.material_id);
-              const contagemDepois = await dbGet(db, `SELECT id, tipo FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ?
-                AND COALESCE(cancelado, 0) = 0 AND (tipo = 'AJUSTE_INVENTARIO' OR (tipo = 'AJUSTE' AND (localizacao_destino_id IS NULL
-                  OR localizacao_destino_id IS ? OR localizacao_destino_id IN (SELECT cs.localizacao_id
+              await recusarSeContagemDepois(`localizacao_destino_id IS ? OR localizacao_destino_id IN (SELECT cs.localizacao_id
                     FROM ajuste_linhas_drenadas_almoxarifado cd JOIN estoque_saldo_almoxarifado cs ON cs.id = cd.saldo_id
-                    WHERE cd.movimentacao_id = ? AND cs.localizacao_id IS NOT NULL))))
-                ORDER BY id DESC LIMIT 1`, [mov.material_id, mov.id, matC.localizacao_padrao_id || null, mov.id]);
-              if (contagemDepois && contagemDepois.tipo === 'AJUSTE_INVENTARIO') {
-                throw Object.assign(new Error(`Não é possível estornar: há uma conferência de inventário deste material feita depois deste `
-                  + `ajuste (movimentação #${contagemDepois.id}) — a contagem mais recente vale. Faça um novo ajuste.`), { status: 400 });
-              }
-              if (contagemDepois) {
-                throw Object.assign(new Error(`Não é possível estornar: há um ajuste deste material feito depois deste `
-                  + `(movimentação #${contagemDepois.id}) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um `
-                  + 'novo ajuste.'), { status: 400 });
-              }
+                    WHERE cd.movimentacao_id = ? AND cs.localizacao_id IS NOT NULL)`, [matC.localizacao_padrao_id || null, mov.id]);
             }
             // RN-258.02: pela diferenca o total pode ficar negativo (ajuste para cima e o material saiu depois) — a mesma recusa do ramo
             // com localizacao, antes de qualquer efeito (o claim volta pelo catch). Material ou configuracao que permite negativo: passa.
