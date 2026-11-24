@@ -3,5 +3,6 @@
   "numero_os": "OS-042",
   "status": "aberta",
   "cliente_id": 7,
-  "cliente_nome": "ACME INDUSTRIA LTDA"
+  "cliente_nome": "ACME INDUSTRIA LTDA",
+  "projeto_id": null
 }
