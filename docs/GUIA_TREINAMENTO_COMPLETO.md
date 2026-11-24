@@ -572,8 +572,9 @@ O que saber:
 - O negrito do português passa para a tradução (ex.: **PROJETO CONCEITUAL** → **PROYECTO CONCEPTUAL**): a frase é traduzida com o
   negrito marcado. Em **Traduções**, o negrito aparece como `**texto**` — quem corrige pode tirar ou pôr os `**`. Traduções feitas antes
   desta mudança são refeitas sozinhas ao abrir a proposta (a correção feita à mão não é mexida).
-- Antes das assinaturas sai uma **Nota legal**, nas duas línguas: a proposta está nas duas línguas só para facilitar a leitura, e em caso
-  de divergência vale o português. Só na proposta em inglês ou espanhol.
+- O contrato ganha uma última cláusula, **IDIOMA**, nas duas línguas: a proposta está nas duas línguas só para facilitar a leitura, e
+  em caso de divergência vale o português. Ela segue a numeração do contrato (21 no Projeto Conceitual, 5.26 em equipamentos, 5.11 em
+  peças) e sai antes das assinaturas. Só na proposta em inglês ou espanhol.
 - As duas colunas terminam juntas: quando a tradução fica mais comprida, a letra dela diminui um pouco (no máximo 12%) para não deixar
   buraco embaixo do português. A tradução sai num azul diferente do português.
 - Nomes de programa e de arquivo (Excel, PDF, DWG, Word, AutoCAD…) nunca são traduzidos.

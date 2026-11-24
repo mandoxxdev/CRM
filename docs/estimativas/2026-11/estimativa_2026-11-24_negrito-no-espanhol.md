@@ -6,7 +6,7 @@ esp"*.
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Negrito também na coluna traduzida | 1h | 1h | 1h | `docs/superpowers/plans/2026-11-24-propostas-etapa1-proposta-bilingue.md` | Correção de cliente + servidor + testes (~1h) | ~5min | 15min | `d4183892` |
-| 2 | Nota legal na proposta em outra língua | 30min | 30min | 30min | idem | Bloco no template + teste (~30min) | ~2min | 15min | `38b8c821` |
+| 2 | Nota legal na proposta em outra língua | 30min | 30min | 30min | idem | Bloco no template + teste (~30min) | ~2min + a cláusula | 15min | `38b8c821`, `ec733fee` |
 
 **Revisado (24/11/2026):** (2) chegou no meio do trabalho: *"sempre que for em outro idioma, tem que aparecer uma nota legal de que a
 versão que vale é a em PTBR, mas isso só deve aparecer quando fazemos a proposta em outras línguas"*.
@@ -20,6 +20,9 @@ versão que vale é a em PTBR, mas isso só deve aparecer quando fazemos a propo
 ## Fechamento (24/11/2026)
 
 `horas.js` mediu **0,1 h** (por baixo: os commits saíram a minutos um do outro). Realizado arredondado para cima, 15min cada.
+
+**Depois do fechamento (24/11/2026):** a nota legal virou cláusula do contrato a pedido (*"não deve ser no sistema, deve ser incluído
+no contrato"*) — mesma tarefa 2, sem tempo novo estimado; o realizado continua 15min (o `horas.js` mede minutos entre os commits).
 
 ## Medir no fechamento
 

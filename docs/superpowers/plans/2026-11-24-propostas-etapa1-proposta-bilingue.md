@@ -243,7 +243,9 @@ um, com print; cada um teve commit próprio.
   `⟦b⟧…⟦/b⟧` → fichas → `**…**`) e o servidor pede para refazer a tradução antiga sem `**`. No documento real em espanhol: 115 negritos
   no lugar. **Lição:** comportamento que depende do tradutor se testa uma vez com o serviço real (`TRADUTOR_WEB_REAL=1` em
   `tradutorWeb.test.js` é o molde).
-- [x] Nota legal (`notaLegalBi`) antes dos campos de assinatura nos três documentos, só em `en`/`es`; teste `propostaBilingueNotaLegal`.
+- [x] Nota legal (`notaLegalBi`) antes dos campos de assinatura nos três documentos, só em `en`/`es` (`38b8c821`) — trocada pela cláusula
+  numerada IDIOMA (`clausulaIdiomaBi` + `numeroSeguinte`), a pedido: "deve ser incluído no contrato" (`ec733fee`); teste
+  `propostaBilingueNotaLegal` (NL-01..03).
 
 ## Retro (4 números)
 
