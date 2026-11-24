@@ -733,5 +733,12 @@ porque o template desenha toda 5.x abaixo de 5.25 antes da tabela — com o núm
 Entregáveis" virou "Item 5.5". Ele **não** entra no `completarModeloClausulas`: sem histórico de cláusula acrescentada depois, ainda não
 precisa. Teste: `tests/api/modeloProjetoConceitual.api.test.js`.
 
-Ainda igual ao de equipamentos numa proposta de Projeto Conceitual (fora deste pedido): o título da capa (`tituloCapa` só distingue
-proposta inteira de peças) e a tabela FINAME/BNDES (`propostaDePecas`).
+**Capa e FINAME por modelo (24/11/2026, segundo pedido do dia).** `carregarVariaveisDasFamilias` leva também
+`templateConfig.modelo_por_familia` (`familias_produto.clausulas_modelo_id` → `clausulas_modelo.nome`, só modelo ativo). No template,
+`MODELOS_DE_SERVICO` (nome do modelo sem acento/caixa → título da capa; hoje só `projeto conceitual` →
+*PROPOSTA PARA FORNECIMENTO DE SERVIÇOS ESPECIALIZADOS*) decide `propostaDeServico`: **todos** os itens com família conhecida e o
+**mesmo** modelo de serviço — a régua do `resolverModeloClausulas`; qualquer dúvida fica equipamento. `propostaDeServico` troca o
+`tituloCapa` e esconde a FINAME, como o `propostaDePecas`. As duas réguas convivem: peças decide pelo **grupo** da família, serviço pelo
+**modelo**; serviço vem primeiro no título. *(A linha anterior desta seção dizia que a capa e a FINAME continuavam as de equipamentos
+numa proposta de Projeto Conceitual — era verdade só entre os dois commits do dia.)* Teste: PC-05 (rota `/premium`, servidor real) e
+PC-06 (bordas) em `tests/api/modeloProjetoConceitual.api.test.js`.

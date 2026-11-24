@@ -527,9 +527,13 @@ serviço (ex.: uma família *Projeto Conceitual*), escolha o modelo **Projeto Co
 já sai com esse contrato. Proposta cujas cláusulas já foram editadas não muda (ela guarda a cópia feita na primeira edição); proposta
 que nunca teve cláusula editada mostra sempre o modelo **atual** da família — trocar o modelo da família muda o contrato dela também.
 
-**O que o modelo não muda:** a capa continua *"Proposta para fornecimento de equipamentos industriais"* e a tabela *Ref. FINAME / Cartão
-BNDES* continua aparecendo — as duas só mudam hoje para proposta inteira de peças. O valor total, as tabelas fiscais e a seção 4 (escopo
-de fornecimento, montada pelos itens) seguem como em qualquer proposta.
+**A capa e a tabela FINAME da proposta de Projeto Conceitual** (desde 24/11/2026, no mesmo dia do modelo): proposta só com itens de
+famílias ligadas ao modelo Projeto Conceitual sai com a capa *"Proposta para fornecimento de serviços especializados"* — com o título
+digitado na proposta logo abaixo, ex.: *"Projeto Conceitual – Nova Unidade Fabril"* — e **sem** a tabela *Ref. FINAME / Cartão BNDES*, que
+só vale para equipamento. Misturada com qualquer item de outra família, a proposta volta a ter a capa de equipamentos e a tabela FINAME (a
+mesma regra do contrato). *(Antes desta data este parágrafo dizia que a capa e a FINAME não mudavam com o modelo — valeu só no primeiro
+envio do modelo, o mesmo dia.)* O valor total, as tabelas fiscais e a seção 4 (escopo de fornecimento, montada pelos itens) seguem como
+em qualquer proposta.
 
 **O cadastro de família de produto.** Criar, editar, renomear e apagar uma família, trocar a foto e o esquemático, escolher as variáveis
 dela e as opções de cada variável exigem o **Comercial** (a regra da seção 3.3) — é em **Comercial → Produtos → um grupo**. As opções por

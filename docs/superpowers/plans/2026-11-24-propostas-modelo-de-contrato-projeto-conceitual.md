@@ -53,7 +53,37 @@ Estimativa: `docs/estimativas/2026-11/estimativa_2026-11-24_contrato-projeto-con
    40/30/30; 5.17 CONSIDERAÇÃO FINAL na página de assinatura.
 5. Misture na mesma proposta um equipamento: o contrato volta a ser o de Equipamentos (regra de sempre).
 
-## O que fica de fora (e o próximo passo natural)
+## Segunda parte (mesmo dia): capa de serviços e sem FINAME — FEITA
+
+Pedida pelo Matheus logo depois do envio. Estimativa: `docs/estimativas/2026-11/estimativa_2026-11-24_capa-projeto-conceitual.txt` (1h).
+
+- [x] **T5 — o modelo de cada família vai para o template.** `carregarVariaveisDasFamilias` junta `clausulas_modelo` (só ativo) e grava
+  `templateConfig.modelo_por_familia`.
+- [x] **T6 — a regra.** `MODELOS_DE_SERVICO` + `propostaDeServico` no template, ao lado do `propostaDePecas`: todos os itens com família
+  conhecida e o mesmo modelo de serviço → capa *"PROPOSTA PARA FORNECIMENTO DE SERVIÇOS ESPECIALIZADOS"* e FINAME escondida. Na dúvida,
+  equipamento (a régua do `resolverModeloClausulas`). Decidido pelo **modelo**, não por um grupo novo: é o que o Comercial já escolhe na
+  família do serviço. Descartado: coluna `titulo_capa` em `clausulas_modelo` (tela de edição de modelo não existe; seria coluna sem
+  quem a preencha) — a regra fica no código, como a de peças.
+- [x] **T7 — bug achado no caminho: o preview sem variável configurada não carregava as famílias.** A rota `/premium` chamava o template
+  direto quando nenhuma variável técnica estava selecionada (`chavesUnicas.length === 0`), sem `carregarVariaveisDasFamilias` — e o
+  `/pdf` carrega sempre. Consequência, já antes desta etapa: nesse caso o preview mostrava a capa de equipamentos numa proposta de
+  peças cujo PDF saía com a capa de peças. Agora os dois ramos carregam. Achado pelo PC-05, que falhou antes da correção.
+- [x] **T8 — teste.** PC-05 (rota `/premium`, servidor real: só Projeto Conceitual → capa de serviços, sem FINAME, título da proposta
+  mantido; misturada com equipamento → como antes) e PC-06 (bordas no template).
+
+Verificação da segunda parte:
+- `modeloProjetoConceitual.api.test.js`: **8 passed, 0 failed**. Controles positivos: o PC-05 falhou antes da correção do T7; com o
+  `propostaDeServico` tirado da condição da FINAME, PC-05 e PC-06 falham (*"ainda mostra a tabela FINAME"*; 6 passed, 2 failed);
+  template restaurado.
+- Testes de template sem Chrome: `propostaCapaTituloPecas`, `propostaNaoImprimeVariavelApagada`, `ordemVariaveisPorFamilia`,
+  `propostaRotulosSecao4`, `propostaHeaderPadraoSempre`, `descricaoTabelaPrecos`, `propostaCapaContato`, `propostaCapaContatoCadastro`,
+  `propostaCapaLogoCliente`, `proposta523Fixa`, `proposta523Editavel`, `propostaClausulasInline`, `propostaEnderecoContratada`,
+  `propostaDescritivoOrdem`: todos 0 failed.
+- `acessoriosItem.test.js`: **1 failed — anterior a esta etapa** (*"os dois calculos de subtotal somam os acessorios: 0 (esperado 2)"*;
+  o mesmo resultado com `index.js` e template no estado de antes). Não investigado aqui.
+- `proposta523OrdemCondicao` e os demais com puppeteer: não rodam nesta máquina (sem Chrome).
+
+## O que fica de fora (e o próximo passo natural) — escrito antes da segunda parte
 
 A capa continua *"Proposta para fornecimento de equipamentos industriais"* e a tabela *Ref. FINAME / Cartão BNDES* continua saindo
 — o documento de origem tem capa *"Proposta para fornecimento de serviços especializados — Projeto Conceitual"* e não tem a tabela
