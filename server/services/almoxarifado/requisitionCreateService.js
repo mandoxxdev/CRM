@@ -220,8 +220,16 @@ async function resolverProjetoDaRequisicao(db, projetoIdBruto, osId) {
     FROM ordens_servico WHERE id = ?`, [osId]);
   if (!os) return v;
   const rotulo = os.numero_os || `#${os.id}`;
+  // Fase 5 (I1): o projeto da OS so conta quando existe e e do mesmo cliente da OS (a regua de `projetosAux.projetoDaOsSql`, a que a aux
+  // de OS devolve ao formulario). Projeto da OS de outro cliente (o cadastro de OS nao confere): a OS conta como "sem projeto" — regra (b).
+  let projetoDaOs = null;
   if (os.projeto_id) {
-    if (Number(os.projeto_id) !== v) throw Object.assign(new Error(projetoNaoEDaOs(rotulo)), { status: 400 });
+    const p = await dbGet(db, `SELECT id, ${colsP.has('cliente_id') ? 'cliente_id' : 'NULL AS cliente_id'} FROM projetos WHERE id = ?`,
+      [os.projeto_id]);
+    if (p && Number(p.cliente_id || 0) === Number(os.cliente_id || 0)) projetoDaOs = Number(p.id);
+  }
+  if (projetoDaOs) {
+    if (projetoDaOs !== v) throw Object.assign(new Error(projetoNaoEDaOs(rotulo)), { status: 400 });
     return v;
   }
   if (Number(projeto.cliente_id || 0) !== Number(os.cliente_id || 0)) {

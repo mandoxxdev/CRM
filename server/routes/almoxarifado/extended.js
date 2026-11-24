@@ -21,7 +21,7 @@ const { requirePermission, requireAlgumaPermissao, can, getPerfilFromUser, ACAO_
 // Etapa 181 (Fase 5, I1): a justificativa antiga da saida da entrega de EPI e mascarada na leitura para quem nao tem `entregar_epi`.
 const { mascararMovimentacoes } = require('../../services/almoxarifado/mascaraEntregaEpi');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
-const { listarProjetosAux } = require('../../services/almoxarifado/projetosAux'); // Etapa 260 (RN-260.03)
+const { listarProjetosAux, projetoDaOsSql } = require('../../services/almoxarifado/projetosAux'); // Etapa 260 (RN-260.03/04)
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
 const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
 // Etapa 33 (fix-round da revisao adversarial): a extensao gravada vem do MIME ACEITO, nunca do
@@ -1099,11 +1099,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     const params = abertas ? STATUS_OS_FECHADA : [];
     // Etapa 260 (RN-260.04): o projeto da OS (o formulario da requisicao preenche o Projeto com ele). Sem a coluna (~25 suites criam
     // `ordens_servico` sem ela): null — conferido por PRAGMA, como a 255.
-    let projetoCol = 'NULL as projeto_id';
-    try {
-      const cols = await dbAll(db, 'PRAGMA table_info(ordens_servico)');
-      if (cols.some((c) => c.name === 'projeto_id')) projetoCol = 'os.projeto_id';
-    } catch (e) { /* sem a tabela: a consulta abaixo cai no [] de sempre */ }
+    // Fase 5 (I1): so o projeto do MESMO cliente da OS (projetosAux.projetoDaOsSql) — o de outro cliente vem null e o formulario nao o trava.
+    const projetoCol = `${await projetoDaOsSql(db, 'os')} as projeto_id`;
     try {
       const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, c.razao_social as cliente_nome, ${projetoCol}
         FROM ordens_servico os LEFT JOIN clientes c ON os.cliente_id = c.id

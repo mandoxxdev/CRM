@@ -28,4 +28,20 @@ async function listarProjetosAux(db, { comCliente = false } = {}) {
     ORDER BY ${ordem} LIMIT 500`);
 }
 
-module.exports = { listarProjetosAux };
+/**
+ * Etapa 260 (RN-260.04, Fase 5 I1) — a expressao SQL do "projeto da OS" que as aux de OS devolvem: o `projeto_id` da OS SO quando o
+ * projeto existe e e do MESMO cliente da OS (sem cliente dos dois lados conta como igual). O cadastro de OS grava projeto e cliente sem
+ * conferir um com o outro: com a OS do cliente A apontando um projeto interno (ou do B), o formulario preenchia e travava esse projeto e a
+ * entrega do material de A recusava pela regra do dono (que olha o projeto antes da OS) — antes da 260 a mesma requisicao saia pela OS.
+ * A conferencia da criacao (`requisitionCreateService.resolverProjetoDaRequisicao`) usa a mesma regua. Sem as colunas: `NULL`.
+ */
+async function projetoDaOsSql(db, aliasOs = 'os') {
+  const colsO = await colunasDe(db, 'ordens_servico');
+  const colsP = await colunasDe(db, 'projetos');
+  if (!colsO.has('projeto_id') || !colsP.has('id')) return 'NULL';
+  const cliOs = colsO.has('cliente_id') ? `COALESCE(${aliasOs}.cliente_id, 0)` : '0';
+  const cliP = colsP.has('cliente_id') ? 'COALESCE(pdo.cliente_id, 0)' : '0';
+  return `(SELECT pdo.id FROM projetos pdo WHERE pdo.id = ${aliasOs}.projeto_id AND ${cliP} = ${cliOs})`;
+}
+
+module.exports = { listarProjetosAux, projetoDaOsSql };

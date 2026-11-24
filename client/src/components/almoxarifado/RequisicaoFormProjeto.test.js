@@ -143,15 +143,17 @@ describe('RequisicaoForm — Projeto (Etapa 260, RN-260.05)', () => {
     expect(resumo('Projeto')).toBe('—');
   });
 
-  test('OS com projeto: preenche e trava ("vem da OS escolhida"); OS sem projeto destrava e limpa', async () => {
+  test('OS com projeto: preenche e trava ("vem da OS escolhida"); OS sem projeto destrava e volta ao escolhido antes (Fase 5)', async () => {
     await renderizar(null);
     await escolher($('req-projeto-select'), '30');
     await escolher($('req-os-select'), '7');
     expect($('req-projeto-select').value).toBe('31');
     expect($('req-projeto-select').disabled).toBe(true);
     expect($('req-projeto-dica').textContent).toBe('vem da OS escolhida');
+    await escolher($('req-os-select'), '15'); // de uma OS com projeto para outra: continua travado, o de antes nao se perde
+    expect($('req-projeto-select').value).toBe('99');
     await escolher($('req-os-select'), '12');
-    expect($('req-projeto-select').value).toBe('');
+    expect($('req-projeto-select').value).toBe('30');
     expect($('req-projeto-select').disabled).toBe(false);
     expect($('req-projeto-dica').textContent).toBe('opcional');
   });

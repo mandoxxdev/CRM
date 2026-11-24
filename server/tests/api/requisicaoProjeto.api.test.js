@@ -184,6 +184,42 @@ const MSG_OUTRO_CLIENTE = (os) => `O projeto escolhido é de outro cliente que o
     assert.deepStrictEqual([r.status, r.body.error], [400, MSG_OUTRO_CLIENTE('OS-260-3')], 'OS sem cliente, projeto de cliente');
   });
 
+  // Fase 5 (I1): o cadastro de OS nao confere projeto x cliente. OS do cliente A apontando um projeto interno (ou do B): o projeto dela
+  // nao conta — a aux devolve null (o formulario nao o preenche nem trava) e a criacao trata a OS como sem projeto (regra b).
+  const OS_INCOERENTE = await novaOs('OS-260-9', cliA, PI);
+  const OS_INCOERENTE_B = await novaOs('OS-260-8', cliA, PB);
+  await test('[RN-260.04, Fase 5 I1] aux de OS (as duas rotas): projeto da OS de outro cliente (ou interno com OS de cliente) vem null', async () => {
+    for (const url of [`${API}/aux/ordens-servico`, '/api/requisicoes-material/aux/ordens-servico']) {
+      const r = await request(app).get(url);
+      const por = new Map(r.body.map((o) => [o.id, o.projeto_id]));
+      assert.deepStrictEqual([por.get(OS_INCOERENTE), por.get(OS_INCOERENTE_B), por.get(OS_PA)], [null, null, PA], url);
+    }
+  });
+
+  await test('[RN-260.06, Fase 5 I1] OS com projeto de outro cliente conta como sem projeto: o projeto dela -> 400 (b); um do cliente da OS passa', async () => {
+    let r = await criar({ os_id: OS_INCOERENTE, projeto_id: PI });
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_OUTRO_CLIENTE('OS-260-9')]);
+    r = await criar({ os_id: OS_INCOERENTE_B, projeto_id: PB });
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_OUTRO_CLIENTE('OS-260-8')]);
+    r = await criar({ os_id: OS_INCOERENTE, projeto_id: PA });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    r = await criar({ os_id: OS_INCOERENTE });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  });
+
+  await test('[Fase 5 I1, integracao] material do cliente A com a OS (de A) que aponta projeto interno, sem projeto na requisicao: entrega 200', async () => {
+    const mc = await material(cliA);
+    const r = await comoSol(() => request(app).post(`${API}/requisicoes`).send({ os_id: OS_INCOERENTE,
+      itens: [{ material_id: mc.id, quantidade: 2 }] }));
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(await projetoDaReq(r.body.id), null);
+    await request(app).put(`${API}/requisicoes/${r.body.id}/aprovar`).send({});
+    const it = (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [r.body.id])).id;
+    await request(app).put(`${API}/requisicoes/${r.body.id}/separar`).send({ itens_separados: [{ item_id: it, quantidade_separada: 2 }] });
+    const ent = await request(app).put(`${API}/requisicoes/${r.body.id}/entregar`).send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 2 }] });
+    assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
+  });
+
   await test('[RN-260.06] sem projeto: nada muda (a OS com projeto nao preenche o da requisicao)', async () => {
     const r = await criar({ os_id: OS_PA });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));

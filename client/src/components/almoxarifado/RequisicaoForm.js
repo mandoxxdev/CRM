@@ -79,9 +79,11 @@ const RequisicaoForm = () => {
   }, [osListaUrl]);
 
   // Etapa 260 (RN-260.05): o campo Projeto (opcional). Escolher uma OS cadastrada com projeto preenche e TRAVA o projeto (o servidor
-  // recusa outro, RN-260.06); OS sem projeto, ou "Digitar outro número", destrava e limpa o que tinha vindo da OS.
+  // recusa outro, RN-260.06); OS sem projeto, ou "Digitar outro número", destrava e volta ao que estava escolhido antes (ou vazio).
   const [projetoId, setProjetoId] = useState('');
   const [projetoDaOs, setProjetoDaOs] = useState(false);
+  // Fase 5 (M2): o projeto escolhido à mão antes de a OS travar o campo — volta quando a OS deixa de mandar.
+  const [projetoAntesDaOs, setProjetoAntesDaOs] = useState('');
   const [projetos, setProjetos] = useState([]);
   const [projetosFalhou, setProjetosFalhou] = useState(false);
   const projetosUrl = warehouseMode ? '/almoxarifado/aux/projetos' : '/requisicoes-material/aux/projetos';
@@ -99,10 +101,11 @@ const RequisicaoForm = () => {
     const os = valor ? ordensServico.find((o) => String(o.id) === String(valor)) : null;
     setForm((f) => ({ ...f, os_referencia: os?.numero_os || '' }));
     if (os && os.projeto_id) {
+      if (!projetoDaOs) setProjetoAntesDaOs(projetoId);
       setProjetoId(String(os.projeto_id));
       setProjetoDaOs(true);
     } else if (projetoDaOs) {
-      setProjetoId('');
+      setProjetoId(projetoAntesDaOs);
       setProjetoDaOs(false);
     }
   };

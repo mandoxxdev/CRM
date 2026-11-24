@@ -30,7 +30,7 @@ const {
 const travaPorRequisicao = require('../services/almoxarifado/travaPorRequisicao'); // Etapa 101 (RN-05)
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
-const { listarProjetosAux } = require('../services/almoxarifado/projetosAux'); // Etapa 260 (RN-260.03)
+const { listarProjetosAux, projetoDaOsSql } = require('../services/almoxarifado/projetosAux'); // Etapa 260 (RN-260.03/04)
 const alertService = require('../services/almoxarifado/alertService');
 const { canDeleteAlmoxRequisicao } = require('../services/systemPermissions');
 const { validate } = require('../services/almoxarifado/validation');
@@ -85,8 +85,8 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
       // eslint-disable-next-line global-require
       const fechadas = require('../services/compras/pedidoCompraService').STATUS_OS_FECHADA;
       // Etapa 260 (RN-260.04): o projeto da OS (o formulario preenche o Projeto); sem a coluna, null (PRAGMA, como a 255)
-      const temProjeto = (await dbAll(db, 'PRAGMA table_info(ordens_servico)')).some((c) => c.name === 'projeto_id');
-      const sel = `SELECT os.id, os.numero_os, os.status, ${temProjeto ? 'os.projeto_id' : 'NULL AS projeto_id'} FROM ordens_servico os`;
+      // Fase 5 (I1): so o projeto do MESMO cliente da OS (`projetoDaOsSql`)
+      const sel = `SELECT os.id, os.numero_os, os.status, ${await projetoDaOsSql(db, 'os')} AS projeto_id FROM ordens_servico os`;
       let rows;
       try {
         rows = await dbAll(db, `${sel}
