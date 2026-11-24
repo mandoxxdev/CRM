@@ -560,14 +560,22 @@ Como usar:
 3. A tradução é **automática**: acontece sozinha ao abrir o preview, ao **Salvar alterações**, ao clicar em **Ver em duas colunas** e
    ao **Baixar PDF**, em qualquer navegador. Um aviso "Traduzindo…" aparece no topo enquanto isso.
 4. Para revisar ou corrigir uma tradução: **Traduções** → corrija a coluna da direita → **Salvar correções**.
-5. **Ver em duas colunas** mostra o documento como ele sai no PDF. Depois, **Baixar PDF**.
+5. **Ver em duas colunas** mostra o documento como ele sai no PDF. **Os parágrafos das cláusulas se editam ali mesmo**, na coluna em
+   português (contorno amarelo): mude o texto, clique em **Salvar alterações** e a tradução nova aparece ao lado. Títulos, fotos e textos
+   com campo automático (ex.: nome do cliente) se editam em **Voltar a editar**. Depois, **Baixar PDF**.
 
 O que saber:
 - A tradução usa o Google Tradutor gratuito, pela internet do servidor. Se ele não responder, aparece *"A tradução automática não
   respondeu agora"*: tente de novo em instantes, ou preencha em **Traduções**.
 - Texto **sem tradução** sai no PDF em português, em laranja com fundo claro, e o sistema avisa quantos são ao baixar o PDF. Confira
   antes de mandar ao cliente.
-- A tradução vem sem negrito: um trecho em negrito no português (ex.: **Elaboração:**) sai sem negrito na outra coluna.
+- O negrito do português passa para a tradução (ex.: **Elaboração:** → **Elaboración:**). Se o tradutor usar outra palavra no meio da
+  frase, aquele trecho sai sem negrito na outra coluna — o texto nunca some.
+- As duas colunas terminam juntas: quando a tradução fica mais comprida, a letra dela diminui um pouco (no máximo 12%) para não deixar
+  buraco embaixo do português. A tradução sai num azul diferente do português.
+- Nomes de programa e de arquivo (Excel, PDF, DWG, Word, AutoCAD…) nunca são traduzidos.
+- A página de apresentação da empresa sai com a foto do modelo e com a maior letra que cabe na página.
+- No Projeto Conceitual em duas colunas, a data, o carimbo e as assinaturas saem sempre juntos, num bloco inteiro.
 - Termos de contrato seguem um glossário fixo: **CONTRATANTE** = *Contracting Party* / *Contratante*, **CONTRATADA** = *Contractor* /
   *Contratista*, **Escopo de Fornecimento** = *Scope of Supply* / *Alcance del Suministro*. O tradutor automático trocava CONTRATANTE
   por *Contractor* — que inverteria as partes do contrato.

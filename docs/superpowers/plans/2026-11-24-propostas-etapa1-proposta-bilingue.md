@@ -214,6 +214,28 @@ Estimativa `docs/estimativas/2026-11/estimativa_2026-11-24_traducao-qualquer-nav
   sem a inicial maiúscula no lote e sem a reserva do Chrome, um teste de cada lado falha.
 - Não feito: clique real de um vendedor em outro navegador; o negrito dentro do parágrafo continua não indo para a tradução.
 
+## Rodada de 24/11/2026, noite (2) — simetria, assinaturas, negrito, termos fixos, edição e cores
+
+Estimativa `docs/estimativas/2026-11/estimativa_2026-11-24_colunas-simetricas.md` (revisada para 6h45, 7 tarefas). Pedidos chegaram um a
+um, com print; cada um teve commit próprio.
+
+- [x] Simetria: `equalizarPares` no template (só `bi`), chamada no `addNode` do paginador; `compensarEntrelinha`; cache `data-eq` pela
+  largura. Apresentação: foto de volta e `ajustarApresentacaoBi` (maior letra que cabe, depois a foto cresce). `0bc9f116`
+- [x] Assinaturas do Projeto Conceitual em duas colunas: 19 e 20 no texto, campos + assinaturas num bloco `avoid-break`. `b737fe0d`
+- [x] Filete da coluna traduzida: `::before` de 1px (o `box-shadow inset` fracionário deixava fio nos 4 lados). `89186c1e`
+- [x] `TERMOS_FIXOS` (cliente e servidor) + espaço em volta da ficha + `limparTraducoesSemTermoFixo` no boot; "DWG versão 2010" fora do
+  modelo. `cc7d407e`
+- [x] Negrito: 33 trechos do DOCX no modelo (script sobre os runs `w:b`); `aplicarNegrito` em `propostaBilingue.js`. `c8ef5543`
+- [x] Edição na tela de duas colunas: `data-pt-html` no `<p>/<li>` do PT; `client/.../edicaoBilingue.js` (`ativarEdicaoBilingue`,
+  `lerEdicoesBilingue`, `aplicarEdicoesNasClausulas`); `salvarBilingue` no preview (inicializar se padrão → GET cláusulas → PUT de cada
+  uma alterada → traduzir → recarregar). `ada37734`
+- [x] Cores: tradução #1f5f8b, título traduzido #1a7f9c, filete sob o h2. `6cdbd928`
+- Testes novos: `propostaBilingueSimetria` (BI-S01..04), `propostaBilingueNegrito` (NG-01..05), `traducoesTermoFixo`, `edicaoBilingue`
+  (4) + integração no documento real (204 trechos editados, 204 gravados). Hash pt-BR do Projeto Conceitual regerado duas vezes, de
+  propósito (DWG e negritos do modelo) — com o modelo anterior, bate com a base; equipamento e peças nunca mudaram.
+- Não feito: clique real de um vendedor; editar título de cláusula na tela de duas colunas; o piso de 88% deixa a letra de um lado até
+  12% menor — visível em parágrafo de uma linha só.
+
 ## Retro (4 números)
 
 - Rodadas de correção até verde: 4 (Fase 2 — redesenho para o editor só PT; navegador — linha partida, tabela vazando, célula invadida;

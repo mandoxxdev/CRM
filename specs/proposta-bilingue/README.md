@@ -10,6 +10,11 @@ completa rodar verde.
 traduzida" — isso corrompia o salvamento (C1–C3 do plano). O editor ficou só em PT; o bilíngue é uma renderização somente leitura e a
 correção é no painel **Traduções**. As RN abaixo já estão na forma final.
 
+**Revista de novo em 24/11/2026 (noite):** "somente leitura" deixou de valer para o texto das cláusulas — o usuário: *"eu devo poder mudar
+todos os textos e depois ele traduz de forma simultânea"*. Os parágrafos e itens das cláusulas, na coluna em português, se editam na
+própria tela de duas colunas (RN-BI.11). O que corrompia o salvamento (o editor do português lendo o documento bilíngue) continua
+proibido: a edição bilíngue grava por outra rota, trocando o trecho exato na cláusula.
+
 Pedido do Matheus (Comercial), 24/11/2026: *"temos que pensar nas propostas para fora do Brasil, deve ter várias línguas, em preferência
 ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em PTBR e a outra na outra língua."*
 
@@ -50,7 +55,9 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - **RN-BI.01** — A proposta tem idioma `pt-BR` (padrão, documento como hoje), `en` (PT-BR + inglês) ou `es` (PT-BR + espanhol).
   Proposta existente sem idioma = `pt-BR`. Em `pt-BR` **em real** o documento sai **idêntico** ao de antes desta etapa, byte a byte.
 - **RN-BI.02** — Em `en`/`es`, todo o documento sai em duas colunas: PT-BR à esquerda, a outra língua à direita.
-- **RN-BI.03** — Um parágrafo e a sua tradução nunca ficam em páginas diferentes; uma linha de tabela também não.
+- **RN-BI.03** — Um parágrafo e a sua tradução nunca ficam em páginas diferentes; uma linha de tabela também não. **E terminam juntos**
+  (24/11/2026: "tem que sempre forçar a ficar parecido ambos, para dar simetria"): a metade mais alta tem a escala reduzida (piso 88%) e a
+  entrelinha compensada até a altura da outra, no momento em que o paginador posiciona o bloco.
 - **RN-BI.04** — Texto fixo do documento sai do dicionário; o que vem de dado (cláusulas, itens, variáveis, título) sai da memória de
   tradução. Sem tradução na memória, a coluna da outra língua mostra o PT-BR marcado como *pendente de tradução* — o documento nunca sai
   com a metade em branco calada. O pendente é marcado só com cor e fundo (o texto "(tradução pendente)" e o itálico alargavam a coluna e
@@ -68,6 +75,14 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
   (o motor de marcadores é outro; não coberto).
 - **RN-BI.09** — O incoterm (código + local, ex.: *FOB – Porto de Santos*) sai junto da tabela de preços quando preenchido.
 - **RN-BI.10** — A tabela FINAME/BNDES não sai em proposta `en`/`es`.
+- **RN-BI.11** — Na tela de duas colunas, cada parágrafo/item de cláusula (coluna PT) é editável; ao salvar, o trecho exato (`data-pt-html`)
+  é trocado na cláusula gravada, o pendente é traduzido e a tela recarrega. Texto com marcador `{{…}}`, títulos e textos fixos: só no modo
+  português. Trecho que não está mais na cláusula (mudou em outra aba): não grava e avisa.
+- **RN-BI.12** — O negrito do PT atravessa para a tradução: cada trecho em negrito é uma chave própria da memória (span oculto `.bi-termo`)
+  e a tradução dele ganha `<strong>` dentro da frase traduzida; parágrafo todo em negrito sai todo em negrito. Não achou: sem negrito,
+  nunca sem texto. O aviso de pendentes do PDF não conta esses trechos.
+- **RN-BI.13** — Nomes de programa e de arquivo (`TERMOS_FIXOS`: Excel, Word, PowerPoint, PDF, DWG, DXF, AutoCAD, Revit, SolidWorks)
+  nunca se traduzem; a tradução automática gravada sem o termo é apagada ao subir o servidor e refeita ("Excel" saía "Sobresalir").
 
 ## Checklist (hashes no plano e no commit da etapa)
 
@@ -78,4 +93,7 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - [x] 5. Tradução automática no Chrome, memória e correção — `traducoes` + `POST /api/traducoes` (`40cb21ff`) + painel **Traduções** (`6f80f20c`)
 - [x] 6. Moeda e incoterm na tabela de preços; FINAME fora (`b8bd5add`)
 - [x] 8. Tradução pelo servidor, em qualquer navegador (`a9fab2fb`); espaçamento igual ao da proposta em português (`749b0fc6`)
+- [x] 9. Colunas que terminam juntas e apresentação com a foto e letra maior (`0bc9f116`); assinaturas inteiras no Projeto Conceitual
+  (`b737fe0d`); coluna traduzida sem a "caixa" (`89186c1e`); termos fixos (`cc7d407e`); negrito (`c8ef5543`); edição na tela de duas
+  colunas (`ada37734`); cores (`6cdbd928`)
 - [ ] 7. Teste de clique de um vendedor com uma proposta real no Chrome — **não feito** (ver Status)
