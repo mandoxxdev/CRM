@@ -9,6 +9,7 @@ import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import PainelTraducoes from './PainelTraducoes';
 import { traduzirPendentesDaProposta } from './traducaoChrome';
+import { ativarEdicaoBilingue, lerEdicoesBilingue, aplicarEdicoesNasClausulas } from './edicaoBilingue';
 import {
   lerClausulasDoSource,
   sincronizarCampoParaSource,
@@ -1383,6 +1384,7 @@ export default function PropostaPreviewEditavel() {
   // Emitir revisão virou ato explícito, no botão ao lado.
   async function salvar() {
     if (!mudancasPendentes) return;
+    if (modoBilingue) return salvarBilingue();
     setSalvando(true);
     try {
       const doc = iframeRef.current?.contentDocument;
@@ -1413,6 +1415,47 @@ export default function PropostaPreviewEditavel() {
       toast[desfecho.tipo](desfecho.mensagem);
       carregarPreview();
       return desfecho.ok;
+    } catch (e) {
+      toast.error(mensagemDaFalhaDoSalvar(e));
+      return false;
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // Salvar na tela de DUAS COLUNAS (24/11/2026: "eu devo poder mudar todos os textos e depois ele traduz de forma simultânea"): grava
+  // os parágrafos editados na cláusula certa (edicaoBilingue.js), traduz o que ficou pendente e recarrega as duas colunas — a tradução
+  // do texto novo aparece ao lado. Não passa pelo salvarClausulas do modo português: ele lê o documento português, não este.
+  async function salvarBilingue() {
+    const doc = iframeRef.current?.contentDocument;
+    const edicoes = doc ? lerEdicoesBilingue(doc) : [];
+    if (edicoes.length === 0) { setMudancasPendentes(false); return true; }
+    setSalvando(true);
+    try {
+      if (clausulasIsDefault) await api.post(`/propostas/${id}/clausulas/inicializar`);
+      const { data } = await api.get(`/propostas/${id}/clausulas`);
+      const { alteradas, naoAchadas } = aplicarEdicoesNasClausulas((data && data.clausulas) || [], edicoes);
+      for (const c of alteradas) {
+        // eslint-disable-next-line no-await-in-loop
+        await api.put(`/propostas/${id}/clausulas/${c.id}`, { titulo: c.titulo, conteudo: c.conteudo });
+      }
+      if (naoAchadas.length) {
+        toast.warning(`${naoAchadas.length} trecho(s) não foram gravados: o texto mudou desde que a tela abriu. Recarregue e edite de novo.`);
+      } else {
+        toast.success('Alterações salvas. Traduzindo…');
+      }
+      // O documento em português (o do modo de edição) também muda: recarrega-o sem sair das duas colunas.
+      const [htmlRes, clausulasRes] = await Promise.all([
+        api.get(`/propostas/${id}/premium?embed=1`, { responseType: 'text' }),
+        api.get(`/propostas/${id}/clausulas`),
+      ]);
+      setHtml(htmlRes.data);
+      setClausulas(clausulasRes.data?.clausulas || []);
+      setClausulasIsDefault(clausulasRes.data?.isDefault ?? true);
+      setMudancasPendentes(false);
+      await traduzirAutomatico();
+      await carregarBilingue();
+      return naoAchadas.length === 0;
     } catch (e) {
       toast.error(mensagemDaFalhaDoSalvar(e));
       return false;
@@ -1535,7 +1578,10 @@ export default function PropostaPreviewEditavel() {
   }, [ehBilingue, idiomaProposta, id]);
 
   async function alternarBilingue() {
-    if (modoBilingue) { setModoBilingue(false); return; }
+    if (modoBilingue) {
+      if (mudancasPendentes) { toast.warning('Salve as alterações antes de voltar a editar.'); return; }
+      setModoBilingue(false); return;
+    }
     // O documento bilíngue é montado do que está SALVO: com alteração pendente, ele mostraria o texto antigo.
     if (mudancasPendentes) { toast.warning('Salve as alterações antes de ver em duas colunas.'); return; }
     try {
@@ -1553,7 +1599,7 @@ export default function PropostaPreviewEditavel() {
       chave: 'bilingue',
       icone: <FiColumns />,
       rotulo: modoBilingue ? 'Voltar a editar' : 'Ver em duas colunas',
-      dica: modoBilingue ? 'Voltar ao documento em português, que é o editável' : 'Ver o documento como sai no PDF: português e a outra língua lado a lado',
+      dica: modoBilingue ? 'Voltar ao documento em português (títulos, fotos e campos automáticos se editam lá)' : 'Ver português e a outra língua lado a lado — os parágrafos das cláusulas se editam aqui mesmo',
       onClick: alternarBilingue,
     },
     {
@@ -1714,8 +1760,9 @@ export default function PropostaPreviewEditavel() {
             sandbox="allow-same-origin allow-scripts"
             onLoad={() => {
               const doc = iframeRef.current?.contentDocument;
-              // Duas colunas = somente leitura: nada do editor é ligado (Fase 2, C1-C3).
-              if (modoBilingue) { if (doc) ajustarEscalaCelular(doc); return; }
+              // Duas colunas: o editor do português NÃO é ligado (Fase 2, C1-C3) — só a edição dos parágrafos das cláusulas na coluna
+              // em português, que grava pela própria rota (salvarBilingue).
+              if (modoBilingue) { if (doc) { ativarEdicaoBilingue(doc, () => setMudancasPendentes(true)); ajustarEscalaCelular(doc); } return; }
               if (doc) {
                 textosIniciaisRef.current = lerTextosIniciaisDasClausulas(doc);
                 injetarAtributosEdicao(doc);

@@ -79,7 +79,8 @@ test('BI-M05 pares: um por paragrafo e por item; PT com HTML; traducao ou penden
   const tr = { 'Garantia de 12 meses.': '12-month warranty.' };
   const h = B.paresDeConteudo('<p>Garantia de <strong>12</strong> meses.</p><ul><li>Sem par;</li><li>Outro;</li></ul>', 'en', tr);
   assert.strictEqual((h.match(/class="bi-par/g) || []).length, 3, 'um par por paragrafo e por item');
-  assert.ok(h.includes('<div class="bi-pt"><p>Garantia de <strong>12</strong> meses.</p></div>'), 'a metade PT guarda o HTML');
+  // Desde 24/11/2026 (noite) o <p> do PT leva o HTML original em data-pt-html, para a edição na tela de duas colunas.
+  assert.ok(h.includes('<div class="bi-pt"><p data-pt-html="Garantia de &lt;strong&gt;12&lt;/strong&gt; meses.">Garantia de <strong>12</strong> meses.</p></div>'), 'a metade PT guarda o HTML');
   // Desde 24/11/2026 (noite) o negrito do PT atravessa para a tradução ("e as partes de negrito tmb"): o "12" em negrito sai em negrito
   // e vira uma chave própria (span hidden .bi-termo). Esta linha esperava a tradução sem negrito — o comportamento anterior.
   assert.ok(h.includes('<p data-tr-origem="Garantia de 12 meses." data-tr-texto="12-month warranty."><strong>12</strong>-month warranty.<span hidden class="bi-termo bi-pendente" data-tr-origem="12" data-traduzir="12"></span></p>'), 'traducao da memoria, com o negrito do PT');

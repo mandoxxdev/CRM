@@ -75,7 +75,7 @@ function dividirEmFrases(texto) {
 function blocosDeParagrafo(html, texto) {
   if (!texto) return [];
   if (texto.length <= LIMITE_PARAGRAFO || /<[a-z]/i.test(html)) return [{ tipo: 'p', html, texto }];
-  return dividirEmFrases(texto).map((g) => ({ tipo: 'p', html: escHtml(g), texto: normalizarChave(g) }));
+  return dividirEmFrases(texto).map((g) => ({ tipo: 'p', html: escHtml(g), texto: normalizarChave(g), parcial: true }));
 }
 
 /**
@@ -93,7 +93,7 @@ function segmentarHtml(conteudo) {
   const re = /<(ul|ol)(\s[^>]*)?>([\s\S]*?)<\/\1>|<(p|div|h[1-6])(\s[^>]*)?>([\s\S]*?)<\/\4>/gi;
   let m; let fim = 0;
   const soltos = (trecho) => {
-    blocos.push(...blocosDeParagrafo(trecho.trim(), textoDeHtml(trecho)));
+    blocos.push(...blocosDeParagrafo(trecho.trim(), textoDeHtml(trecho)).map((b) => ({ ...b, parcial: true })));
   };
   while ((m = re.exec(bruto)) !== null) {
     soltos(bruto.slice(fim, m.index));
@@ -203,14 +203,18 @@ function elementoTraduzidoComNegrito(tag, htmlPt, textoPt, traducoes) {
   return `<${tag}${attrsTraducao(textoPt, t)}>${aplicarNegrito(htmlPt, textoPt, escHtml(t || normalizarChave(textoPt)), traducoes)}</${tag}>`;
 }
 
+// Edição na tela de duas colunas (24/11/2026: "eu devo poder mudar todos os textos e depois ele traduz de forma simultânea"): o <p>/<li>
+// do PT leva o HTML ORIGINAL dele (data-pt-html, com as chaves em entidade, imune à troca de marcadores) — a tela troca exatamente esse
+// trecho dentro da cláusula ao salvar. Parágrafo partido em frases ou texto solto (sem <p>) não ganha: não existe inteiro na cláusula.
+const origemPt = (html) => ` data-pt-html="${attrCru(html)}"`;
 function paresDeConteudo(conteudo, idioma, traducoes) {
   return segmentarHtml(conteudo).map((b) => {
     if (b.tipo === 'p') {
-      return `<div class="bi-par"><div class="bi-pt"><p>${b.html}</p></div><div class="bi-tr" lang="${idioma}">${elementoTraduzidoComNegrito('p', b.html, b.texto, traducoes)}</div></div>`;
+      return `<div class="bi-par"><div class="bi-pt"><p${b.parcial ? '' : origemPt(b.html)}>${b.html}</p></div><div class="bi-tr" lang="${idioma}">${elementoTraduzidoComNegrito('p', b.html, b.texto, traducoes)}</div></div>`;
     }
     // Lista: um par por item — um item longo nunca fica numa página e a tradução dele na outra.
     const fecha = `</${b.tipo}>`;
-    return b.itens.map((li) => `<div class="bi-par bi-par-li"><div class="bi-pt">${b.abre}<li>${li}</li>${fecha}</div>`
+    return b.itens.map((li) => `<div class="bi-par bi-par-li"><div class="bi-pt">${b.abre}<li${origemPt(li)}>${li}</li>${fecha}</div>`
       + `<div class="bi-tr" lang="${idioma}">${b.abre}${elementoTraduzidoComNegrito('li', li, textoDeHtml(li), traducoes)}${fecha}</div></div>`).join('');
   }).join('');
 }
