@@ -1,0 +1,9 @@
+*Planejamento — Tradução da proposta em qualquer navegador*
+_24/11/2026_
+
+*1. Tradução automática em qualquer navegador*
+A proposta em inglês ou espanhol passa a ser traduzida pelo próprio sistema, sem depender do Chrome atualizado: funciona no Edge, no Firefox, no Chrome antigo e no celular, sem custo. Os termos do contrato (contratante, contratada, nota fiscal) continuam com a tradução fixa, e a correção feita à mão em "Traduções" continua valendo.
+Tempo estimado: *1h30*
+
+*Total estimado: 1h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
