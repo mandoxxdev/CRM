@@ -78,9 +78,14 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - **RN-BI.11** — Na tela de duas colunas, cada parágrafo/item de cláusula (coluna PT) é editável; ao salvar, o trecho exato (`data-pt-html`)
   é trocado na cláusula gravada, o pendente é traduzido e a tela recarrega. Texto com marcador `{{…}}`, títulos e textos fixos: só no modo
   português. Trecho que não está mais na cláusula (mudou em outra aba): não grava e avisa.
-- **RN-BI.12** — O negrito do PT atravessa para a tradução: cada trecho em negrito é uma chave própria da memória (span oculto `.bi-termo`)
-  e a tradução dele ganha `<strong>` dentro da frase traduzida; parágrafo todo em negrito sai todo em negrito. Não achou: sem negrito,
-  nunca sem texto. O aviso de pendentes do PDF não conta esses trechos.
+- **RN-BI.12** — O negrito do PT atravessa para a tradução: a frase vai ao tradutor com o negrito marcado (`data-tr-marcado`) e a tradução
+  guarda o negrito como `**…**`, que vira `<strong>` ao montar; parágrafo todo em negrito sai todo em negrito. Tradução sem `**` de frase
+  com negrito é refeita (`data-tr-refazer`), aparecendo traduzida enquanto isso e sem contar no aviso de pendentes; a manual não é
+  sobrescrita. *(Esta linha dizia "cada trecho em negrito é uma chave própria e a tradução dele é procurada dentro da frase" — errado na
+  prática: traduzido sozinho, o trecho sai com outra palavra ("PROJETO CONCEITUAL" → "DISEÑO CONCEPTUAL"; na frase, "PROYECTO
+  CONCEPTUAL") e o negrito não aparecia — o usuário: "cadê o negrito na versão em esp". A versão foi testada só com tradução falsa.)*
+- **RN-BI.14** — Proposta `en`/`es` traz, antes dos campos de assinatura, a **nota legal** nas duas línguas: prevalece a versão em
+  português em caso de divergência. Em `pt-BR`, nada.
 - **RN-BI.13** — Nomes de programa e de arquivo (`TERMOS_FIXOS`: Excel, Word, PowerPoint, PDF, DWG, DXF, AutoCAD, Revit, SolidWorks)
   nunca se traduzem; a tradução automática gravada sem o termo é apagada ao subir o servidor e refeita ("Excel" saía "Sobresalir").
 
@@ -95,5 +100,5 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - [x] 8. Tradução pelo servidor, em qualquer navegador (`a9fab2fb`); espaçamento igual ao da proposta em português (`749b0fc6`)
 - [x] 9. Colunas que terminam juntas e apresentação com a foto e letra maior (`0bc9f116`); assinaturas inteiras no Projeto Conceitual
   (`b737fe0d`); coluna traduzida sem a "caixa" (`89186c1e`); termos fixos (`cc7d407e`); negrito (`c8ef5543`); edição na tela de duas
-  colunas (`ada37734`); cores (`6cdbd928`)
+  colunas (`ada37734`); cores (`6cdbd928`); negrito com o tradutor de verdade (`d4183892`); nota legal (`38b8c821`)
 - [ ] 7. Teste de clique de um vendedor com uma proposta real no Chrome — **não feito** (ver Status)

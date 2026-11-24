@@ -569,8 +569,11 @@ O que saber:
   respondeu agora"*: tente de novo em instantes, ou preencha em **Traduções**.
 - Texto **sem tradução** sai no PDF em português, em laranja com fundo claro, e o sistema avisa quantos são ao baixar o PDF. Confira
   antes de mandar ao cliente.
-- O negrito do português passa para a tradução (ex.: **Elaboração:** → **Elaboración:**). Se o tradutor usar outra palavra no meio da
-  frase, aquele trecho sai sem negrito na outra coluna — o texto nunca some.
+- O negrito do português passa para a tradução (ex.: **PROJETO CONCEITUAL** → **PROYECTO CONCEPTUAL**): a frase é traduzida com o
+  negrito marcado. Em **Traduções**, o negrito aparece como `**texto**` — quem corrige pode tirar ou pôr os `**`. Traduções feitas antes
+  desta mudança são refeitas sozinhas ao abrir a proposta (a correção feita à mão não é mexida).
+- Antes das assinaturas sai uma **Nota legal**, nas duas línguas: a proposta está nas duas línguas só para facilitar a leitura, e em caso
+  de divergência vale o português. Só na proposta em inglês ou espanhol.
 - As duas colunas terminam juntas: quando a tradução fica mais comprida, a letra dela diminui um pouco (no máximo 12%) para não deixar
   buraco embaixo do português. A tradução sai num azul diferente do português.
 - Nomes de programa e de arquivo (Excel, PDF, DWG, Word, AutoCAD…) nunca são traduzidos.
