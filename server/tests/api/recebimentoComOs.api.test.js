@@ -383,7 +383,13 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     const m = await material(cliA);
     await receberNf([{ m: m.id, q: 10 }], os.id);
     const projB = (await dbRun(db, "INSERT INTO projetos (cliente_id, nome) VALUES (?, 'Projeto B E176')", [cliB])).lastID;
-    const R = await criarReq(m.id, 3, { osId: os.id, projetoId: projB });
+    // Etapa 260 (RN-260.06 b): a criacao passou a recusar projeto de outro cliente que o da OS sem projeto — a combinacao so existe
+    // em requisicao gravada antes (ou por outro caminho). A guarda M1 da aprovacao continua: semeada por UPDATE.
+    const recusa = await as(SOL, () => request(app).post(`${API}/requisicoes`)
+      .send({ os_id: os.id, projeto_id: projB, itens: [{ material_id: m.id, quantidade: 3 }] }));
+    assert.strictEqual(recusa.status, 400, JSON.stringify(recusa.body));
+    const R = await criarReq(m.id, 3, { osId: os.id });
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET projeto_id = ? WHERE id = ?', [projB, R]);
     assert.ok(EM_ESPERA.includes(await aprovar(R)), 'M1: nao converteu');
     assert.strictEqual(await holdReq(R), 0);
     assert.strictEqual(await saldoOs(m.id), 10, 'a reserva da OS ficou inteira');

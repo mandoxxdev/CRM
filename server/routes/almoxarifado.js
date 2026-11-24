@@ -5039,16 +5039,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Requisição de origem não possui itens' });
       }
 
+      // Etapa 172 (RN-172.06, I2): a OS cadastrada vai junto SO se ainda existir — a copia nunca falha por causa da OS
+      // (excluida: copia so o texto). Fechada vai (a requisicao aceita OS fechada, RN-172.02).
+      const osDaCopia = origem.os_id && await osAindaExiste(db, origem.os_id) ? origem.os_id : null;
+      // Etapa 260 (RN-260.06): o projeto vai SO se ainda passa na conferencia da criacao (existe; e o da OS, ou do cliente dela). Nunca
+      // falha a copia por ele: o 400 da conferencia vira "copia sem projeto"; outro erro sobe.
+      let projetoDaCopia = null;
+      if (origem.projeto_id) {
+        try {
+          projetoDaCopia = await requisitionCreateService.resolverProjetoDaRequisicao(db, origem.projeto_id, osDaCopia);
+        } catch (e) {
+          if (e.status !== 400) throw e;
+        }
+      }
       const payload = {
         tipo_requisicao: origem.tipo_requisicao || 'CONSUMO',
         centro_custo_id: origem.centro_custo_id || null,
         local_entrega: origem.local_entrega || null,
-        projeto_id: origem.projeto_id || null,
+        projeto_id: projetoDaCopia,
         cliente_id: origem.cliente_id || null,
         os_referencia: origem.os_referencia || null,
-        // Etapa 172 (RN-172.06, I2): a OS cadastrada vai junto SO se ainda existir — a copia nunca falha por causa da OS
-        // (excluida: copia so o texto). Fechada vai (a requisicao aceita OS fechada, RN-172.02).
-        ...(origem.os_id && await osAindaExiste(db, origem.os_id) ? { os_id: origem.os_id } : {}),
+        ...(osDaCopia ? { os_id: osDaCopia } : {}),
         setor: origem.setor || null,
         departamento: origem.departamento || null,
         // Justificativa só é copiada para EMERGENCIAL (design: "justificativa copiada se

@@ -187,6 +187,49 @@ async function resolverOsDaRequisicao(db, osIdBruto, osReferencia) {
   return { osId: v, osReferencia: os.numero_os || osReferencia };
 }
 
+/**
+ * Etapa 260 (RN-260.06, item 2; Fase 2 C1/C2) — o PROJETO da requisicao, opcional. Sem `projeto_id` (ausente, null, '') -> null (nada
+ * muda: a fila tira o projeto da OS, RN-255.01). Com ele: nao inteiro positivo -> 400 `Projeto inválido` (a copia nao passa pelo Zod);
+ * inexistente (ou sem a tabela core) -> 400 `Projeto #<id> não encontrado`; inativo PASSA (como a OS fechada, B1611). Com a OS
+ * cadastrada: (a) a OS tem projeto e o escolhido e outro -> 400; (b) a OS nao tem projeto e o cliente do projeto e outro que o da OS
+ * (sem cliente conta como valor: interno com OS de cliente recusa; os dois sem cliente passam) -> 400. Sem (b), a regra do dono — que
+ * olha o projeto ANTES da OS (`ownerRules.resolverClienteDoVinculo`) — recusaria na entrega o que a OS deixava, a aprovacao nao
+ * converteria a reserva da OS e a saida de material proprio perderia a OS (`osIdDaSaida`). Tabelas core por PRAGMA (regua da 255).
+ */
+const PROJETO_INVALIDO = 'Projeto inválido';
+const projetoNaoEncontrado = (id) => `Projeto #${id} não encontrado`;
+const projetoNaoEDaOs = (os) => `O projeto escolhido não é o da OS ${os}. Escolha o projeto da OS ou deixe o campo vazio.`;
+const projetoDeOutroCliente = (os) => `O projeto escolhido é de outro cliente que o da OS ${os}. Escolha um projeto do mesmo cliente ou deixe o campo vazio.`;
+async function colunasDe(db, tabela) {
+  return new Set((await dbAll(db, `PRAGMA table_info(${tabela})`)).map((c) => c.name));
+}
+async function resolverProjetoDaRequisicao(db, projetoIdBruto, osId) {
+  if (projetoIdBruto === undefined || projetoIdBruto === null || projetoIdBruto === '') return null;
+  const v = typeof projetoIdBruto === 'string' && /^\s*\d+\s*$/.test(projetoIdBruto) ? Number(projetoIdBruto) : projetoIdBruto;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) throw Object.assign(new Error(PROJETO_INVALIDO), { status: 400 });
+  const colsP = await colunasDe(db, 'projetos');
+  const projeto = colsP.has('id')
+    ? await dbGet(db, `SELECT id, ${colsP.has('cliente_id') ? 'cliente_id' : 'NULL AS cliente_id'} FROM projetos WHERE id = ?`, [v])
+    : null;
+  if (!projeto) throw Object.assign(new Error(projetoNaoEncontrado(v)), { status: 400 });
+  if (!osId) return v;
+  const colsO = await colunasDe(db, 'ordens_servico');
+  if (!colsO.has('id')) return v;
+  const os = await dbGet(db, `SELECT id, ${colsO.has('numero_os') ? 'numero_os' : 'NULL AS numero_os'},
+    ${colsO.has('projeto_id') ? 'projeto_id' : 'NULL AS projeto_id'}, ${colsO.has('cliente_id') ? 'cliente_id' : 'NULL AS cliente_id'}
+    FROM ordens_servico WHERE id = ?`, [osId]);
+  if (!os) return v;
+  const rotulo = os.numero_os || `#${os.id}`;
+  if (os.projeto_id) {
+    if (Number(os.projeto_id) !== v) throw Object.assign(new Error(projetoNaoEDaOs(rotulo)), { status: 400 });
+    return v;
+  }
+  if (Number(projeto.cliente_id || 0) !== Number(os.cliente_id || 0)) {
+    throw Object.assign(new Error(projetoDeOutroCliente(rotulo)), { status: 400 });
+  }
+  return v;
+}
+
 // eslint-disable-next-line no-unused-vars -- `modulo` faz parte do contrato da interface
 // (identifica a rota chamadora para uso futuro/auditoria); nenhuma regra de Task 1 depende dele.
 async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = false } = {}) {
@@ -211,6 +254,8 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   const osFinal = isRascunho
     ? (osReferencia == null ? null : String(osReferencia).trim() || null)
     : exigirOS(osReferencia);
+  // Etapa 260 (RN-260.06): o projeto, depois da OS (precisa dela) e ANTES de qualquer escrita (o `ensureSetoresRequisicao` escreve)
+  const projetoIdFinal = await resolverProjetoDaRequisicao(db, projeto_id, osIdFinal);
 
   const setorFinal = departamento || setor || null;
 
@@ -298,7 +343,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
       urgenciaFinal, observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
-      projeto_id || null, cliente_id || null, equipamento || null,
+      projetoIdFinal, cliente_id || null, equipamento || null,
       prioridade || 'NORMAL', dataNecessidadeFinal, justificativa || null,
     ]));
 
@@ -335,4 +380,4 @@ module.exports = {
   // Exportada para a rota /enviar cobrar a MESMA regra no envio do rascunho — duas
   // cópias da condição divergiriam e o rascunho viraria a porta dos fundos da RN-A.
   exigirOS, recusaFracaoDeSerie, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE,
-  resolverOsDaRequisicao };
+  resolverOsDaRequisicao, resolverProjetoDaRequisicao };

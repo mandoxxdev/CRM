@@ -21,6 +21,7 @@ const { requirePermission, requireAlgumaPermissao, can, getPerfilFromUser, ACAO_
 // Etapa 181 (Fase 5, I1): a justificativa antiga da saida da entrega de EPI e mascarada na leitura para quem nao tem `entregar_epi`.
 const { mascararMovimentacoes } = require('../../services/almoxarifado/mascaraEntregaEpi');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
+const { listarProjetosAux } = require('../../services/almoxarifado/projetosAux'); // Etapa 260 (RN-260.03)
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
 const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
 // Etapa 33 (fix-round da revisao adversarial): a extensao gravada vem do MIME ACEITO, nunca do
@@ -1096,8 +1097,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     const filtro = abertas
       ? `WHERE LOWER(TRIM(COALESCE(os.status, ''))) NOT IN (${STATUS_OS_FECHADA.map(() => '?').join(', ')})` : '';
     const params = abertas ? STATUS_OS_FECHADA : [];
+    // Etapa 260 (RN-260.04): o projeto da OS (o formulario da requisicao preenche o Projeto com ele). Sem a coluna (~25 suites criam
+    // `ordens_servico` sem ela): null — conferido por PRAGMA, como a 255.
+    let projetoCol = 'NULL as projeto_id';
     try {
-      const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, c.razao_social as cliente_nome
+      const cols = await dbAll(db, 'PRAGMA table_info(ordens_servico)');
+      if (cols.some((c) => c.name === 'projeto_id')) projetoCol = 'os.projeto_id';
+    } catch (e) { /* sem a tabela: a consulta abaixo cai no [] de sempre */ }
+    try {
+      const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, c.razao_social as cliente_nome, ${projetoCol}
         FROM ordens_servico os LEFT JOIN clientes c ON os.cliente_id = c.id
         ${filtro} ORDER BY os.id DESC LIMIT 300`, params);
       return res.json(rows);
@@ -1106,13 +1114,22 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // (clientes é tabela core, fora do initSchema do almoxarifado). Tenta sem o JOIN antes de desistir.
       if (/no such table:\s*clientes/i.test(e.message)) {
         try {
-          const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, NULL as cliente_nome
+          const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, NULL as cliente_nome, ${projetoCol}
             FROM ordens_servico os ${filtro} ORDER BY os.id DESC LIMIT 300`, params);
           return res.json(rows);
         } catch (e2) { return res.json([]); }
       }
       return res.json([]); // tabela ordens_servico pode não existir em ambiente parcial
     }
+  });
+
+  // ── Aux: projetos (Etapa 260, RN-260.03) — o campo Projeto da nova requisicao, com o mesmo `auth` da aux de OS acima ──
+  // Ativos primeiro, depois por nome; no maximo 500. Inativo entra (a requisicao aceita, B1611). Sem a tabela core (ou sem `clientes`): [] /
+  // sem o nome do cliente — conferido por PRAGMA.
+  app.get('/api/almoxarifado/aux/projetos', auth, async (req, res) => {
+    try {
+      res.json(await listarProjetosAux(db, { comCliente: true }));
+    } catch (e) { handleError(res, e); }
   });
 
   // ── Recebimentos ──
