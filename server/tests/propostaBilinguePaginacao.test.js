@@ -47,6 +47,11 @@ async function medir(browser, html) {
     const nasPaginas = pgs.reduce((s, p) => s + p.querySelectorAll('.bi-par').length, 0);
     const quebrados = pgs.reduce((s, p) => s + [...p.querySelectorAll('.bi-par')].filter((x) => !x.querySelector(':scope > .bi-pt') || !x.querySelector(':scope > .bi-tr')).length, 0);
     const altura = pgs.map((p, i) => { const c = p.querySelector('.page-content'); return c.scrollHeight > c.clientHeight + 1 ? i + 1 : null; }).filter(Boolean);
+    // As páginas FIXAS (fora do paginador) também: a apresentação em duas colunas passava do rodapé e este teste só olhava as
+    // geradas — o usuário viu no PDF em espanhol (24/11/2026).
+    const fixasTransbordando = [...document.querySelectorAll('.proposal-page:not([data-generated]) .page-content')]
+      .filter((c) => c.offsetParent !== null && c.scrollHeight > c.clientHeight + 1)
+      .map((c) => (c.classList.contains('pres-page-content') ? 'apresentacao' : (c.closest('.proposal-page').id || 'fixa')));
     const largura = [];
     pgs.forEach((p, i) => { const lim = p.querySelector('.page-content').getBoundingClientRect().right + 1; p.querySelectorAll('table, .bi-par, h2, h3').forEach((el) => { if (el.getBoundingClientRect().right > lim) largura.push(`p${i + 1} ${el.tagName}`); }); });
     const celulas = [...document.querySelectorAll('.proposal-page[data-generated="1"] .bi-tabela td, .proposal-page[data-generated="1"] .bi-tabela th')]
@@ -77,7 +82,7 @@ async function medir(browser, html) {
     const paginasDaTabelaDePrecos = new Set([...document.querySelectorAll('.proposal-page[data-generated="1"] .bi-tabela-precos')]
       .map((t) => t.closest('.proposal-page'))).size;
     return {
-      paginas: pgs.length, fonte, nasPaginas, quebrados, altura, largura, celulas, linhasPartidas, fora, paginasDaTabelaDePrecos, frasesNaOrdem,
+      paginas: pgs.length, fonte, nasPaginas, quebrados, altura, fixasTransbordando, largura, celulas, linhasPartidas, fora, paginasDaTabelaDePrecos, frasesNaOrdem,
       gigante: gigantes.map((g) => ({ tem140: g.textContent.includes('Frase 140 de um'), tem1: g.textContent.includes('Frase 1 de um') })),
       tocVisivel: toc && getComputedStyle(toc).display !== 'none', titulosToc,
     };
@@ -103,6 +108,7 @@ async function medir(browser, html) {
       checar(r.paginas > 3, `paginou (${r.paginas} páginas)`);
       checar(r.fonte > 10 && r.fonte === r.nasPaginas && r.quebrados === 0, `BI-P01 ${r.fonte} pares na fonte, ${r.nasPaginas} nas páginas, ${r.quebrados} partidos`);
       checar(r.altura.length === 0, `BI-P02 nenhuma página transborda na altura ${r.altura.join(',')}`);
+      checar(r.fixasTransbordando.length === 0, `BI-P02 nenhuma página fixa (apresentação, sumário) passa do rodapé ${r.fixasTransbordando.join(',')}`);
       checar(r.largura.length === 0, `BI-P02 nada passa da margem direita ${r.largura.slice(0, 3).join(',')}`);
       checar(r.celulas.length === 0, `BI-P02 nenhuma célula vaza ${r.celulas.slice(0, 3).join(' | ')}`);
       checar(r.linhasPartidas.length === 0, `BI-P03 nenhuma linha de tabela partida ${r.linhasPartidas.join(',')}`);

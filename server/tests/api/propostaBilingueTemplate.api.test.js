@@ -64,7 +64,10 @@ test('BI-T03 RN-BI.04 memoria, pendente com o PT e titulo pela chave sem numero'
 test('BI-T04 RN-BI.04 dicionario nos textos fixos; dados da capa fora do tradutor', () => {
   assert.ok(en.includes('PROPOSAL FOR THE SUPPLY OF SPECIALIZED SERVICES') || en.includes('PROPOSAL FOR THE SUPPLY OF INDUSTRIAL EQUIPMENT'));
   assert.ok(en.includes('EMPRESA CONTRATANTE / CONTRACTING COMPANY:'));
-  assert.ok(en.includes('5. GENERAL TERMS OF SUPPLY') && en.includes('4. SCOPE OF SUPPLY'));
+  const enEquip = htmlDoCaso('equipamento', { idioma: 'en' });
+  assert.ok(enEquip.includes('5. GENERAL TERMS OF SUPPLY') && enEquip.includes('4. SCOPE OF SUPPLY'), 'proposta de equipamento');
+  // Projeto Conceitual = documento de servico (24/11/2026): sem a secao 4 de equipamento, com o total dos servicos traduzido
+  assert.ok(!corpo(en).includes('4. SCOPE OF SUPPLY') && corpo(en).includes('Total Price of Services'), 'documento de servico em ingles');
   assert.ok(es.includes('4. ALCANCE DEL SUMINISTRO') && es.includes('Firma y sello de la empresa CONTRATANTE'));
   assert.ok(!/contractor\b[^"]*signature|Signature[^<]*CONTRACTOR\b/i.test(en), 'CONTRATANTE virou Contractor na assinatura');
   assert.ok(!/data-tr-origem="CLIENTE TESTE LTDA"/.test(en), 'o nome do cliente nao pode ir para a memoria de traducao');

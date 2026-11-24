@@ -247,6 +247,7 @@ const DICIONARIO = {
   'TOTAL DA PROPOSTA': { en: 'PROPOSAL TOTAL', es: 'TOTAL DE LA PROPUESTA' },
   'TOTAL DA PROPOSTA COM DESCONTO': { en: 'PROPOSAL TOTAL WITH DISCOUNT', es: 'TOTAL DE LA PROPUESTA CON DESCUENTO' },
   'Incoterm:': { en: 'Incoterm:', es: 'Incoterm:' },
+  'Valor Total dos Serviços': { en: 'Total Price of Services', es: 'Valor Total de los Servicios' },
   'IMPOSTOS E CLASSIFICAÇÕES FISCAIS': { en: 'TAXES AND TAX CLASSIFICATIONS (BRAZIL)', es: 'IMPUESTOS Y CLASIFICACIONES FISCALES (BRASIL)' },
   'Tabela de Classificação Fiscal': { en: 'Tax Classification Table', es: 'Tabla de Clasificación Fiscal' },
   'IDENTIFICAÇÃO EQUIPAMENTOS MOINHO YPIRANGA': { en: 'MOINHO YPIRANGA EQUIPMENT', es: 'IDENTIFICACIÓN DE EQUIPOS MOINHO YPIRANGA' },

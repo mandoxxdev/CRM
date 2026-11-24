@@ -109,43 +109,39 @@ const FINAME = 'Tabela Ref. FINAME / Ref. Cartão BNDES';
 
 // ── o documento ───────────────────────────────────────────────────────────────────────────
 const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
-const itens = [{ produto_nome: 'Projeto Conceitual', quantidade: 1, unidade: 'UN', valor_unitario: 1000, valor_total: 1000 }];
+// Proposta inteira de Projeto Conceitual: o item e de uma familia ligada ao modelo — o documento de SERVICO (24/11/2026).
+const itens = [{ produto_nome: 'Projeto Conceitual', quantidade: 1, unidade: 'UN', valor_unitario: 1000, valor_total: 1000, familia_produto: 'PC GMP' }];
 const totais = { total: 1000, dataEmissao: '24/11/2026' };
-const html = (custom) => gerarHTMLPropostaPremiumV2(proposta, itens, totais, { clausulas_custom: custom }, null, true, true);
+const html = (custom) => gerarHTMLPropostaPremiumV2(proposta, itens, totais,
+  { clausulas_custom: custom, modelo_por_familia: { 'PC GMP': 'Projeto Conceitual' } }, null, true, true);
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const ocorrencias = (h, t) => h.split(esc(t)).length - 1;
+const corpoDoc = (h) => h.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<script[\s\S]*?<\/script>/g, '');
+const ocorrencias = (h, t) => corpoDoc(h).split(esc(t)).length - 1;
 
+// A ordem da proposta de origem (pedido do usuario, 24/11/2026: "seguir exatamente minha proposta"): 1 a 20, sem secao de
+// equipamento, quadro "Valor Total dos Servicos" no 16, a condicao de pagamento antes do 17, 19 e 20 na pagina de assinatura.
 function conferirOrdem(h, rotulo) {
-  const posTabela = h.indexOf('Tabela de Preços');
-  const posAssinatura = h.indexOf('pagina-assinatura" data-page-break'); // so 'pagina-assinatura' casa antes no CSS
-  assert.ok(posTabela > 0 && posAssinatura > posTabela, `${rotulo}: tabela de precos e pagina de assinatura existem`);
-  const pos = (t) => { const p = h.indexOf(esc(t)); assert.ok(p >= 0, `${rotulo}: "${t}" sumiu do documento`); return p; };
-  const intro = MODELO.filter((c) => /^[123]\.$/.test(c.numero));
-  const antes = MODELO.filter((c) => /^5\.(\d+)$/.test(c.numero) && !/PREÇO|CONSIDERAÇÃO FINAL/.test(c.titulo));
-  assert.strictEqual(intro.length, 3, 'o modelo tem as tres secoes do comeco');
-  assert.strictEqual(antes.length, 15, 'o modelo tem 5.1 a 5.15 antes do preco');
-  // 1-3 na ordem, antes da secao 5
-  const posSecao5 = h.indexOf('5. CONDIÇÕES GERAIS DE FORNECIMENTO');
-  intro.reduce((ant, c) => { const p = pos(c.titulo); assert.ok(p > ant && p < posSecao5, `${rotulo}: ${c.numero} ${c.titulo} fora do lugar`); return p; }, 0);
-  // 5.1..5.15 na ordem, entre a secao 5 e a tabela de precos
-  antes.reduce((ant, c) => {
-    const p = pos(`${c.numero} ${c.titulo}`);
-    assert.ok(p > ant && p < posTabela, `${rotulo}: ${c.numero} ${c.titulo} fora do lugar (deveria vir antes da tabela de precos)`);
-    return p;
-  }, posSecao5);
-  // abertura do preco antes da tabela; a condicao depois; a consideracao final na pagina de assinatura
-  const pPreco = pos('5.16 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
-  assert.ok(pPreco > pos('5.15 VALIDADE E ACEITE') && pPreco < posTabela, `${rotulo}: a abertura do preco fora do lugar`);
+  const c = corpoDoc(h);
+  const posAssinatura = c.indexOf('pagina-assinatura" data-page-break');
+  assert.ok(posAssinatura > 0, `${rotulo}: pagina de assinatura existe`);
+  const pos = (t) => { const p = c.indexOf(esc(t)); assert.ok(p >= 0, `${rotulo}: "${t}" sumiu do documento`); return p; };
+  const principais = MODELO.filter((x) => x.titulo !== 'CONDIÇÃO DE PAGAMENTO:');
+  assert.strictEqual(principais.length, 20, 'o modelo tem as 20 clausulas da proposta de origem');
+  const posicoes = principais.map((x, i) => pos(`${i + 1}. ${x.titulo}`));
+  posicoes.reduce((ant, p, i) => { assert.ok(p > ant, `${rotulo}: ${i + 1}. ${principais[i].titulo} fora de ordem`); return p; }, -1);
+  assert.ok(posicoes[18] > posAssinatura && posicoes[19] > posAssinatura, `${rotulo}: 19 e 20 na pagina de assinatura`);
+  assert.ok(posicoes[17] < posAssinatura, `${rotulo}: 18 antes da pagina de assinatura`);
+  // 16: o quadro do total logo depois do titulo; a condicao de pagamento depois dele e antes do 17
+  const pTotal = pos('Valor Total dos Serviços');
+  assert.ok(pTotal > posicoes[15] && pTotal < posicoes[16], `${rotulo}: o quadro do total fora do 16`);
   const pCond = pos('1ª Parcela – Entrada:');
-  assert.ok(pCond > posTabela && pCond < posAssinatura, `${rotulo}: a condicao de pagamento fora do lugar`);
-  assert.ok(pos('5.17 CONSIDERAÇÃO FINAL') > posAssinatura, `${rotulo}: a consideracao final fora da pagina de assinatura`);
-  // nenhuma sai duas vezes
-  MODELO.forEach((c) => {
-    if (c.titulo === 'CONDIÇÃO DE PAGAMENTO:') return; // o titulo dela sai sem o prefixo, so como "CONDIÇÃO DE PAGAMENTO:"
-    assert.strictEqual(ocorrencias(h, c.titulo.replace(/:$/, '')) >= 1, true, `${rotulo}: ${c.titulo} nao saiu`);
-  });
+  assert.ok(pCond > pTotal && pCond < posicoes[16], `${rotulo}: a condicao de pagamento fora do lugar`);
+  // o que NAO e da proposta de origem
+  for (const fora of ['Equipamento:', 'equip-photo', 'Tabela de Preços', 'FINAME', 'IMPOSTOS E CLASSIFICAÇÕES FISCAIS', '5. CONDIÇÕES GERAIS', '4. ESCOPO DE FORNECIMENTO']) {
+    assert.ok(!c.includes(fora), `${rotulo}: "${fora}" nao e da proposta de origem`);
+  }
   assert.strictEqual(ocorrencias(h, '1ª Parcela – Entrada:'), 1, `${rotulo}: a condicao de pagamento saiu mais de uma vez`);
-  assert.strictEqual(ocorrencias(h, 'O CLIENTE declara ter recebido as informações necessárias'), 1, `${rotulo}: a 5.9 saiu mais de uma vez`);
+  assert.strictEqual(ocorrencias(h, 'O CLIENTE declara ter recebido as informações necessárias'), 1, `${rotulo}: a 12 saiu mais de uma vez`);
 }
 
 let token;
@@ -165,9 +161,14 @@ test('PC-01 o servidor cria o modelo "Projeto Conceitual" e a lista do cadastro 
   assert.deepStrictEqual(doBanco, MODELO.map((c) => `${c.numero} ${c.titulo}`));
 });
 
-test('PC-02 subir de novo nao duplica o modelo nem as clausulas', async () => {
+test('PC-02 subir de novo nao duplica o modelo nem as clausulas; modelo antigo no banco e ressincronizado com o codigo', async () => {
   await descer();
+  // Simula o banco de producao com a versao da manha (numeracao de equipamento): a subida tem de trazer de volta a do codigo.
+  await escreverBanco("UPDATE clausulas_modelo_itens SET numero = '5.1' WHERE titulo = 'ESCOPO TÉCNICO' AND modelo_id = (SELECT id FROM clausulas_modelo WHERE nome = 'Projeto Conceitual')");
   token = await subir();
+  await pausa(3500); // o ressincronizar roda 3 s depois da subida
+  const doBanco = await lerBanco("SELECT numero, titulo FROM clausulas_modelo_itens WHERE modelo_id = (SELECT id FROM clausulas_modelo WHERE nome = 'Projeto Conceitual') ORDER BY ordem");
+  assert.deepStrictEqual(doBanco.map((x) => `${x.numero} ${x.titulo}`), MODELO.map((x) => `${x.numero} ${x.titulo}`), 'o modelo do banco nao voltou ao do codigo');
   const modelos = await lerBanco("SELECT id FROM clausulas_modelo WHERE nome = 'Projeto Conceitual'");
   assert.strictEqual(modelos.length, 1);
   const itensM = await lerBanco('SELECT COUNT(*) AS n FROM clausulas_modelo_itens WHERE modelo_id = ?', [modelos[0].id]);

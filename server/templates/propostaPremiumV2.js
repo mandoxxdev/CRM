@@ -1232,16 +1232,33 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>`;
     })();
 
+    // CSS do documento de serviço (Projeto Conceitual) — só emitido nele.
+    const servicoCss = `
+    /* ===== Documento de serviço (Projeto Conceitual) ===== */
+    .servico-total { display: flex; justify-content: space-between; align-items: baseline; gap: 6mm; padding: 3mm 4mm;
+      border: 0.3mm solid #c9d3e3; border-radius: 2mm; background: #f4f7fb; margin: 1mm 0 3mm; }
+    .servico-total span { font-weight: 700; }
+    .servico-total strong { font-size: 13pt; color: var(--blue-900, #1f3a66); }
+    .bi-par .servico-total { margin: 0; }
+    `;
+
     // CSS do bilíngue — só emitido no bilíngue (RN-BI.01). PT à esquerda, a outra língua à direita, separadas por um filete.
     const biCss = `
     /* ===== Proposta bilíngue (specs/proposta-bilingue) ===== */
     .bi-par, .bi-h, .bi-capa { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6mm; }
     .bi-par { break-inside: avoid; page-break-inside: avoid; }
-    .bi-par + .bi-par { margin-top: 1.6mm; }
+    /* Espaçamento (o usuário: "totalmente errado os espaçamentos", 24/11/2026): cada parágrafo e cada item de lista é um par, e o
+       gap das pilhas (.stack-sm/.stack-md, feito para parágrafos soltos) SOMAVA com a margem entre pares — uma lista de 5 itens
+       saía espalhada como 5 parágrafos. A pilha que contém pares fica sem gap; o espaço é só este: parágrafo 2.4mm, item 0.8mm. */
+    .stack-sm:has(> .bi-par), .stack-md:has(> .bi-par) { gap: 0 !important; }
+    .bi-par + .bi-par { margin-top: 2.4mm; }
+    .bi-par-li + .bi-par-li { margin-top: 0.8mm; }
     .bi-par > .bi-tr, .bi-h > .bi-tr { border-left: 0.4mm solid #c9d3e3; padding-left: 3mm; }
-    .bi-par p, .bi-par ul, .bi-par ol { margin: 0; text-indent: 0; }
+    .bi-par p, .bi-par ul, .bi-par ol, .bi-par li { margin: 0 !important; text-indent: 0 !important; }
     .bi-par ul, .bi-par ol { padding-left: 5mm; }
-    .bi-par li { text-align: left; }
+    /* Justificado em meia largura abria buracos entre as palavras ("aspectos      técnicos"): no bilíngue, à esquerda. */
+    .bi-par p, .bi-par li, .bi-par div { text-align: left !important; }
+    .bi-h { margin-bottom: 1.6mm; }
     .bi-tr { color: #1f3a66; }
     .bi-pendente { font-style: italic; color: #9a5b00; }
     .bi-pendente::after { content: " (tradução pendente)"; font-size: 0.85em; }
@@ -1263,7 +1280,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .bi-tabela .bi-sep { border-left: 0.7mm solid #1f3a66 !important; }
     .bi-capa > .bi-tr { color: inherit; border-left: 0.4mm solid rgba(255,255,255,0.5); padding-left: 3mm; }
     .cover-info-title-tr { font-size: 0.75em; font-weight: 600; }
-    .bi-pres { font-size: 9pt; width: 100%; max-width: none; flex: 1 1 auto; }
+    /* Apresentação: página FIXA (fora do paginador, overflow:hidden). O .pres-text p/li do estilo base fixa 12pt em cada
+       parágrafo e item e vencia o 9pt posto só no bloco — o texto em duas colunas passava do rodapé (visto pelo usuário, 24/11/2026). */
+    .bi-pres { width: 100%; max-width: none; flex: 1 1 auto; }
+    .bi-pres p, .bi-pres li { font-size: 9pt !important; line-height: 1.25 !important; margin-bottom: 1.2mm !important; }
+    .bi-pres p { text-indent: 0 !important; }
+    .bi-pres ul { padding-left: 3mm !important; margin: 0 !important; }
+    .bi-pres li { padding-left: 5mm !important; }
+    .bi-pres .bi-par + .bi-par { margin-top: 1.5mm; }
     .bi-item .equip-photo-float { float: none; margin: 0 auto 3mm; }
     `;
 
@@ -1506,6 +1530,63 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         const assinaturasDoDoc = !bi ? assinaturasHtml
           : ['Diretor Comercial', 'Gerente Comercial', 'Vendas Técnica', 'Depto. Comercial']
             .reduce((h, cargo) => h.split(`>${cargo}<`).join(`>${esc(cargo)} / ${esc(T(cargo))}<`), assinaturasHtml);
+
+        // ===== DOCUMENTO DE SERVIÇO (Projeto Conceitual) — pedido do Comercial, 24/11/2026 =====
+        // "Não consegue seguir exatamente minha proposta? … Somente nesse caso, o restante das propostas não mexa." A proposta
+        // inteira de serviço sai como a de origem: as cláusulas em sequência (1, 2, 3… pela posição — o número gravado no título é
+        // ignorado, então mover/incluir no editor não bagunça), sem a seção 4 de equipamento (foto, código, modelo), sem FINAME e
+        // sem tabelas fiscais; o preço traz o quadro "Valor Total dos Serviços"; da CONSIDERAÇÃO FINAL em diante, a página de
+        // assinatura. Só entra aqui quando propostaDeServico — nenhuma outra proposta passa por este ramo.
+        if (propostaDeServico) {
+          const normal = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+          const semNumero = (c) => String((c && c.titulo) || '').replace(/^\s*\d+(\.\d+)*\.?\s*/, '').trim();
+          const ehCondicao = (c) => normal(semNumero(c)) === 'condicao de pagamento:';
+          const ehPreco = (c) => normal(semNumero(c)).startsWith('preco');
+          const lista = templateConfig.clausulas_custom;
+          // Pelo título SEM número (semNumero tira "19." com o ponto; o ehConsideracaoFinal geral só tira "5.17" e não achava a
+          // gravada na proposta como "19. CONSIDERAÇÃO FINAL" — o 19 e o 20 saíam fora da página de assinatura).
+          const idxFinal = lista.findIndex((c) => normal(semNumero(c)).startsWith('consideracao final'));
+          const corpoLista = idxFinal >= 0 ? lista.slice(0, idxFinal) : lista;
+          const fimLista = idxFinal >= 0 ? lista.slice(idxFinal) : [];
+          const totalBruto = Number(totais.total) || 0;
+          const descontoPerc = Math.min(100, Math.max(0, Number(proposta.margem_desconto) || 0));
+          const totalFinal = Math.max(0, totalBruto * (1 - descontoPerc / 100));
+          const quadroTotal = bi
+            ? biPar(`<div class="servico-total"><span>Valor Total dos Serviços</span><strong>${esc(moedaBRL(totalFinal))}</strong></div>`,
+              `<div class="servico-total"><span>${esc(T('Valor Total dos Serviços'))}</span><strong>${esc(moedaTr(totalFinal))}</strong></div>`)
+            : `<div class="servico-total"><span>Valor Total dos Serviços</span><strong>${esc(moedaBRL(totalFinal))}</strong></div>`;
+          let n = 0;
+          const renderServico = (c, idx, primeira) => {
+            const key = esc(clausulaKey(c, idx));
+            if (ehCondicao(c)) {
+              // Subtítulo do preço (sem número próprio, como na origem).
+              return bi
+                ? `<section class="block stack-md allow-break">${biPar(`<p class="clausula-subtitulo">${esc(semNumero(c))}</p>`, Bilingue.elementoTraduzido('p', semNumero(c), traducoesDoc, 'clausula-subtitulo'))}<div class="stack-sm">${Bilingue.paresDeConteudo(c.conteudo, idiomaDoc, traducoesDoc)}</div></section>`
+                : `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="24"><p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="">${esc(semNumero(c))}</p><div class="stack-sm clausula-524-condicao" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div></section>`;
+            }
+            n += 1;
+            const titulo = `${n}. ${semNumero(c)}`;
+            const quebra = primeira ? ' data-page-break="before"' : '';
+            const total = ehPreco(c) ? quadroTotal : '';
+            if (bi) {
+              return `<section class="block stack-md allow-break clausula-corpo"${quebra}>${biTitulo('h2', titulo)}${total}<div class="stack-md">${Bilingue.paresDeConteudo(c.conteudo, idiomaDoc, traducoesDoc)}</div></section>`;
+            }
+            const slot = ehPreco(c) ? ' data-clausula-slot="24"' : '';
+            return `<section class="block stack-md allow-break clausula-corpo" data-clausula-key="${key}"${slot}${quebra}><h2 data-clausula-campo="titulo">${esc(titulo)}</h2>${total}<div class="stack-md" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div></section>`;
+          };
+          const corpoHtml = corpoLista.map((c, i) => renderServico(c, i, i === 0)).join('\n          ');
+          const fimHtml = fimLista.map((c, i) => renderServico(c, corpoLista.length + i, false)).join('');
+          return `
+          ${corpoHtml}
+          <section class="block avoid-break pagina-assinatura" data-page-break="before">
+            <div class="assinatura-topo">${fimHtml}</div>
+            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-rodape">
+              ${bi ? biFixo('p', 'Atenciosamente,') : '<p>Atenciosamente,</p>'}
+              ${assinaturasDoDoc}
+            </div>
+          </section>`;
+        }
         // As seções 1–3 (slot intro) saem da lista ANTES do destructuring: elas são
         // renderizadas em posição fixa no começo do documento (secoesIntroHtml) e, sem
         // este filtro, a "1. OBJETIVO DA PROPOSTA" viraria a primeira cláusula da seção 5.
@@ -1564,9 +1645,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
       </section>
 
-      ${secoesIntroHtml}
+      ${propostaDeServico ? '' : secoesIntroHtml}
 
-      ${equipDescritivoHtml}
+      ${propostaDeServico ? '' : equipDescritivoHtml}
 
       ${clausulasSection !== null ? clausulasSection : `<section class="block stack-md avoid-break five-intro-group" data-page-break="before">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
@@ -2350,7 +2431,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       .proposal-document { display: block; gap: 0; padding: 0; }
       .proposal-page { margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
     }
-  ${bi ? biCss : ''}</style>
+  ${bi ? biCss : ''}${propostaDeServico ? servicoCss : ''}</style>
 </head>
 <body>
   ${printBar}
