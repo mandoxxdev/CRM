@@ -166,7 +166,7 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(e.status, 200, JSON.stringify(e.body));
   });
 
-  await test('[104 J5] (Fase 2, achado 1) A->0 e depois A->3 (sobe, ainda abaixo): os dois avisam; estornar o A->3 e recusado (97); estornar o que BAIXOU destrava', async () => {
+  await test('[104 J5] (Fase 2, achado 1) A->0 e depois A->3 (sobe, ainda abaixo): os dois avisam; estornar o A->3 e recusado (97); estornar o que BAIXOU e recusado pela contagem de A depois (261); um Ajuste novo contando a caixa destrava', async () => {
     const x = await montagem();
     const r0 = await ajuste(x.m, 0, x.A);
     assert.strictEqual(r0.body.aviso_caixa, A1(x.codigo, 0, 4, `a requisição ${x.numero}`));
@@ -176,8 +176,17 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     const errado = await estornar(r3.body.id, 'ADMIN');
     assert.strictEqual(errado.status, 400, JSON.stringify(errado.body));
     assert.ok(/separada na caixa de requisição: 4/.test(errado.body.error), errado.body.error);
-    const certo = await estornar(r0.body.id, 'ADMIN');
-    assert.strictEqual(certo.status, 200, JSON.stringify(certo.body));
+    // Etapa 261 (RN-261.01, B1616): ate a 260 o estorno do A->0 passava aqui (total 7). Com a contagem de A feita depois (A->3), ele e
+    // recusado como qualquer estorno de ajuste de prateleira com contagem mais recente da mesma prateleira — o caminho e o da propria
+    // recusa: um Ajuste novo de A contando a caixa (3 + 4 = 7).
+    const recusado = await estornar(r0.body.id, 'ADMIN');
+    assert.strictEqual(recusado.status, 400, JSON.stringify(recusado.body));
+    assert.strictEqual(recusado.body.error, `Não é possível estornar: há um ajuste deste material feito depois deste (movimentação `
+      + `#${r3.body.id}) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste.`);
+    assert.strictEqual(await total(x.m), 3);
+    const certo = await ajuste(x.m, 7, x.A);
+    assert.strictEqual(certo.status, 201, JSON.stringify(certo.body));
+    assert.ok(!('aviso_caixa' in certo.body), JSON.stringify(certo.body));
     assert.strictEqual(await total(x.m), 7);
     const e = await entregar(x.R, x.ids[0], 4);
     assert.strictEqual(e.status, 200, JSON.stringify(e.body));
