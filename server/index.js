@@ -8966,10 +8966,11 @@ const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Tr
 function carregarVariaveisDasFamilias(templateConfig, callback) {
   if (!templateConfig) return callback();
   db.all(
-    `SELECT f.nome AS familia, g.nome AS grupo, fv.variavel_chave AS chave
+    `SELECT f.nome AS familia, g.nome AS grupo, m.nome AS modelo, fv.variavel_chave AS chave
      FROM familias_produto f
      LEFT JOIN familia_variaveis fv ON fv.familia_id = f.id AND fv.ativo = 1
      LEFT JOIN grupos_produto g ON g.id = f.grupo_id
+     LEFT JOIN clausulas_modelo m ON m.id = f.clausulas_modelo_id AND m.ativo = 1
      WHERE f.ativo = 1`,
     [],
     (err, rows) => {
@@ -8981,6 +8982,7 @@ function carregarVariaveisDasFamilias(templateConfig, callback) {
       }
       const mapa = {};
       const grupos = {};
+      const modelos = {};
       (rows || []).forEach((r) => {
         const fam = String(r.familia || '').trim();
         if (!fam) return;
@@ -8989,9 +8991,13 @@ function carregarVariaveisDasFamilias(templateConfig, callback) {
         // Grupo da família: a capa usa para escolher o título ("equipamentos
         // industriais" x "peças e acessórios").
         if (r.grupo && !grupos[fam]) grupos[fam] = String(r.grupo).trim();
+        // Modelo de contrato da família: a capa e a tabela FINAME de proposta inteira de
+        // serviço (Projeto Conceitual) saem por ele (24/11/2026).
+        if (r.modelo && !modelos[fam]) modelos[fam] = String(r.modelo).trim();
       });
       templateConfig.variaveis_da_familia = mapa;
       templateConfig.grupo_por_familia = grupos;
+      templateConfig.modelo_por_familia = modelos;
       callback();
     }
   );
@@ -9332,7 +9338,11 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
             templateConfig.variaveis_proposta_labels = {};
           }
           if (chavesUnicas.length === 0) {
-            runGerarSafe();
+            // Sem variavel configurada nao ha rotulo a buscar, mas o grupo e o modelo de contrato das
+            // familias (titulo da capa e tabela FINAME) continuam valendo. Este ramo chamava o template
+            // direto e o preview saia com a capa de equipamentos enquanto o PDF — que carrega as familias
+            // sempre — saia com a de pecas ou de servico (24/11/2026).
+            carregarVariaveisDasFamilias(templateConfig, runGerarSafe);
             return;
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');

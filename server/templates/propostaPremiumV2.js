@@ -432,9 +432,40 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return grupos.every(ehPeca);
     })();
 
-    const tituloCapa = propostaDePecas
-      ? 'PROPOSTA PARA FORNECIMENTO DE PEÇAS E ACESSÓRIOS'
-      : 'PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS';
+    // Proposta INTEIRA de serviço (24/11/2026). Decide pelo MODELO DE CONTRATO da família, não
+    // pelo grupo: é o modelo que o Comercial escolhe para o serviço no cadastro da família, e o
+    // contrato já é o do serviço — a capa e a tabela FINAME acompanham. Mesma regra do contrato
+    // (resolverModeloClausulas): item sem família conhecida, ou de família com outro modelo, deixa
+    // a proposta como equipamento. Nome do modelo comparado sem acento e sem caixa; acrescentar
+    // aqui o modelo de serviço novo que precisar do mesmo tratamento.
+    const MODELOS_DE_SERVICO = {
+      'projeto conceitual': 'PROPOSTA PARA FORNECIMENTO DE SERVIÇOS ESPECIALIZADOS',
+    };
+    const modeloPorFamilia = (config.modelo_por_familia && typeof config.modelo_por_familia === 'object')
+      ? config.modelo_por_familia
+      : null;
+    const tituloDeServico = (() => {
+      if (!modeloPorFamilia || itens.length === 0) return null;
+      const normalizar = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const modeloDoItem = (it) => {
+        const fam = String(it.familia_produto || it.produto_familia || it.familia || '').trim();
+        if (!fam) return null;
+        const famNorm = normalizarFamiliaComparacao(fam);
+        const achado = Object.keys(modeloPorFamilia).find((n) => normalizarFamiliaComparacao(n) === famNorm);
+        return achado ? normalizar(modeloPorFamilia[achado]) : null;
+      };
+      const modelos = itens.map(modeloDoItem);
+      if (modelos.some((m) => !m || !MODELOS_DE_SERVICO[m])) return null;
+      if (new Set(modelos).size > 1) return null; // dois serviços diferentes: sem critério, fica o padrão
+      return MODELOS_DE_SERVICO[modelos[0]];
+    })();
+    const propostaDeServico = Boolean(tituloDeServico);
+
+    const tituloCapa = propostaDeServico
+      ? tituloDeServico
+      : propostaDePecas
+        ? 'PROPOSTA PARA FORNECIMENTO DE PEÇAS E ACESSÓRIOS'
+        : 'PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS';
 
     const extrairCodigoFamiliaParens = (s) => {
       const m = String(s || '').match(/\(([^)]+)\)/);
@@ -1041,7 +1072,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${blocos524.slice(1).map((c, i) => render524Bloco(c, i + 1)).join('')}
       </section>
 
-      ${propostaDePecas ? '' : `
+      ${(propostaDePecas || propostaDeServico) ? '' : `
       <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
           <table class="table table-dark">

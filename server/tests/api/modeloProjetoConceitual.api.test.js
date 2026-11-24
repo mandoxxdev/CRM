@@ -8,6 +8,10 @@
  *          a condicao de pagamento depois dela e a CONSIDERACAO FINAL na pagina de assinatura —
  *          nos dois formatos (o do modelo, com `numero`, e o gravado na proposta, com o numero no titulo)
  *   PC-04  nenhuma clausula some nem sai duas vezes
+ *   PC-05  pela rota do preview (/premium, servidor real): proposta so de familia ligada ao Projeto Conceitual sai com
+ *          a capa "servicos especializados" e sem a tabela FINAME; misturada com equipamento, como antes
+ *   PC-06  a regra da capa no template: acento e caixa, e na duvida (sem mapa, item sem familia, familia sem
+ *          modelo, outro modelo) fica a de equipamentos; proposta so de pecas nao muda
  *
  * Executar: node tests/api/modeloProjetoConceitual.api.test.js
  */
@@ -94,6 +98,14 @@ const lerBanco = (sql, p = []) => new Promise((res, rej) => {
   const cru = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
   cru.all(sql, p, (e, r) => cru.close(() => (e ? rej(e) : res(r))));
 });
+const escreverBanco = (sql, p = []) => new Promise((res, rej) => {
+  const cru = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
+  cru.configure('busyTimeout', 15000);
+  cru.run(sql, p, function feito(e) { const r = this; cru.close(() => (e ? rej(e) : res(r))); });
+});
+const CAPA_SERVICO = 'PROPOSTA PARA FORNECIMENTO DE SERVIÇOS ESPECIALIZADOS';
+const CAPA_EQUIP = 'PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS';
+const FINAME = 'Tabela Ref. FINAME / Ref. Cartão BNDES';
 
 // ── o documento ───────────────────────────────────────────────────────────────────────────
 const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
@@ -160,7 +172,70 @@ test('PC-02 subir de novo nao duplica o modelo nem as clausulas', async () => {
   assert.strictEqual(modelos.length, 1);
   const itensM = await lerBanco('SELECT COUNT(*) AS n FROM clausulas_modelo_itens WHERE modelo_id = ?', [modelos[0].id]);
   assert.strictEqual(itensM[0].n, MODELO.length);
+});
+
+test('PC-05 pela rota do preview: so Projeto Conceitual -> capa de servicos e sem FINAME; misturado com equipamento -> como antes', async () => {
+  const [{ id: idPc }] = await lerBanco("SELECT id FROM clausulas_modelo WHERE nome = 'Projeto Conceitual'");
+  // a familia com o modelo escrita em outra caixa que a do item: o casamento e o mesmo do contrato
+  await escreverBanco('INSERT INTO familias_produto (nome, clausulas_modelo_id) VALUES (?, ?)', ['Projeto Conceitual GMP', idPc]);
+  await escreverBanco('INSERT INTO familias_produto (nome) VALUES (?)', ['Masseira Teste PC']);
+  const nova = async (numero, familias) => {
+    const r = await escreverBanco("INSERT INTO propostas (numero_proposta, titulo) VALUES (?, 'PROJETO CONCEITUAL – NOVA UNIDADE FABRIL')", [numero]);
+    for (const f of familias) {
+      await escreverBanco('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, valor_unitario, valor_total, familia_produto) VALUES (?, ?, 1, 1000, 1000, ?)',
+        [r.lastID, 'Item ' + f, f]);
+    }
+    return r.lastID;
+  };
+  const soServico = await nova('PC-05-A', ['PROJETO CONCEITUAL GMP']);
+  const misturada = await nova('PC-05-B', ['PROJETO CONCEITUAL GMP', 'Masseira Teste PC']);
+
+  const preview = async (id) => {
+    const r = await fetch(`http://127.0.0.1:${porta}/api/propostas/${id}/premium`, {
+      headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(120000),
+    });
+    const corpo = await r.text();
+    assert.strictEqual(r.status, 200, corpo.slice(0, 300));
+    return corpo;
+  };
+  const hServico = await preview(soServico);
+  assert.ok(hServico.includes(CAPA_SERVICO), 'a capa da proposta so de Projeto Conceitual nao diz servicos especializados');
+  assert.ok(!hServico.includes(CAPA_EQUIP), 'a capa da proposta so de Projeto Conceitual ainda diz equipamentos');
+  assert.ok(!hServico.includes(FINAME), 'a proposta so de Projeto Conceitual ainda mostra a tabela FINAME');
+  assert.ok(hServico.includes('PROJETO CONCEITUAL – NOVA UNIDADE FABRIL'), 'o titulo da proposta sumiu da capa');
+
+  const hMista = await preview(misturada);
+  assert.ok(hMista.includes(CAPA_EQUIP) && !hMista.includes(CAPA_SERVICO), 'misturada com equipamento a capa deixou de ser a de equipamentos');
+  assert.ok(hMista.includes(FINAME), 'misturada com equipamento a tabela FINAME sumiu');
   await descer();
+});
+
+// ── a regra da capa no template (as bordas) ──────────────────────────────────────────────
+const capa = (familias, modeloPorFamilia, grupoPorFamilia) => gerarHTMLPropostaPremiumV2(
+  proposta,
+  familias.map((f, i) => ({ produto_nome: 'Item ' + i, descricao: 'd', quantidade: 1, unidade: 'UN', valor_unitario: 100, valor_total: 100, familia_produto: f, especificacoes_tecnicas: '{}' })),
+  totais,
+  { ...(modeloPorFamilia === undefined ? {} : { modelo_por_familia: modeloPorFamilia }), ...(grupoPorFamilia ? { grupo_por_familia: grupoPorFamilia } : {}) },
+  null, false, true,
+);
+const ehServico = (h) => h.includes(CAPA_SERVICO) && !h.includes(CAPA_EQUIP) && !h.includes(FINAME);
+const ehEquip = (h) => h.includes(CAPA_EQUIP) && !h.includes(CAPA_SERVICO) && h.includes(FINAME);
+
+test('PC-06 capa: nome do modelo sem depender de acento e caixa; familia casada sem caixa', () => {
+  assert.ok(ehServico(capa(['Projeto Conceitual GMP'], { 'PROJETO CONCEITUAL GMP': 'PROJETO CONCEITUAL' })));
+  assert.ok(ehServico(capa(['PC A', 'PC B'], { 'PC A': 'Projeto Conceitual', 'PC B': 'projeto conceitual' })), 'duas familias no mesmo modelo de servico');
+});
+
+test('PC-06 capa: na duvida fica a de equipamentos (sem mapa, item sem familia, familia sem modelo, outro modelo)', () => {
+  assert.ok(ehEquip(capa(['PC A'], undefined)), 'sem o mapa');
+  assert.ok(ehEquip(capa(['PC A', ''], { 'PC A': 'Projeto Conceitual' })), 'item sem familia');
+  assert.ok(ehEquip(capa(['PC A', 'Masseira'], { 'PC A': 'Projeto Conceitual' })), 'familia sem modelo');
+  assert.ok(ehEquip(capa(['PC A', 'Disco'], { 'PC A': 'Projeto Conceitual', Disco: 'Hélices e Discos' })), 'outro modelo');
+});
+
+test('PC-06 capa: proposta so de pecas continua como era (titulo de pecas, sem FINAME)', () => {
+  const h = capa(['Disco'], { Disco: 'Hélices e Discos' }, { Disco: 'Hélices e Acessórios' });
+  assert.ok(h.includes('PROPOSTA PARA FORNECIMENTO DE PEÇAS E ACESSÓRIOS') && !h.includes(CAPA_SERVICO) && !h.includes(FINAME));
 });
 
 test('PC-03/04 documento com as clausulas do modelo (com numero): ordem do contrato, nenhuma some nem repete', () => {
