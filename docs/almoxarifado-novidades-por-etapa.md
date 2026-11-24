@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-20):** **Etapa 259 fechada** (**excluir uma requisição entregue devolve cada peça à prateleira de
+> **Onde o desenvolvimento está (2026-11-23):** **Etapa 260 fechada** (**a busca de materiais acha pelo fornecedor, a requisição ganha o
+> Projeto e a Fila de separação agrupa por setor ou projeto** — itens 1 a 3 da estimativa de 23/11. Decisões **B1610** a **B1613** (a
+> **B1612** revê a **B1600**); limitação **D (260)**; verificação **F (260)**; sem consulta antes do deploy). **Próxima:** os itens 4 e 5 da
+> estimativa de 23/11 (fim do plano da 260).
+> *(Antes, 2026-11-20:)* **Etapa 259 fechada** (**excluir uma requisição entregue devolve cada peça à prateleira de
 > onde ela saiu** — a exclusão credita uma entrada por prateleira que a entrega baixou, não mais tudo numa prateleira só (**D (257)** 2
 > resolvida); a prateleira que não aceita mais o material recebe pela regra de antes; excluir de novo depois de uma falha no meio não devolve
 > duas vezes. Decisões **B1607** a **B1609**; avisos novos **C552** e **C553**; limitação **D (259)**; verificação **F (259)**; sem consulta antes do deploy).
@@ -4884,7 +4888,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15627,6 +15631,42 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1610 (NOVA, da Etapa 260; decisão do agente) — a lista de materiais busca e mostra os fornecedores do material; o texto antigo do
+Fornecedor Principal fica na busca e só aparece na lista quando não há fornecedor vinculado.** O pedido (item 1 da estimativa de 23/11) era
+mostrar os fornecedores da seção Fornecedores do material "e não mais o texto antigo". **Escolhido:** a lista mostra os vinculados (até três e
+*"+N"*); sem nenhum vinculado, mostra o texto antigo marcado *"Fornecedor (cadastro antigo): ⟨texto⟩"*; a busca acha pelos vinculados (nome,
+fantasia, código do fornecedor, descrição comercial) **e** continua achando pelo texto antigo. Motivo (revisão do plano): a migração da Etapa
+212 só converteu o texto que batia com um fornecedor só — o resto ficou só no texto, que o formulário ainda mostra; tirá-lo da lista
+esconderia a única informação de fornecedor daquele material. **Descartado:** tirar o texto antigo de tudo; só mostrar sem buscar. Medido: +23
+ms na lista inteira e +30 ms na busca a 3 mil materiais e 6 mil vínculos. **Reversível.** `14af4e46`.
+
+**B1611 (NOVA, da Etapa 260; decisão do agente) — o projeto da requisição tem de combinar com a OS cadastrada; projeto inativo é aceito.** O
+campo Projeto entrou no formulário (item 2 da estimativa de 23/11). Para **material de cliente**, a entrega confere o **projeto antes da OS**
+(a regra do dono): com a OS do cliente *A* e um projeto do cliente *B*, a aprovação não converteria a reserva da OS, a Fila pularia o material
+e a entrega recusaria o que a OS sozinha deixava sair — e, para material próprio, a saída perderia a OS no relatório de consumo por OS.
+**Escolhido:** ao criar (também o rascunho e pela integração), com uma OS cadastrada que tem projeto, só o projeto dela passa; com uma OS
+cadastrada sem projeto, só um projeto do mesmo cliente da OS (sem cliente dos dois lados passa; projeto sem cliente com OS de cliente, não).
+No formulário, a OS com projeto preenche e trava o campo. **O projeto da OS só conta quando é do mesmo cliente da OS** (revisão final: o cadastro de OS não confere os dois; com a OS do cliente *A* apontando um projeto interno, o campo vinha travado nesse projeto e a entrega do material de *A* era recusada — sem saída para quem requisitava): o projeto incoerente da OS não é preenchido e a OS conta como *sem projeto*. Projeto **inativo** passa (como a OS fechada, B da Etapa 172). A cópia leva o
+projeto só se ele ainda passa, e nunca é recusada por ele. **Descartado:** só conferir que o projeto existe (deixaria a combinação que a
+entrega recusa); preencher o projeto da OS sozinho no servidor quando o formulário não manda (mudaria o que a entrega grava em requisições de
+outras telas — a Fila já tira o projeto da OS, **B1598**); recusar projeto inativo. **Reversível.** `5ca40351`, `af583d26`, Fase 5 `682fb1ae`.
+
+**B1612 (NOVA, da Etapa 260; decisão do agente; REVÊ a B1600) — a Fila de separação agrupa por setor ou por projeto, como opção desligada.**
+A **B1600** (Etapa 255) escolheu filtro, não agrupamento, porque blocos quebrariam a ordem de urgência. O pedido voltou (item 3 da estimativa de
+23/11). **Escolhido:** **Agrupar** com *Sem agrupar* (padrão — a fila de antes), *Por setor* e *Por projeto*; a ordem de urgência é preservada
+**entre** os blocos (cada bloco entra na posição da sua requisição mais urgente) e **dentro** deles; o *Aguardando* continua separado, com os
+seus blocos; os filtros valem antes; **Limpar filtros** não mexe no agrupamento; a escolha fica no navegador, como os filtros (**B1599**); a
+lista de coleta de todas sai na ordem da tela. **Descartado:** agrupar por localização (a requisição com itens em dois endereços apareceria em
+dois blocos — o motivo da B1600 continua valendo aí); ordenar os blocos por nome (a requisição *Crítica* de um setor ficaria abaixo da
+*Normal* de outro). Consequência: com a fila agrupada, uma requisição *Normal* pode aparecer acima de uma *Urgente* de outro bloco (a do bloco
+dela que veio antes é mais urgente). **Reversível** (*Sem agrupar*). `45b4fff3`.
+
+**B1613 (NOVA, da Etapa 260; decisão do agente) — a lista de projetos do formulário dos módulos é aberta a quem cria requisição.** O campo
+Projeto da Nova Requisição dos módulos (fora do Almoxarifado) lê os projetos com o mesmo portão da lista de OS daquela tela (só o login).
+**Escolhido:** devolver só número interno, nome e situação — sem cliente —, até 500, como a lista de OS de lá (Etapa 172). **Descartado:**
+exigir o acesso ao Comercial (quem requisita de outro setor não tem e ficaria sem o campo). Consequência: qualquer usuário logado pode ler os
+nomes dos projetos. **Reversível.** `5ca40351`.
+
 **B1607 (NOVA, da Etapa 259; decisão do agente) — na exclusão da requisição, a prateleira que não aceita mais o material não recebe de
 volta; a parte dela vai para onde a exclusão sempre mandou.** A exclusão devolve agora a cada prateleira o que a entrega tirou dela. Se a
 prateleira foi **bloqueada** ou **inativada** depois da entrega, ou não aceita mais o tipo do material, **escolhido:** a parte dela vai para
@@ -21570,6 +21610,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(260) Fornecedores na busca, projeto na requisição e Fila agrupada, o que ficou de fora.** (1) A cesta **Solicitação de material**
+  dos módulos não ganha o campo Projeto. (2) O detalhe da requisição não mostra o projeto, e ele não se edita depois de criada (não há
+  edição de rascunho). (3) Com só o número da OS digitado (sem OS cadastrada), o projeto de outro cliente num material de cliente é aceito
+  ao criar e recusado na entrega pela regra do dono (anterior para a OS digitada). (4) Na tela dos módulos a lista de projetos e a de OS
+  não mostram o cliente: quem escolhe um projeto para uma OS sem projeto só sabe que é de outro cliente pela recusa ao enviar. (5) Não há
+  agrupamento por localização (**B1612**). (6) A lista de materiais lê os fornecedores de todos os materiais a cada carga (+23 ms a 3 mil
+  materiais, **B1610**). (7) A conversão da reserva da OS com projeto do mesmo cliente não ganhou cenário próprio (a conferência da criação
+  só deixa passar projeto do cliente da OS).
 - **(259) A exclusão que devolve às prateleiras, o que ficou de fora.** (1) **Entrega feita antes da Etapa 257** (sem o registro de onde
   tirou) é excluída como antes: tudo numa prateleira (a origem informada na entrega, se aceita, ou a padrão). (2) A prateleira que não aceita
   mais o material não recebe (**B1607**). (3) Na peça com número de série, a entrega pode ter tirado de prateleiras que não batem com o
@@ -23219,6 +23267,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(260) Nenhum clique foi dado.** A busca e a lista de materiais foram provadas pelas rotas reais (Almoxarifado e Compras) e pela tabela; o
+projeto pelas rotas de criação, cópia, aprovação, separação, entrega e Fila e pelo formulário (mock só na fronteira HTTP); o agrupamento pela
+tela da Fila com o JSON do contrato. Vale 5 minutos: o roteiro da seção da Etapa 260 no guia.
 
 **(259) Nenhum clique foi dado.** A exclusão foi provada pelas rotas reais (Movimentações v2, separação, entrega, devolução, exclusão,
 transferência) e pelo serviço em `exclusaoDevolvePrateleira`, com a Entrada da exclusão forçada a falhar no meio (a nova tentativa).
@@ -44601,12 +44653,73 @@ Administrador podem excluir requisições"*.
 - Depois de uma falha inesperada no meio da exclusão, a Devolução ainda aceita o que a exclusão já devolveu — exclua de novo antes de registrar qualquer devolução (**C553**).
 - Não há tela nova: o que muda aparece no saldo por prateleira e no histórico.
 
+## Etapa 260 — A busca de materiais acha pelo fornecedor, a requisição ganha o Projeto e a Fila de separação agrupa por setor ou projeto (2026-11-23)
+
+Três pedidos da semana, todos de tela. **(1)** Desde que o Compras passou a cadastrar vários fornecedores por material (Etapa 212), a lista
+de materiais continuava buscando e mostrando só o texto antigo do *Fornecedor Principal*: quem procurava pelo fornecedor, ou pelo código que
+o fornecedor usa na nota, não achava o material. Agora acha, e a lista mostra os fornecedores cadastrados embaixo do nome. **(2)** O
+formulário da requisição não tinha onde dizer o projeto: a Fila só sabia o projeto quando a requisição citava uma OS cadastrada. Agora o
+campo **Projeto** existe, vem da OS quando ela tem projeto, e o sistema recusa o projeto que não combina com a OS. **(3)** A Fila de
+separação, que desde a Etapa 255 filtra, agora também **agrupa** por setor ou por projeto, sem perder a ordem de urgência. Decisões do agente:
+**B1610** a **B1613** (a **B1612** revê a **B1600**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Busca *"aços"* em Materiais → não acha o material cujo fornecedor é a *Aços Brasil* | Acha (nome, fantasia, código do fornecedor, descrição comercial) |
+| Busca *"AB-77"* (o código no fornecedor) → nada | Acha o material |
+| Embaixo do nome: o texto antigo do *Fornecedor Principal* | *"Fornecedores: Aços Brasil, BETA METAIS SA"*; mais de três: *"… +2"*; sem nenhum vinculado, *"Fornecedor (cadastro antigo): ⟨texto⟩"* |
+| Formulário da requisição sem projeto | Campo **Projeto** (lista; ativos primeiro; cliente ao lado no Almoxarifado) |
+| OS cadastrada com projeto: a requisição não guardava o projeto | O projeto vem preenchido e travado (*"vem da OS escolhida"*) |
+| Projeto inexistente pela integração → gravado assim mesmo | *"Projeto #⟨id⟩ não encontrado"* |
+| OS do cliente A + projeto do cliente B → criada; a entrega do material do cliente A recusava depois | Recusada ao criar, com a frase |
+| A Fila só filtrava (**B1600**) | **Agrupar**: *Sem agrupar* (padrão), *Por setor*, *Por projeto* |
+
+### As regras, com o cenário exato
+
+Preparação: administrador do Compras; almoxarife; um projeto *Linha 2* do cliente *A*, um projeto *Ampliação* do cliente *B*; uma OS
+cadastrada *OS-1* do cliente *A* com o projeto *Linha 2* e uma *OS-2* do cliente *A* sem projeto.
+
+**1. A busca acha pelo fornecedor (RN-260.01).** **Compras → Materiais** → lápis de um material → **Fornecedores deste material** → vincule
+um fornecedor com o código *AB-778* → **Salvar**. Na busca: parte do nome do fornecedor → o material aparece; *ab-77* → aparece. O mesmo em
+**Almoxarifado → Materiais**. O placeholder da busca diz *"Buscar por nome, código, fornecedor ou código do fornecedor..."*.
+
+**2. Os fornecedores embaixo do nome (RN-260.02, B1610).** Na mesma lista, embaixo do nome: *"Fornecedores: ⟨nome⟩"*. Um material sem
+fornecedor vinculado e com o texto antigo do Fornecedor Principal mostra *"Fornecedor (cadastro antigo): ⟨texto⟩"*.
+
+**3. O campo Projeto (RN-260.03 a .05).** **Nova Requisição de Material** → campo **Projeto** com *"— sem projeto —"*. Escolha **OS
+cadastrada** *OS-1* → **Projeto** *Linha 2 — ⟨cliente A⟩*, travado, *"vem da OS escolhida"*. Troque para *OS-2* → o projeto limpa e destrava.
+
+**4. As recusas (RN-260.06, B1611).** Com *OS-1*, o projeto vem travado — pela integração, outro projeto é recusado: *"O projeto escolhido não
+é o da OS OS-1. Escolha o projeto da OS ou deixe o campo vazio."*. Com *OS-2* e o projeto *Ampliação* → **Enviar** → *"O projeto escolhido é
+de outro cliente que o da OS OS-2. Escolha um projeto do mesmo cliente ou deixe o campo vazio."*. Projeto inexistente (integração) →
+*"Projeto #⟨id⟩ não encontrado"*. Sem OS cadastrada (só o número digitado), qualquer projeto passa — inativo inclusive.
+
+**5. A Fila agrupada (RN-260.07 a .09, B1612).** Aprove duas requisições de setores diferentes. **Fila de separação** → **Agrupar** → **Por
+setor** → blocos *"Setor: ⟨nome⟩ — N requisições"*, o da requisição mais urgente primeiro; **Aguardando** continua no fim, com os seus blocos.
+**Por projeto** → *"Projeto: ⟨nome⟩ — …"* e *"Sem projeto — …"*. **Limpar filtros** não muda o agrupamento; **Abrir** e voltar mantém.
+
+### O que esta etapa NÃO cobre
+
+- A cesta **Solicitação de material** dos módulos não ganha o Projeto; o detalhe da requisição não mostra o projeto; não há edição do
+  projeto depois de criada (**D (260)**).
+- Só com o número da OS digitado, um projeto de outro cliente num material de cliente é aceito ao criar e recusado na entrega (**D (260)**).
+- Não há agrupamento por localização (**B1612**).
+- A lista de projetos dos módulos mostra os nomes de até 500 projetos a quem cria requisição (**B1613**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 260 entregue (2026-11-23):** **a busca de materiais acha pelo fornecedor (Compras e Almoxarifado), a requisição ganha o campo
+  Projeto (vem da OS cadastrada; o projeto que não combina com a OS é recusado) e a Fila de separação agrupa por setor ou projeto** (itens
+  1 a 3 da estimativa de 23/11). Commits `d7e6afb9` (estimativa), `c5237959` (plano e Fase 2), `14af4e46`, `5ca40351`, `af583d26`, `45b4fff3`, Fase 5 `682fb1ae`, `3f18085e` e o fechamento. **O que é seu:**
+  as **B1610** a **B1613** (reversíveis; a **B1612** revê a **B1600**); a limitação **(260)** em D e a verificação **(260)** em F. Sem
+  consulta antes do deploy. **Próxima:** os itens 4 e 5 da estimativa de 23/11 (fim do plano da 260).
 
 - **Etapa 259 entregue (2026-11-20):** **excluir uma requisição entregue devolve cada peça à prateleira de onde ela saiu** (**D (257)** 2
   resolvida; a próxima tarefa do plano da 258). Uma Entrada por prateleira que a entrega baixou; a que não aceita mais recebe pela regra de

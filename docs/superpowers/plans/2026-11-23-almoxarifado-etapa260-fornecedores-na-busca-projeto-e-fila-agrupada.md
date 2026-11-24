@@ -1,6 +1,6 @@
 # Etapa 260 — Fornecedores na busca de materiais, projeto na requisição e Fila de separação agrupada
 
-> **Status:** EM EXECUÇÃO (23/11/2026). Itens 1, 2 e 3 da estimativa da semana
+> **Status:** FECHADA (23/11/2026). Itens 1, 2 e 3 da estimativa da semana
 > (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.*`, `d7e6afb9`): 1h15 + 1h15 + 1h30.
 > Features: Compras/cadastro (`specs/modulo-almoxarifado/01-cadastros-materiais`, pedido de 12/11 img5), requisições
 > (`specs/modulo-almoxarifado/04-requisicoes`), separação (`specs/modulo-almoxarifado/05-separacao-picking`, item "Agrupamento" `[ ]`).
@@ -51,12 +51,17 @@
 - **RN-260.05 — o campo Projeto no formulário.** "Projeto" (lista, opcional, *"— sem projeto —"*). Escolher uma **OS cadastrada com
   projeto** preenche o projeto com o da OS e **trava** o campo (dica *"vem da OS escolhida"*); OS sem projeto, ou *Digitar outro número*,
   destrava e limpa o que tinha vindo da OS. Projeto da OS fora da lista aparece como *"Projeto #<id>"*. O resumo ganha a linha *Projeto*.
-  O envio manda `projeto_id` (número) ou `null`.
-- **RN-260.06 — o servidor confere o projeto.** Na criação (as duas rotas, rascunho incluído), com `projeto_id`: inexistente → 400
-  `Projeto #<id> não encontrado` (sem a tabela também — como a OS, RN-172.03); com a OS cadastrada (`os_id`) que **tem** projeto e o
-  projeto escolhido for outro → 400 `O projeto escolhido não é o da OS <numero_os>. Escolha o projeto da OS ou deixe o campo vazio.`
-  (B1611). Sem `projeto_id`: nada muda (a fila continua tirando o projeto da OS, RN-255.01). **A cópia nunca falha pelo projeto**: leva-o só
-  se ainda passa nessas duas conferências (mesma régua da OS na cópia, RN-172.06).
+  O envio manda `projeto_id` (número) só quando escolhido (divergência abaixo). Fase 5: o escolhido à mão volta quando a OS destrava o campo.
+- **RN-260.06 — o servidor confere o projeto.** Na criação (as duas rotas, rascunho incluído), com `projeto_id`: não inteiro positivo
+  (a cópia não passa pelo Zod) → 400 `Projeto inválido`; inexistente → 400 `Projeto #<id> não encontrado` (sem a tabela também — como a
+  OS, RN-172.03). **Projeto inativo passa** (como a OS fechada, RN-172.02 — B1611). Com a OS cadastrada (`os_id`):
+  (a) a OS **tem** projeto e o escolhido é outro → 400 `O projeto escolhido não é o da OS <numero_os>. Escolha o projeto da OS ou deixe o
+  campo vazio.`; (b) a OS **não tem** projeto e o cliente do projeto é outro que o da OS (projeto interno, sem cliente, com OS de cliente
+  conta como outro; os dois sem cliente passam) → 400 `O projeto escolhido é de outro cliente que o da OS <numero_os>. Escolha um projeto
+  do mesmo cliente ou deixe o campo vazio.` (Fase 2, C1/C2: sem (b) a aprovação não converteria a reserva da OS, a fila pularia o material
+  de cliente, a entrega recusaria pela regra do dono — que olha o projeto antes da OS — e a saída de material próprio perderia a OS,
+  `osIdDaSaida`). OS sem `numero_os`: `#<id>`. Sem `projeto_id`: nada muda (a fila continua tirando o projeto da OS, RN-255.01). **A cópia
+  nunca falha pelo projeto**: leva-o só se ainda passa nessas conferências (mesma régua da OS na cópia, RN-172.06).
 
 ### Item 3 — Fila agrupada
 
@@ -69,7 +74,20 @@
   projeto sem nome *"Projeto #<id>"*; dois projetos de mesmo nome, *"Linha 2 (#7)"* (régua da 255). Os filtros continuam valendo antes do
   agrupamento. *Sem agrupar*: a tela é a de hoje, sem título de bloco.
 - **RN-260.09 — a lista de coleta de todas na ordem da tela.** Com agrupamento, *Imprimir lista de coleta (todas)* imprime as visíveis
-  imprimíveis na ordem dos blocos (B1612).
+  imprimíveis na ordem em que aparecem: os blocos dos acionáveis, depois os blocos do "Aguardando" (B1612).
+
+## Fase 2 (revisor fresco, 23/11) — absorvida
+
+- **C1/C2 (críticos):** OS sem projeto + projeto de outro cliente passava → (b) da RN-260.06.
+- **I1:** o texto antigo não convertido pela 212 sumiria da lista → mostrado, marcado, só sem fornecedor vinculado (B1610).
+- **I2:** projeto "apagado" é `status='inativo'` → inativo passa (B1611); o teste da cópia usa a linha apagada direto no banco e o inativo.
+- **I3:** `Projeto inválido` (a cópia) e `#<id>` sem `numero_os`.
+- **I4:** a cesta (`RequisicaoMaterialCesta.js`) não ganha o Projeto → D (260).
+- **I5:** integração: entrega com projeto (regra do dono pelo projeto) e cópia com projeto + OS; a conversão da reserva da OS com projeto
+  do mesmo cliente não ganha cenário próprio (a guarda (b) só deixa passar projeto do cliente da OS) → declarado.
+- **M1:** medido: +23 ms na lista inteira e +30 ms na busca a 3 mil materiais e 6 mil vínculos — fica sempre ligado.
+- **M2:** ordem da impressão agrupada → RN-260.09. **M3:** a aux de projetos fora do almoxarifado mostra nomes a qualquer logado → B1613.
+- P3: galhos independentes; a T4 só começa com o contrato final da T3.
 
 ## Contratos
 
@@ -85,22 +103,83 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor, item 1)** — RN-260.01/02 em `listarMateriais`. Teste novo `server/tests/api/materiaisBuscaFornecedores.api.test.js`:
+- [x] **T1 (tronco, servidor, item 1)** — `14af4e46` (9 cenários; 10 sabotagens vermelhas) — RN-260.01/02 em `listarMateriais`. Teste novo `server/tests/api/materiaisBuscaFornecedores.api.test.js`:
   pela rota do Almoxarifado **e** pela do Compras; sem a tabela `fornecedores`, 200 com `[]`. Controle positivo por regra.
-- [ ] **T2 (galho, tela, item 1)** — `TabelaMateriais.js` mostra `fornecedores` e não `fornecedor_principal`. Teste no `MateriaisCompras.test.js`
+- [x] **T2 (galho, tela, item 1)** — `14af4e46` (`TabelaMateriaisFornecedores.test.js` 4; 7 sabotagens; o texto antigo marcado sem vínculo, B1610) — `TabelaMateriais.js` mostra `fornecedores` e não `fornecedor_principal`. Teste no `MateriaisCompras.test.js`
   (ou novo `TabelaMateriaisFornecedores.test.js`).
-- [ ] **T3 (tronco, servidor, item 2)** — RN-260.03/04/06. Teste novo `server/tests/api/requisicaoProjeto.api.test.js`: aux de projetos pelas
+- [x] **T3 (tronco, servidor, item 2)** — `5ca40351` (16 cenários; 14 sabotagens), Fase 5 `682fb1ae` (+3; +2), fixture `3f18085e` — RN-260.03/04/06. Teste novo `server/tests/api/requisicaoProjeto.api.test.js`: aux de projetos pelas
   duas rotas; aux de OS com `projeto_id`; criação com projeto (grava), inexistente (400), divergente da OS (400), igual ao da OS (201), OS sem
   projeto + qualquer projeto (201); cópia com projeto apagado (201, sem projeto); **integração**: requisição criada pela rota com projeto e
   sem OS aparece na fila (`/fila-separacao`) com `projeto_nome` — e a entrega de material de cliente com o projeto do dono passa (a regra do
   dono vê o projeto gravado). Controle positivo por regra.
-- [ ] **T4 (galho, tela, item 2)** — `RequisicaoForm.js`: RN-260.05. Teste novo `RequisicaoFormProjeto.test.js`.
-- [ ] **T5 (galho, tela, item 3)** — `filtrosFilaSeparacao.js` (`agruparFila`, ler/guardar a opção) + `FilaSeparacao.js`: RN-260.07..09.
+- [x] **T4 (galho, tela, item 2)** — `af583d26` (7; 13 sabotagens), Fase 5 `682fb1ae` (+2 sabotagens) — `RequisicaoForm.js`: RN-260.05. Teste novo `RequisicaoFormProjeto.test.js`.
+- [x] **T5 (galho, tela, item 3)** — `45b4fff3` (8; 14 sabotagens, 13 vermelhas — G7, ler a opção sem validar, é defesa dupla) — `filtrosFilaSeparacao.js` (`agruparFila`, ler/guardar a opção) + `FilaSeparacao.js`: RN-260.07..09.
   Teste novo `FilaSeparacaoAgrupada.test.js`.
-- [ ] **T6** — Fase 5 (revisor fresco), suítes, fechamento (fechar-etapa sem 7½ e 8) e estimado × realizado.
+- [x] **T6** — Fase 5 (revisor fresco), suítes, fechamento (fechar-etapa sem 7½ e 8) e estimado × realizado.
 
 ## Pontos de atenção
 
 - `fornecedores` e `projetos`/`ordens_servico` são tabelas core: conferir por PRAGMA, nunca por mensagem de erro.
 - A lista de materiais alimenta 18 chamadas do cliente: o campo novo é aditivo; a busca nova só roda com `search`.
 - A guarda do projeto × OS só olha OS **cadastrada** (`os_id`); OS só em texto não tem projeto para comparar.
+
+## Fase 5 (revisor fresco, 23/11) — 1 importante (corrigido), 3 menores
+
+- **Importante, reproduzido e corrigido (`682fb1ae`):** o cadastro de OS não confere projeto × cliente. OS do cliente A apontando projeto
+  interno: o formulário travava esse projeto, a regra (a) aceitava e a entrega do material de A recusava pela regra do dono (antes da 260 a
+  mesma requisição saía pela OS: 201/200/200/200 contra 201/200/200/400). Agora o projeto da OS só conta quando é do mesmo cliente
+  (`projetosAux.projetoDaOsSql`, a régua das aux e da criação); senão a OS vale como sem projeto (regra b).
+- **Menor, corrigido (`682fb1ae`):** o projeto escolhido à mão se perdia quando uma OS com projeto travava e depois destravava o campo.
+- **Menor, declarado (D (260)):** fora do almoxarifado as listas não mostram o cliente; a lista de materiais lê todos os fornecedores a cada
+  carga (medido +23 ms, B1610).
+
+## Divergências do plano
+
+- RN-260.05: `projeto_id` vai só quando escolhido (o plano dizia "ou `null`" — mandar sempre mudaria o payload de quem não escolhe).
+- RN-260.04/06: o "projeto da OS" passou a exigir o mesmo cliente da OS (Fase 5).
+- `listasNotificacoesPortao` (RN-155.01) compara as chaves da aux de OS com o fixture das Reservas e caiu com o campo novo (esperado) — fixture
+  atualizado (`3f18085e`). `recebimentoComOs [M1]` passou a semear por UPDATE a combinação que a rota agora recusa.
+- T2, T4 e T5: o teste veio logo depois do código (controle positivo por sabotagem em todas as regras), fora da ordem TDD estrita; T1 e T3
+  nasceram vermelhas.
+- O primeiro `test:api` foi interrompido depois da Fase 5 (o código do servidor mudou) e rodado de novo sobre o código final.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (o fixture da aux de OS; o `[M1]` do recebimento com OS).
+- Achados: Fase 2, 2 críticos + 5 importantes + 3 menores reais (absorvidos antes do código); Fase 5, 1 importante + 1 menor corrigidos, 2
+  menores declarados, 0 ruído.
+- Paralelismo: nenhum galho em paralelo (tudo na mesma árvore, em sequência); os revisores rodaram em paralelo com o trabalho.
+- Defeito que escapou: (preencher na etapa seguinte). Da 259: nenhum apontado.
+
+## Próxima tarefa detalhada
+
+Os itens 4 e 5 da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`), juntos numa etapa:
+
+1. **Item 4 — o histórico diz de quais prateleiras a peça saiu (D (252) 1; 1h).** Desde as Etapas 256/257 o Ajuste e a Saída gravam as linhas
+   baixadas em `ajuste_linhas_drenadas_almoxarifado` (`schema.js:1610`: `movimentacao_id, saldo_id, quantidade`; índice por
+   `movimentacao_id`), mas só o estorno (`stockService.js` ~3744) e a exclusão (`requisitionService.js` ~3387) a leem. Contrato a propor:
+   `GET /api/almoxarifado/movimentacoes` (`routes/almoxarifado.js:1389`) ganha, por movimento, `prateleiras: [{ codigo, quantidade }]`
+   (aditivo; `saldo_id` → `estoque_saldo_almoxarifado.localizacao_id` → código; linha de saldo apagada: sem código), numa consulta à parte
+   pelos ids da página (sem N+1). Tela: `MovimentacoesAlmoxarifado.js` mostra *"Saiu de: A 3 · B 3"* quando há mais de uma. Movimento antigo
+   sem linha: como hoje. Só leitura — Fase 2/5 enxutas.
+2. **Item 5 — o estorno do Ajuste de prateleira respeita a contagem mais recente (D (258) 5; 1h15, motor).** O estorno de um Ajuste **com**
+   `localizacao_destino_id` não olha um Ajuste do total feito depois (5 em A, Ajuste de A para 3, Ajuste do total para 7, estorno do primeiro
+   → 9; a contagem diz 7). Molde: a guarda B1606 do ramo sem localização (`stockService.cancelarMovimentacao` ~3869, mensagens ~3887/3891:
+   *"… a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste."*) e o teste
+   `estornoAjusteForaDeOrdem.api.test.js`. Pontos de atenção: a guarda vai **antes do claim**, dentro da seção da trava por material
+   (CLAUDE.md, estorno); o inventário conta como contagem; um Ajuste de **outra** prateleira depois — decidir na letra B pelo caminho
+   reversível (só o Ajuste do total e o da mesma prateleira travam). Motor: Fase 2 e Fase 5 completas.
+- **O que já está pronto e não reabre:** a busca e a lista com fornecedores; o projeto na requisição (campo, aux, conferência com a OS,
+  cópia); a Fila agrupada.
+
+## Verificação (medida sobre o código final)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`, sobre o servidor de `682fb1ae` + `3f18085e`): **657/658 arquivos OK**
+  (o mais lento: `propostaClausulasGrava`, 70,8 s); o único vermelho, `requisicaoComOsCadastrada` [RN-172.08, I4], fixava as chaves da aux de OS
+  dos módulos — atualizado (`60f72369`, só o teste) e **27/27** rodado de novo. A primeira rodada (antes da Fase 5) foi interrompida em ~405
+  arquivos com um vermelho, `listasNotificacoesPortao` (o fixture da OS, `3f18085e`, 10/10 depois).
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, código final): **243/243 suítes, 3267/3267 testes** (a primeira rodada deu 3266/3267: o teste de chaves do
+  fixture nas Reservas, atualizado em `efdfa465`).
+- `CI=true npx react-scripts build`: **Compiled successfully.**
+- Nenhum clique no navegador (F (260)).

@@ -26,6 +26,9 @@
 3. Descrição comercial do fornecedor (quando difere da nossa). — **feito, Etapa 212** (idem)
 4. Histórico de preços cotados e comprados por fornecedor. — **feito, Etapa 214** (`8ec674b0`, `bd9209c4`)
 5. Seleção automática: na cotação/pedido, escolher o fornecedor apresenta o código dele. — **feito, Etapa 213** (`86ab0eb4`, `7a8e6f5b`)
+5b. A lista de materiais (Compras e Almoxarifado) busca e mostra os fornecedores do material (img5: o Fornecedor Principal "absorvido pelo
+   relacionamento" também na lista). — **feito, Etapa 260** (`14af4e46`; B1610 / B93 do Compras): o texto antigo fica na busca e só aparece na
+   lista, marcado, sem fornecedor vinculado.
 6. **Regra:** o código interno da GMP continua o identificador principal; o do fornecedor nunca o substitui. — respeitada nas duas
    etapas: o código GMP não muda pela seção de fornecedores e vem primeiro na tela e no impresso.
 

@@ -12,7 +12,12 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 259 fechada — 2026-11-20.** **Excluir uma requisição entregue devolve cada peça à prateleira de onde
+> **O desenvolvimento parou aqui: Etapa 260 fechada — 2026-11-23.** **A busca de materiais acha pelo fornecedor, a requisição ganha o
+> Projeto e a Fila de separação agrupa por setor ou projeto** (itens 1 a 3 da estimativa de 23/11). **Sem consulta antes do deploy.**
+> **Nenhum clique foi dado** (roteiro na seção da 260). **Onde parou, exatamente:** a **260 está fechada**; a próxima são os itens 4 e 5 da
+> estimativa de 23/11 (fim do plano da 260).
+>
+> *(Antes:)* **Etapa 259 fechada — 2026-11-20.** **Excluir uma requisição entregue devolve cada peça à prateleira de onde
 > ela saiu.** A entrega que tirou de várias prateleiras é desfeita pela exclusão com uma entrada por prateleira (não mais tudo numa só); a
 > prateleira que não aceita mais o material recebe pela regra de antes; excluir de novo depois de uma falha no meio não devolve duas vezes.
 > **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 259). **Onde parou, exatamente:** a **259 está
@@ -7443,6 +7448,45 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 260 — Fornecedores na busca de materiais, projeto na requisição e Fila de separação agrupada (ENTREGUE — 2026-11-23)
+
+**Em uma frase:** a lista de materiais (Compras e Almoxarifado) acha e mostra o material pelos fornecedores cadastrados nele; o formulário
+da requisição ganha o campo **Projeto** (vem da OS cadastrada, quando ela tem); e a **Fila de separação** pode ser agrupada por setor ou por
+projeto, sem perder a ordem de urgência.
+
+| Antes | Agora |
+|---|---|
+| Buscar o nome do fornecedor ou o código que ele usa não achava o material (só o texto antigo do *Fornecedor Principal*) | Acha: nome, nome fantasia, código do fornecedor e descrição comercial |
+| Embaixo do nome do material, o texto antigo do *Fornecedor Principal* | *"Fornecedores: A, B, C +2"* (os da seção Fornecedores do material); sem nenhum, o texto antigo marcado *"(cadastro antigo)"* |
+| O formulário da requisição não tinha projeto: a Fila só via o projeto da OS cadastrada | Campo **Projeto**; a OS cadastrada com projeto o preenche e trava |
+| — | Projeto que não é o da OS, ou de outro cliente que o da OS, é recusado ao criar |
+| A Fila só filtrava | **Agrupar**: *Sem agrupar* (padrão), *Por setor*, *Por projeto* — blocos com título, o da requisição mais urgente primeiro |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **administrador do Compras**. **Compras → Materiais**, lápis de um material → seção **Fornecedores deste material** → vincule
+   um fornecedor com o código *AB-778* → salve.
+2. Na lista, **Confira:** embaixo do nome, *"Fornecedores: ⟨nome do fornecedor⟩"*. Digite na busca parte do nome do fornecedor → **Confira:**
+   o material aparece. Digite *ab-77* → **Confira:** aparece. Faça o mesmo em **Almoxarifado → Materiais**.
+3. Entre como almoxarife. **Requisições → Nova Requisição**: **Confira** o campo **Projeto** com *"— sem projeto —"* e a lista de projetos
+   (ativos primeiro; o cliente ao lado; *"(inativo)"* nos inativos).
+4. Escolha uma **OS cadastrada** que tem projeto → **Confira:** o **Projeto** vem preenchido, travado, com *"vem da OS escolhida"*; o resumo
+   mostra o projeto. Troque para *Digitar outro número* → o projeto limpa e destrava.
+5. Sem OS cadastrada, digite o número da OS, escolha um projeto, adicione um material → **Enviar** → **Confira:** criada.
+6. (Recusa) Escolha uma OS cadastrada **sem** projeto de um cliente e um projeto de **outro** cliente → **Enviar** → **Confira:** *"O projeto
+   escolhido é de outro cliente que o da OS ⟨número⟩. Escolha um projeto do mesmo cliente ou deixe o campo vazio."*
+7. Aprove a requisição do passo 5. **Fila de separação** → **Confira:** *"Projeto: ⟨nome⟩"* no cartão.
+8. Em **Agrupar**, escolha **Por setor** → **Confira:** blocos *"Setor: ⟨nome⟩ — N requisições"*, o bloco da requisição mais urgente
+   primeiro; o **Aguardando** continua no fim. **Por projeto** → blocos por projeto e *"Sem projeto"*.
+9. Escolha um filtro e clique **Limpar filtros** → **Confira:** o agrupamento continua. Abra uma requisição e volte → continua agrupado.
+
+**O que esta etapa NÃO cobre:** a cesta **Solicitação de material** dos módulos não ganha o Projeto; o detalhe da requisição não mostra o
+projeto; o projeto não se edita depois de criada; com só o número da OS digitado, o projeto de outro cliente num material de cliente é
+recusado só na entrega (pela regra do dono); não há agrupamento por localização; a Fila não muda a ordem do servidor.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 259 — Excluir uma requisição entregue devolve cada peça à prateleira de onde ela saiu (ENTREGUE — 2026-11-20)
 

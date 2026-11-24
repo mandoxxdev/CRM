@@ -571,7 +571,7 @@ O "Inativar" e o "Reativar" ficam no histórico do cadastro (2.9): o primeiro co
 ### 2.12 A lista de materiais e as buscas do módulo
 
 **Compras → Materiais** e **Almoxarifado → Materiais** mostram a **mesma lista**: as colunas **Foto**, **Código**, **Material** (com o
-selo do dono, quando é material de cliente, e o fornecedor principal embaixo), **Família**, **Categoria**, **Quantidade** (a barra, o
+selo do dono, quando é material de cliente, e os fornecedores embaixo — veja abaixo), **Família**, **Categoria**, **Quantidade** (a barra, o
 saldo, a unidade e *"Mín: … · Máx: …"*), **Localização**, **Status** e **Ações**, e os mesmos filtros: busca, **Todas categorias**,
 **Todas famílias** (cada família seguida das suas subfamílias; escolher uma subfamília mostra só os materiais dela) e **Todos status**
 (*OK*, *Crítico*, *Zerado*, *Inativos*), com **Limpar filtros** quando algum está em uso. Sem filtro de status, a lista mostra os
@@ -591,8 +591,17 @@ continua o saldo físico de sempre. Sem saldo em lote impedido, ou em material s
 Materiais** não mostra esse número. O número é lido quando a lista é carregada (ao abrir a tela, filtrar ou buscar): um lote bloqueado ou
 liberado depois só aparece ao recarregar.
 
-A busca da lista de **Materiais** (*"Buscar por nome, código ou fornecedor..."*) procura o texto no nome, no código, na descrição e no
-fornecedor principal. Como as demais buscas de texto do módulo — a dos **Retalhos** (norma, dimensões e descrição), a das **Ferramentas**
+**Os fornecedores embaixo do nome.** Abaixo do nome do material, a lista mostra os fornecedores cadastrados na seção **Fornecedores deste
+material** (2.3b): *"Fornecedores: Aços Brasil, BETA METAIS SA"*, em ordem alfabética, cada um pelo nome fantasia (ou pela razão social, sem
+fantasia). Com mais de três, aparecem os três primeiros e o resto em número: *"Fornecedores: A, B, C +2"*. O material sem nenhum fornecedor
+vinculado que ainda tem o texto antigo do *Fornecedor Principal* (o que não virou vínculo — 2.3b) mostra *"Fornecedor (cadastro antigo):
+⟨texto⟩"*; sem nenhum dos dois, nada aparece.
+
+A busca da lista de **Materiais** (*"Buscar por nome, código, fornecedor ou código do fornecedor..."*) procura o texto no nome, no código,
+na descrição e no texto antigo do fornecedor principal, e também em cada fornecedor vinculado ao material: a razão social, o nome fantasia, o
+**código que o fornecedor usa** e a **descrição comercial** dele (2.3b). Buscar *"aços"* acha os materiais que têm a *Aços Brasil* como
+fornecedor; *"AB-77"* acha o material cujo código no fornecedor é *AB-778*. Um item do catálogo do fornecedor que não está ligado a nenhum
+material não faz nenhum material aparecer. Como as demais buscas de texto do módulo — a dos **Retalhos** (norma, dimensões e descrição), a das **Ferramentas**
 (patrimônio e nome), a dos **Empréstimos** (o colaborador) e a do usuário do **Histórico de movimentações** (21d) —, ela ignora os espaços
 das pontas e acha o texto em qualquer combinação de maiúsculas e minúsculas, **inclusive nas letras acentuadas** (*"válvula"* acha
 *"VÁLVULA ESFERA"*); **o acento conta** (*"valvula"* não acha *"VÁLVULA"*), e um nome antigo com letras acentuadas maiúsculas e minúsculas
@@ -2323,6 +2332,24 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   número abaixo."* (na cesta) ou *"… — digite o número ao lado."* (na Nova Requisição), e o envio segue pelo número digitado. Pela integração,
   a OS cadastrada vai num campo próprio da requisição: um valor que não é número inteiro positivo é recusado com *"Dados inválidos — os_id: OS inválida"* e uma OS que
   não existe com *"OS #⟨código interno da OS⟩ não encontrada"* — nos dois casos, antes da cobrança do número da OS, e nada é gravado.
+- **Projeto** — opcional, na **Nova Requisição de Material** (do Almoxarifado e dos módulos; a cesta **Solicitação de material** não tem o
+  campo). É uma lista dos projetos cadastrados, os ativos primeiro e depois os inativos (marcados *"(inativo)"*), em ordem de nome; na tela do
+  Almoxarifado, cada projeto vem com o cliente dele. *"— sem projeto —"* deixa a requisição sem projeto. Escolher uma **OS cadastrada** que
+  tem projeto preenche o **Projeto** com o projeto dela e trava o campo (*"vem da OS escolhida"*); escolher uma OS sem projeto, ou *Digitar
+  outro número*, destrava e limpa o projeto que tinha vindo da OS (o escolhido à mão fica). O projeto da OS que não está na lista aparece
+  como *"Projeto #⟨número⟩"*. O resumo ao lado mostra o projeto. Se a lista não carregar, o campo diz *"Não foi possível carregar os
+  projetos."* e o envio segue sem projeto. O projeto aparece na **Fila de separação** (10.6) e, para **material de cliente**, é ele que a
+  entrega confere primeiro: o material do cliente só sai por um projeto desse cliente (16.4). Por isso o servidor confere, ao criar (também
+  o rascunho e pela integração), antes de gravar qualquer coisa:
+  - projeto que não existe: *"Projeto #⟨número⟩ não encontrado"*; valor que não é número inteiro positivo: *"Dados inválidos — projeto_id: …"*
+    (pela integração);
+  - com uma OS cadastrada que tem projeto, outro projeto: *"O projeto escolhido não é o da OS ⟨número da OS⟩. Escolha o projeto da OS ou deixe o
+    campo vazio."*;
+  - com uma OS cadastrada sem projeto, um projeto de outro cliente que o da OS — um projeto sem cliente com uma OS de cliente também conta
+    como outro; os dois sem cliente passam: *"O projeto escolhido é de outro cliente que o da OS ⟨número da OS⟩. Escolha um projeto do mesmo
+    cliente ou deixe o campo vazio."*
+  Projeto **inativo** é aceito. Com só o **Número da OS** digitado (sem OS cadastrada) não há com o que comparar: o projeto é aceito, e é ele
+  que vale para o material de cliente na entrega.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 - **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras) ou cancele o rascunho e faça outro sem ele."* (7.8).
 - **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
@@ -2331,7 +2358,8 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 
 Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**. A
 data de necessidade também **não** é copiada. O **Número da OS** é copiado; a **OS cadastrada** também, se ela ainda existir (fechada inclusive) —
-se foi excluída, a cópia vem só com o número escrito. Se o sistema não conseguir conferir a OS (falha do banco), a cópia termina em erro e nada é
+se foi excluída, a cópia vem só com o número escrito. O **Projeto** é copiado se ainda passar nas conferências da criação (acima; inativo
+inclusive); se não passar mais (o projeto sumiu do cadastro ou a OS passou a ter outro projeto), a cópia vem sem projeto — nunca é recusada por ele. Se o sistema não conseguir conferir a OS (falha do banco), a cópia termina em erro e nada é
 gravado; basta tentar de novo.
 
 ### 7.3 Requisição emergencial — o que fura e o que não fura
@@ -3525,6 +3553,18 @@ As escolhas ficam guardadas **neste navegador**: **Atualizar**, **Abrir** uma re
 valor que sumiu da fila depois de **Atualizar** continua escolhido (a tela mostra a frase de nenhuma requisição) até ser trocado. Outro
 computador ou outro navegador começa em **Todos**; um navegador que não guarda dados (janela anônima, bloqueio) também, e os filtros
 funcionam do mesmo jeito enquanto a tela está aberta.
+
+#### Agrupar a fila por setor ou por projeto
+
+Ao lado dos filtros, **Agrupar** tem três opções: **Sem agrupar** (o padrão — a fila como descrita acima), **Por setor** e **Por projeto** (o
+mesmo setor e o mesmo projeto dos filtros). Agrupada, a fila divide as requisições em **blocos**, cada um com um título: *"Setor: Produção —
+2 requisições"*, *"Projeto: Linha 2 — 1 requisição"*, *"Sem setor — …"*, *"Sem projeto — …"* (o projeto com o mesmo rótulo do filtro: *"Linha 2
+(#7)"* quando há dois com o mesmo nome; *"Projeto #⟨número⟩"* sem nome). **A ordem de urgência continua valendo:** o primeiro bloco é o da
+requisição mais urgente da fila, o segundo o da mais urgente que sobrou, e assim por diante; dentro de cada bloco, as requisições ficam na
+ordem da fila. O grupo **"Aguardando"** continua separado, no fim, com os seus próprios blocos. Os filtros valem antes: agrupar por setor
+com o filtro de um projeto mostra os blocos de setor só daquele projeto. **Limpar filtros** não muda o agrupamento. A escolha fica guardada
+neste navegador, como os filtros. Com a fila agrupada, **Imprimir lista de coleta (todas)** imprime na ordem em que as requisições aparecem
+na tela (bloco por bloco).
 
 #### Onde pegar cada item, e a ordem de coleta
 

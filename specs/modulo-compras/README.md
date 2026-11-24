@@ -67,6 +67,7 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 | 9 | Nº de série + nº de controle (etiqueta) obrigatórios — sem resposta, pela tela de Ferramentas | idem, 25 | 1h30 | **esperando** a compradora dizer a tela (img4 não foi salva) |
 | 10 | Especificações Técnicas e Observações Gerais saem; Identificação fica com Descrição e Descrição Técnica (texto antigo continua visível) | idem, 26 | 1h | **esperando** a compradora (pedido ambíguo) |
 | 11 | Material criado pela sobra e pela remessa a terceiros aparece no Compras como "cadastro a completar" | idem, 27 | 1h30 | **feito pelo caminho reversível — Etapa 254** (`67194649`, `9fa64070`, `76646464`, 20/11/2026): marca na criação, aviso, filtro e selo no Compras → Materiais; salvar tira. Sem resposta da compradora: a criação continua no Almoxarifado (B92 daqui; B1593 a B1595 do almoxarifado) |
+| 12 | Busca e lista de materiais com os fornecedores cadastrados | `estimativa_2026-11-23_almoxarifado-semana`, 1 | 1h15 | **feito — Etapa 260** (`14af4e46`, 23/11/2026): a busca acha pelo nome, código e descrição comercial do fornecedor; a lista mostra os fornecedores (B93) |
 
 **Almoxarifado:** a Etapa 209 (o bloqueio sabe o lote) **foi concluída em 13/11/2026** (`e10f8c04`, Fase 5 `fa50fae9`) — esta linha dizia
 "em pausa, parada na T6" e **estava errada** desde então (corrigida em 18/11/2026). A fila do almoxarifado está na estimativa de 18/11 acima.

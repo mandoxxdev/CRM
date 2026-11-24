@@ -1,5 +1,8 @@
 # 04 — Requisições de Materiais
 
+> **+ Etapa 260 (2026-11-23, `5ca40351`, `af583d26`, Fase 5 `682fb1ae`): o formulário ganha o campo Projeto (vem da OS cadastrada; o servidor
+> confere o projeto com a OS — B1611)** — ver a seção "Etapa 260", no fim. Continua 🟢.
+
 > **+ Etapa 259 (2026-11-20, `e1f4dc82`, Fase 2 `8b5de9df`, Fase 5 `d2d7943b`): a exclusão devolve a cada prateleira o que a entrega tirou dela** (D (257) 2; B1607-B1609) — ver a seção "Etapa 259", no fim. Continua 🟢.
 
 > **+ Etapa 172 (2026-10-22, `c34eab10..ffbbaae4`): a requisição ganha OS cadastrada OPCIONAL (`os_id`) ao lado do texto livre da RN-A, e a cesta — que não enviava requisição nenhuma desde a RN-A de 16/09 (C428, provado por execução) — ganha o campo *Número da OS*** — ver a seção "Etapa 172", no fim. Continua 🟢.
@@ -512,3 +515,22 @@ saída sem origem no livro (a parte automática da entrega, que baixa de várias
 Teste: `exclusaoDevolvePrateleira.api.test.js`. Quatro testes afirmavam a padrão como destino da parte automática (D (51)) e viraram:
 `entregaAutomaticaPeloLoteIntegracao`, `entregaGuardaSemLote` (RN-207.06 controle), `origemSeparacaoEmDuasVezesIntegracao` (cenário 1,
 controle) e `entregaAutomaticaPeloLote` (RN-197.10, só no protótipo da Fase 2 — com a padrão sem destino passou como estava).
+
+## Etapa 260 — o projeto na requisição (2026-11-23)
+
+Plano: `docs/superpowers/plans/2026-11-23-almoxarifado-etapa260-fornecedores-na-busca-projeto-e-fila-agrupada.md` (RN-260.03 a .06, B1611, B1613).
+
+**O que estava errado nesta spec:** a lista de campos acima dizia `projeto_id` como campo existente, e era — mas só no banco: **nenhuma tela o
+gravava** e o servidor o aceitava sem conferir nem se existia (medido na Fase 0 da 255 e da 260).
+
+- [x] **RN-260.03** — `GET /api/almoxarifado/aux/projetos` (com cliente) e `GET /api/requisicoes-material/aux/projetos` (só id, nome,
+  situação — B1613) — `5ca40351`.
+- [x] **RN-260.04** — as duas aux de OS devolvem `projeto_id` — só o projeto do mesmo cliente da OS (Fase 5) — `5ca40351`, `682fb1ae`.
+- [x] **RN-260.05** — o campo Projeto no formulário (trava quando vem da OS; o escolhido à mão volta ao destravar) — `af583d26`, `682fb1ae`.
+- [x] **RN-260.06** — a criação confere: inexistente, não é o da OS, ou de outro cliente que o da OS → 400; inativo passa; a cópia leva o
+  projeto só se ainda passa — `5ca40351`, `682fb1ae`.
+- [ ] A cesta **Solicitação de material** com o projeto — **fora** (D (260): o pedido era o formulário).
+- [ ] O projeto no detalhe da requisição e a edição depois de criada — **fora** (D (260)).
+
+Testes: `requisicaoProjeto.api.test.js` (19; 16 sabotagens), `RequisicaoFormProjeto.test.js` (7; 15 sabotagens). `recebimentoComOs [M1]` passou
+a semear por UPDATE a combinação que a rota agora recusa.

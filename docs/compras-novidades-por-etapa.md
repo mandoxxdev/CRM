@@ -5,7 +5,9 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** **2026-11-20 — Etapa 254 entregue:** o material criado pela sobra e pela remessa a terceiros chega ao
+> **Onde o desenvolvimento está:** **2026-11-23 — Etapa 260 entregue:** a busca de **Compras → Materiais** (e de Almoxarifado →
+> Materiais) acha o material pelos fornecedores cadastrados nele — nome, fantasia, código do fornecedor e descrição comercial —, e a lista
+> mostra esses fornecedores embaixo do nome (B93). Antes: **2026-11-20 — Etapa 254 entregue:** o material criado pela sobra e pela remessa a terceiros chega ao
 > **Compras → Materiais** marcado *cadastro a completar*, com aviso, filtro e selo, até o Compras salvar (B92). Antes: **2026-10-30 — Etapa 193 entregue** (`19c69056` a `262c6bd5`, na `main`): o **cadastro de
 > material passa a ser só do Compras** (o Almoxarifado consulta) e cada **item do pedido ganha a sua OS** (texto, só justificativa —
 > substitui o plano de 25 h de várias OS). A12, B74–B81, C (lote/série com saldo sem tela). Antes: **2026-10-30 — Etapa 192 entregue** (`ad99f567` a `3a293902`, na `main`): **CPF** e
@@ -631,6 +633,10 @@
   marcado. **Descartado:** tirar a criação desses fluxos (o almoxarife não registraria o retalho na hora — B74); exigir NCM ou custo para
   tirar a marca (mudaria o que o cadastro exige). Detalhe e decisões vizinhas: **B1593** a **B1595** em `docs/almoxarifado-novidades-por-etapa.md`.
   **Reversível.**
+- **B93 — 23/11/2026 (Etapa 260): a lista de materiais busca e mostra os fornecedores do material; o texto antigo do Fornecedor
+  Principal fica na busca e só aparece na lista, marcado *"(cadastro antigo)"*, quando não há fornecedor vinculado.** A migração da Etapa 212
+  só converteu o texto que batia com um fornecedor só; tirá-lo da lista esconderia a única informação daquele material. **Descartado:** tirar
+  o texto antigo de tudo. Detalhe: **B1610** em `docs/almoxarifado-novidades-por-etapa.md`. **Reversível.**
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -810,6 +816,40 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 260 — A busca de materiais acha pelo fornecedor (2026-11-23)
+
+**Em uma frase.** Desde a Etapa 212 o material tem vários fornecedores, cada um com o seu código, mas a lista de materiais continuava
+buscando e mostrando só o texto antigo do *Fornecedor Principal*. Agora a busca acha pelo fornecedor e a lista mostra os fornecedores (B93).
+A mesma etapa pôs o Projeto na requisição e agrupou a Fila de separação — seção da Etapa 260 em `docs/almoxarifado-novidades-por-etapa.md`.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais** e **Almoxarifado → Materiais**: a busca (*"Buscar por nome, código, fornecedor ou código do fornecedor..."*) acha
+  o material pela razão social, pelo nome fantasia, pelo código que o fornecedor usa e pela descrição comercial de qualquer fornecedor
+  vinculado a ele.
+- Embaixo do nome: *"Fornecedores: Aços Brasil, BETA METAIS SA"* (até três; depois *"+N"*). Sem fornecedor vinculado e com o texto antigo:
+  *"Fornecedor (cadastro antigo): ⟨texto⟩"*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Buscar o fornecedor ou o código dele não achava o material | Acha |
+| Embaixo do nome, o texto antigo do Fornecedor Principal | Os fornecedores vinculados (o antigo só sem nenhum vinculado) |
+
+### Roteiro de teste manual (clicável)
+
+1. Administrador do Compras → **Compras → Materiais** → lápis de um material → **Fornecedores deste material** → vincule um fornecedor
+   com o código *AB-778* → **Salvar**.
+2. Na lista, **Confira** *"Fornecedores: ⟨nome⟩"* embaixo do nome. Busque parte do nome do fornecedor e depois *ab-77* → o material aparece.
+3. Repita a busca em **Almoxarifado → Materiais**.
+
+### O que a etapa NÃO cobre
+
+- O texto antigo do Fornecedor Principal continua na busca (B93).
+- Os seletores de material das outras telas (requisição, movimentação) não buscam pelo fornecedor: a busca deles é no navegador, por nome
+  e código.
 
 ## Etapa 254 — Material da sobra e da remessa com "cadastro a completar" (2026-11-20)
 
