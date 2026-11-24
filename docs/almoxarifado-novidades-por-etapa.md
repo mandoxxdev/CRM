@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-23):** **Etapa 260 fechada** (**a busca de materiais acha pelo fornecedor, a requisição ganha o
+> **Onde o desenvolvimento está (2026-11-24):** **Etapa 261 fechada** (**o histórico de Movimentações diz de quais prateleiras a peça
+> saiu e o estorno do Ajuste de prateleira respeita a contagem mais recente** — itens 4 e 5 da estimativa de 23/11 (**D (252)** 1 e **D (258)** 5
+> resolvidas). Decisões **B1614** a **B1616**; aviso novo **C554**; limitação **D (261)**; verificação **F (261)**; sem consulta antes do deploy).
+> **Próxima:** os itens 6 e 7 da estimativa de 23/11 (fim do plano da 261).
+> *(Antes, 2026-11-23:)* **Etapa 260 fechada** (**a busca de materiais acha pelo fornecedor, a requisição ganha o
 > Projeto e a Fila de separação agrupa por setor ou projeto** — itens 1 a 3 da estimativa de 23/11. Decisões **B1610** a **B1613** (a
 > **B1612** revê a **B1600**); limitação **D (260)**; verificação **F (260)**; sem consulta antes do deploy). **Próxima:** os itens 4 e 5 da
 > estimativa de 23/11 (fim do plano da 260).
@@ -4888,7 +4892,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15631,6 +15635,33 @@ lá.** A entrega dividida (parte da origem + parte automática) dava as séries 
 A2. Agora as séries que estão na origem vão primeiro. Só muda **quais** séries vão em cada saída, nunca as quantidades — vale também para
 material com lote. **Descartado:** só para material sem lote (a mesma troca de séries acontecia com lote). **Reversível.** `89665967`.
 
+**B1614 (NOVA, da Etapa 261; decisão do agente) — o estorno do Ajuste de uma prateleira é recusado quando, depois dele, há um Ajuste do total,
+uma conferência de inventário ou um Ajuste da mesma prateleira e do mesmo lote.** É a regra da **B1606** (a contagem mais recente vale) levada
+ao Ajuste feito numa prateleira. Medido: *A* 5; Ajuste de *A* para 3; Ajuste do total para 7; **Estornar** o primeiro → antes, total **9** (a
+contagem dizia 7); com um Ajuste de *A* para 6 no lugar do total, **8** (a contagem de *A* dizia 6). **Escolhido:** recusar nesses três casos,
+com as mesmas mensagens da B1606, e deixar passar o Ajuste de **outra** prateleira ou de **outro lote** na mesma prateleira (ele contou só a
+linha dele; o estorno pela diferença dá o número certo — com a exceção rara da **D (261)** 1). **Descartado:** travar com qualquer Ajuste
+posterior do material (barraria o caso da outra prateleira, que está certo); travar só com o Ajuste do total (deixaria o caso do 8, em
+silêncio). Na revisão final: um ajuste mais recente cujo estorno ainda está em andamento conta como valendo (dois estornos no mesmo
+instante deixavam o mais antigo estornado e o mais recente de pé, com 1 peça a menos) — vale também para a B1606. **Reversível.**
+`125db383`, `6b18d4de`.
+
+**B1615 (NOVA, da Etapa 261; decisão do agente) — o "Saiu de" do histórico aparece mesmo quando a peça saiu de uma prateleira só, e no Ajuste
+do total mostra também a parte da posição padrão.** A tela de Movimentações não mostrava endereço nenhum. **Escolhido:** mostrar *"Saiu de:
+⟨prateleira⟩ ⟨quantidade⟩ · …"* sempre que o sistema guardou de onde tirou (Saídas e Ajustes do total feitos desde 20/11); no Ajuste do total,
+o que saiu da posição padrão aparece como *"posição padrão"*, sem código (o endereço padrão daquela hora não é guardado; o de hoje pode ser
+outro). Quando a posição padrão **subiu** no Ajuste (estava negativa), não aparece nada — a conta não fecharia (revisão do plano). **Descartado:**
+mostrar só quando foram duas prateleiras ou mais (esconderia a prateleira da saída automática de uma só); gravar a prateleira na própria linha
+do histórico (**B1581**: mudaria o estorno). **Reversível.** `caff2759`, `334752a7`, `87a7ef3f`.
+
+**B1616 (NOVA, da Etapa 261; decisão do agente) — com material separado na caixa, a contagem da prateleira feita depois também trava o estorno
+do ajuste que baixou.** Caso medido: 4 separados na caixa de uma requisição, tirados de *A*; a contagem de *A* não os viu (Ajuste de *A* para
+0, com o aviso de caixa), depois outra contagem (Ajuste de *A* para 3). Até a 260, **Estornar** o Ajuste para 0 dava 7 (certo nesse caso). Pela
+B1614 ele é recusado, porque a contagem de *A* para 3 é mais recente. **Escolhido:** manter a recusa; o caminho é o que a mensagem diz, um
+**Ajuste novo** de *A* contando a caixa (7), que passa sem aviso. **Descartado:** deixar o Ajuste da mesma prateleira fora da trava só por
+causa deste caso — no caso comum, sem caixa, o estorno daria 8 com a contagem dizendo 6, em silêncio. O aviso do ajuste com caixa continua
+dizendo *"estorne o ajuste que baixou o estoque"* (**C554**). **Reversível.** `61ead3b6`.
+
 **B1610 (NOVA, da Etapa 260; decisão do agente) — a lista de materiais busca e mostra os fornecedores do material; o texto antigo do
 Fornecedor Principal fica na busca e só aparece na lista quando não há fornecedor vinculado.** O pedido (item 1 da estimativa de 23/11) era
 mostrar os fornecedores da seção Fornecedores do material "e não mais o texto antigo". **Escolhido:** a lista mostra os vinculados (até três e
@@ -20254,6 +20285,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de novo → nada a devolver; físico **11** (o certo: 8). **O que fazer:** depois de uma falha na exclusão, **excluir de novo** logo em
      seguida (devolve só o que faltava — **B1609**), sem registrar devolução no meio. Conserto: a conta do que já voltou de uma saída passar a
      contar a entrada parcial da exclusão (a mesma conta serve a cinco lugares — fica para quando aparecer).
+554. **NOVO (da Etapa 261) — o aviso do ajuste com material separado na caixa manda estornar o ajuste que baixou, e com outra contagem da
+     mesma prateleira depois esse estorno é recusado.** Medido: 4 separados na caixa (tirados de *A*); Ajuste de *A* para 0 → aviso
+     *"… estorne o ajuste que baixou o estoque …"*; Ajuste de *A* para 3 (mesmo aviso); **Estornar** o Ajuste para 0 → *"Não é possível
+     estornar: há um ajuste deste material feito depois deste (movimentação #⟨número⟩) — a contagem mais recente vale. Estorne primeiro o
+     ajuste mais recente ou faça um novo ajuste."* (o mais recente também não se estorna: baixaria abaixo da caixa). **O que fazer:** um
+     **Ajuste novo** de *A* contando também o que está na caixa (3 + 4 = 7) — passa sem aviso (**B1616**).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -21610,6 +21647,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(261) O "Saiu de" do histórico e o estorno do Ajuste de prateleira, o que ficou de fora.** (1) O Ajuste de **outra** prateleira pode
+  subir a linha da prateleira deste quando ela estava negativa sem lote (material com saldo em lote e sem lote misturados) — o estorno do
+  Ajuste de prateleira não vê isso e ainda pode inventar peças: *A* 5, Entrada de 10 em *B* no lote L1, Ajuste de *A* para 3, Saída de 5 sem
+  lote (*A* −2), Ajuste de *B*/L1 para 0 (total 0, *A* 0), **Estornar** o Ajuste de *A* → total 2 (anterior; raro; o conserto exigiria guardar
+  as linhas que o Ajuste com prateleira acerta). (2) Num material cujo total não batia com as prateleiras (dado antigo), a parte *"posição
+  padrão"* do Ajuste do total inclui o que nunca teve endereço. (3) O Ajuste do total que só baixou a posição padrão (sem tirar de outra
+  prateleira), as Saídas e Ajustes feitos **antes de 20/11** e as Entradas/Transferências ficam sem *"Saiu de"*. (4) O *"Saiu de"* está só na
+  tela **Movimentações** — não no extrato do material, no painel, no relatório *Histórico de movimentações* nem no Excel. (5) Os estornos de
+  Ajuste de prateleira **já feitos** não mudam. (6) Nenhum clique foi dado (**F (261)**).
 - **(260) Fornecedores na busca, projeto na requisição e Fila agrupada, o que ficou de fora.** (1) A cesta **Solicitação de material**
   dos módulos não ganha o campo Projeto. (2) O detalhe da requisição não mostra o projeto, e ele não se edita depois de criada (não há
   edição de rascunho). (3) Com só o número da OS digitado (sem OS cadastrada), o projeto de outro cliente num material de cliente é aceito
@@ -21631,7 +21677,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   antes passava inventando peças; o caminho é um Ajuste novo. (4) O Ajuste sem lote de um material cujo saldo está todo em lotes: quando o
   estorno baixa o total, as prateleiras com lote não cedem e a padrão sem lote pode ficar negativa (o Ajuste de ida faz o mesmo; anterior).
   (5) O estorno de um Ajuste **com** prateleira não olha um Ajuste do total feito depois (5 em *A*, Ajuste de *A* para 3, Ajuste do total para
-  7, estorno do primeiro → 9; a contagem diz 7) — anterior, não mexido; estorne na ordem inversa. (6) Uma conferência de inventário feita
+  7, estorno do primeiro → 9; a contagem diz 7) — anterior, não mexido; estorne na ordem inversa. *(**Resolvido na Etapa 261** — `125db383`: o
+  estorno é recusado com a mensagem da contagem mais recente, também com o Ajuste da mesma prateleira e lote feito depois — **B1614**.)* (6) Uma conferência de inventário feita
   depois de um Ajuste trava o estorno dele para sempre (o inventário não se estorna): o caminho é um Ajuste novo. (7) Não há tela nova: o que
   muda aparece no total e no saldo por prateleira.
 - **(257) O estorno da Saída que devolve às prateleiras, o que ficou de fora.** (1) **Saída feita antes da etapa** (sem o registro de onde
@@ -21670,7 +21717,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   prateleira, ainda pode deixar o "sem lote" negativo (anterior; o inventário não indica lote). (4) Se o registro do Ajuste com lote falhar
   depois de drenar as prateleiras do lote, as prateleiras não voltam (o mesmo do Ajuste sem lote; só o estorno tem o desfazer).
 - **(252) A troca para o automático, a frase da outra peça e a peça com série, o que ficou de fora.** (1) A saída automática continua sem
-  endereço no histórico de movimentações; só o registro da troca o diz (**B1581**). (2) A peça com série sem separação de outro item no
+  endereço no histórico de movimentações; só o registro da troca o diz (**B1581**). *(**Resolvido na Etapa 261** — `caff2759`, `334752a7`:
+  a linha da Saída na tela Movimentações diz *"Saiu de: A 3 · B 3"* — **B1615**; a linha do histórico continua sem endereço gravado.)* (2) A peça com série sem separação de outro item no
   caminho continua saindo da linha de sempre (a padrão, depois a maior) — o saldo da prateleira e as séries dela podem não bater, como antes
   (**B1583**). (3) Depois de uma transferência, o endereço gravado na série não é usado (**B1584**). (4) Material com lote e série: a parte
   automática continua saindo do lote das séries, sem endereço. (5) A peça com série escolhida na própria prateleira que outro item separou
@@ -23267,6 +23315,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(261) Nenhum clique foi dado.** O *"Saiu de"* foi provado pela rota real (`GET /movimentacoes`, com Saídas, Ajustes e estornos
+reais) e pela tabela da tela com o JSON do contrato (mock só na fronteira HTTP); o estorno pela rota e pelo serviço. Vale 5 minutos: o roteiro da
+seção da Etapa 261 no guia.
 
 **(260) Nenhum clique foi dado.** A busca e a lista de materiais foram provadas pelas rotas reais (Almoxarifado e Compras) e pela tabela; o
 projeto pelas rotas de criação, cópia, aprovação, separação, entrega e Fila e pelo formulário (mock só na fronteira HTTP); o agrupamento pela
@@ -44708,12 +44760,69 @@ setor** → blocos *"Setor: ⟨nome⟩ — N requisições"*, o da requisição 
 - Não há agrupamento por localização (**B1612**).
 - A lista de projetos dos módulos mostra os nomes de até 500 projetos a quem cria requisição (**B1613**).
 
+## Etapa 261 — O histórico diz de quais prateleiras a peça saiu, e o estorno do Ajuste de prateleira respeita a contagem mais recente (2026-11-24)
+
+Dois pedidos da semana. **(1)** Desde 20/11 o sistema guarda de quais prateleiras cada Saída tirou as peças (para o estorno devolver a cada
+uma), mas a tela de Movimentações não mostrava: a Saída automática que tirou 3 de *A* e 3 de *B* aparecia só com *"−6"*. Agora a linha diz
+*"Saiu de: A 3 · B 3"*. **(2)** O estorno de um Ajuste feito **numa prateleira** desfazia a diferença mesmo depois de uma contagem mais nova:
+5 em *A*, Ajuste de *A* para 3, Ajuste do total para 7, **Estornar** o primeiro → 9, quando a última contagem disse 7. Agora ele é recusado,
+como o estorno do Ajuste do total já era desde a Etapa 258. Decisões do agente: **B1614** a **B1616**; aviso novo **C554**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Saída automática de 6 (3 de *A*, 3 de *B*): a linha do histórico só com *"−6 UN"* | Abaixo da quantidade: *"Saiu de: A 3 · B 3"* |
+| Saída com a origem escolhida: nenhuma prateleira na linha | *"Saiu de: A 2"* |
+| Ajuste do total para 2 com *A* 3 (padrão) e *B* 5: nenhuma prateleira | *"Saiu de: B 3 · posição padrão 3"* |
+| *A* 5 → Ajuste de *A* para 3 → Ajuste do total para 7 → **Estornar** o primeiro: total **9** | Recusado; o total continua 7 |
+| *A* 5 → Ajuste de *A* para 3 → Ajuste de *A* para 6 → **Estornar** o primeiro: *A* **8** | Recusado; *A* continua 6 |
+| Conferência de inventário depois de um Ajuste de prateleira: o estorno passava | Recusado, com a mensagem do inventário |
+
+### As regras, com o cenário exato
+
+Preparação: administrador; um material sem lote, sem número de série, posição padrão *A*, e uma prateleira *B*.
+
+**1. O "Saiu de" (RN-261.03 a .05, B1615).** **Movimentações → Nova** → Entrada 3 (sem prateleira: vai para *A*) → Entrada 5 em *B* → Saída de
+6 sem escolher a origem. Na lista, a linha da Saída mostra *"−6 UN"* e, embaixo, *"Saiu de: A 3 · B 3"*. Faça um **Ajuste** do total para 1
+→ a linha do Ajuste diz *"Saiu de: B 1"* (*A* já estava em 0). As Entradas não têm *"Saiu de"*.
+
+**2. O estorno recusado (RN-261.01, B1614).** O Ajuste **de uma prateleira** não é oferecido pela tela (só pela integração:
+`POST /api/almoxarifado/movimentacoes/v2` com `tipo: "AJUSTE"` e `localizacao_destino_id`); o **Estornar** é pela tela. Outro material: Entrada
+5 → Ajuste da prateleira *A* para 3 (integração) → **Ajuste** do total para 7 (tela) → na linha do primeiro Ajuste, **Estornar** → *"Não é possível estornar: há um ajuste deste material feito depois deste
+(movimentação #⟨número do Ajuste para 7⟩) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste."* O
+total continua 7. Estorne o Ajuste para 7 (volta a 3) e depois o primeiro (volta a 5). Se duas pessoas estornarem os dois no mesmo
+instante, o do mais antigo é recusado com a mesma mensagem enquanto o do mais recente não termina (revisão final; vale também para o Ajuste
+do total) — basta tentar de novo.
+
+**3. O que não trava (RN-261.02).** Com *A* 5 e *B* 4: Ajuste de *A* para 3, Ajuste de *B* para 2 (os dois pela integração), **Estornar** o de
+*A* → passa: total 7
+(*A* 5, *B* 2). O mesmo com outro lote na mesma prateleira, e com o Ajuste do total feito **antes**.
+
+**4. Depois de uma conferência de inventário.** Ajuste de *A* para 3 (integração); conclua uma conferência com ajuste deste material; **Estornar** o
+Ajuste de *A* → *"Não é possível estornar: há uma conferência de inventário deste material feita depois deste ajuste (movimentação
+#⟨número⟩) — a contagem mais recente vale. Faça um novo ajuste."*
+
+### O que esta etapa NÃO cobre
+
+- Saídas e Ajustes feitos antes de 20/11, o Ajuste do total que só baixou a posição padrão e o Ajuste em que a posição padrão subiu ficam sem
+  *"Saiu de"*; o *"Saiu de"* só está na tela Movimentações (**D (261)**).
+- O Ajuste de outra prateleira que acerta uma linha negativa sem lote desta não trava o estorno (raro, **D (261)** 1).
+- Com material na caixa de separação, o aviso do ajuste manda estornar o que baixou, e com outra contagem da prateleira depois isso é
+  recusado: o caminho é um Ajuste novo (**C554**, **B1616**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 261 entregue (2026-11-24):** **o histórico de Movimentações diz de quais prateleiras a Saída e o Ajuste tiraram as peças, e o
+  estorno do Ajuste de prateleira respeita a contagem mais recente** (itens 4 e 5 da estimativa de 23/11; **D (252)** 1 e **D (258)** 5
+  resolvidas). Commits `74822036` (plano), `125db383`, `caff2759`, `334752a7`, `a4c40e2a`, `61ead3b6`, Fase 2 `87a7ef3f`, Fase 5 `6b18d4de`
+  e o fechamento. **O que é seu:** as **B1614** a **B1616** (reversíveis); o aviso **C554**; a limitação **(261)** em D e a verificação **(261)** em
+  F. Sem consulta antes do deploy. **Próxima:** os itens 6 e 7 da estimativa de 23/11 (fim do plano da 261).
 
 - **Etapa 260 entregue (2026-11-23):** **a busca de materiais acha pelo fornecedor (Compras e Almoxarifado), a requisição ganha o campo
   Projeto (vem da OS cadastrada; o projeto que não combina com a OS é recusado) e a Fila de separação agrupa por setor ou projeto** (itens

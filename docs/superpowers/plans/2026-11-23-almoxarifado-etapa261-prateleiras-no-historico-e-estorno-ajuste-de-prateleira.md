@@ -97,13 +97,94 @@ com um ajuste da mesma prateleira depois, isso é recusado (**C554**). Teste atu
 
 ## Tasks
 
-- [ ] **T1 (tronco, motor)** item 5: a guarda no ramo com localização (a mesma consulta da RN-258.07 extraída num helper, parametrizada);
-  teste novo `estornoAjustePrateleiraContagem.api.test.js` (cenários 1-4, inventário, outro lote, contagem estornada, ordem inversa,
-  pelo serviço). Sabotagens.
-- [ ] **T2 (galho, leitura)** item 4: a rota (`prateleiras`) + `movimentacoesPrateleirasDaSaida.api.test.js` (Saída automática de duas
-  prateleiras; Ajuste que drena com a parte padrão; movimento sem registro `[]`; Saída com lote em duas prateleiras soma). Sabotagens.
-- [ ] **T3 (galho, tela)** `MovimentacoesPrateleirasDaSaida.test.js` (Jest): a frase, os rótulos sem endereço/padrão, nada sem registro.
-- [ ] **T4 integração:** pela rota — Saída de 6 de *A* 3 + *B* 5, o histórico diz *A* 3 · *B* 3; Ajuste de *A*, Ajuste do total, o estorno
-  recusado, o histórico intacto.
-- [ ] **T5** Fase 2 (revisor fresco) e **T6** Fase 5 (adversarial, sondas executadas em cópia, falha forçada).
-- [ ] **T7** fechamento (fechar-etapa sem 7½ e 8) + Passo 7¼.
+- [x] **T1 (tronco, motor)** item 5 — `125db383`: `recusarSeContagemDepois` (a consulta da RN-258.07 virou função, com a condição da linha
+  por ramo) e a chamada no ramo com localização; `estornoAjustePrateleiraContagem.api.test.js` 11 no commit (**6 vermelhos no código de
+  antes**, os 5 "não trava" verdes nos dois). Sabotagens **S1-S9** (harness `scratchpad/sab-261-harness.js`: âncora contada = 1, cópia,
+  md5 antes/sabotado/restaurado): sem a guarda, sem o lote, sem a prateleira, a mais antiga, a estornada contando, a guarda na compensação,
+  o inventário com a mensagem de ajuste, sem o inventário, sem o Ajuste do total — cada uma derruba o seu cenário pela asserção certa.
+- [x] **T2 (galho, leitura)** item 4 — `caff2759`: `anexarPrateleirasDaBaixa` na rota; `movimentacoesPrateleirasDaSaida.api.test.js` (6 no
+  commit). Sabotagens **R1-R7** (sem anexar, sem a padrão, padrão 0, agrupar por linha, só o 1º bloco, ordem por código, padrão também na
+  Saída) — a R7 não derrubava nada na 1ª rodada (a conta dá 0 numa Saída íntegra): ganhou o cenário do registro menor que a quantidade.
+- [x] **T3 (galho, tela)** — `334752a7`: `MovimentacoesPrateleirasDaSaida.test.js` (3; **3 vermelhos antes**). Sabotagens **F1-F5**.
+- [x] **T4 integração** — `a4c40e2a` (no arquivo da rota): Saída de *A* e *B*, Ajuste de *B*, Ajuste do total, o estorno do de *B* recusado,
+  o da Saída devolve a cada prateleira, o histórico intacto. Controle positivo: sem a guarda (I1) e sem anexar (I2), cai.
+- [x] **T4b** — `61ead3b6`: os 42 arquivos de `tests/api` com AJUSTE e estorno, um a um: só o J5 da 104 caiu (B1616, C554; ver Fase 2).
+- [x] **T5** Fase 2 — `87a7ef3f` (achado 2 consertado; sabotagem R8). **T6** Fase 5 — `6b18d4de` (abaixo).
+- [x] **T7** fechamento (fechar-etapa sem 7½ e 8) + Passo 7¼ — o commit de fechamento e o do estimado × realizado. Primeiro boot: **não se
+  aplica** (nenhuma tabela nem coluna).
+
+## Fase 5 (revisor adversarial fresco, 24/11, sondas executadas em cópia de `server/`)
+
+1. **[importante, reproduzido]** O claim do estorno (`cancelado = 1`) roda **fora** da trava do material, e a guarda filtrava `cancelado = 0`:
+   dois estornos juntos (*A* 5, Ajuste de *A* para 8, para 10, Saída 6) — o do mais recente faz o claim e espera; o do mais antigo o lê como
+   cancelado e passa; o do mais recente falha depois (*"a localização não comporta"*) e volta. Final: o antigo estornado com o recente vivo,
+   total 1 (o certo, 2). **16/30** rodadas sem forçar nada (`fase5-261-corrida2.js`), **17/30** no ramo **sem** localização (anterior, desde
+   a 258; `corrida3`) — reproduzido por mim no repositório antes do conserto. → **consertado** `6b18d4de`: "vivo" = `NOT estornoConcluidoSql`
+   (a régua de `devolucaoViva.js`); 30/30 certas nos dois ramos. Cenário determinístico (a trava segura pelo teste, os dois estornos
+   disparados do contexto do teste — molde do CLAUDE.md), nos dois ramos; 5 rodadas seguidas, 14/14. Sabotagem S10 (o `cancelado = 0` de
+   antes) derruba os dois. Preço: enquanto o estorno do mais recente roda, o do mais antigo é recusado e a pessoa tenta de novo.
+2. **[menor, cobertura]** A fronteira sem lote × com lote na mesma prateleira não tinha cenário: duas sabotagens passavam → cenário novo;
+   S11 e S12 derrubam.
+3. **[ruído]** `GET /movimentacoes` com 5002 movimentos e 10000 linhas de registro, sem `limit`: ~113 ms contra ~86 ms sem as prateleiras;
+   com `limit=200` (a tela), 7 ms nos dois.
+- Tentado e não quebrou: a recusa devolve o claim inteiro (`cancelado`, `cancelado_por`, motivo, `regularizacao_pendente`) e não grava
+  ESTORNO; **falha forçada** (trigger no INSERT do ESTORNO): 500, estado idêntico, a 2ª tentativa certa; Ajuste de *A* disparado junto com
+  o estorno do Ajuste de *A*: 30/30 iguais ao serial; Ajuste sem localização com lote depois trava (é do total); Transferência para *A* depois
+  passa pela diferença; o mascaramento de EPI não toca os códigos de prateleira; filtros, `limit` e o portão iguais.
+
+## Divergências do plano
+
+- O plano previa só a guarda e a leitura. A integração dos 42 arquivos achou o J5 da 104 (B1616, C554); a Fase 2 tirou o *"Saiu de"* do
+  Ajuste em que a padrão sobe; a Fase 5 trocou o "vivo" da guarda (os dois ramos — mexe também na RN-258.07 da 258).
+- A RN-261.02 dizia, sem exceção, que a outra prateleira dá o número certo — **estava incompleta** (Fase 2, achado 1; D (261) 1).
+- **O plano e o primeiro rascunho dos documentos diziam "Ajuste escolhendo a prateleira *A*" na tela — estava errado:** a tela de
+  Movimentações não oferece prateleira no Ajuste (`TIPOS_COM_DESTINO` = Entrada e Transferência; o manual 3.6 já dizia "a contagem por
+  posição é feita pela integração"). Os roteiros do guia e das novidades dizem agora "pela integração".
+- A primeira rodada da Fase 2 foi cortada pelo limite de uso e refeita sobre o código; a base de `test:api` (658/658, abaixo) rodou
+  enquanto o T1 era escrito — os arquivos do fim da fila já carregaram a guarda nova.
+- **CLAUDE.md:** nenhuma linha ficou errada — a seção das travas não descreve a guarda da contagem; a leitura nova roda dentro da seção do
+  material que ela já descreve, e o claim provisório fora da trava já estava descrito.
+
+## Próxima tarefa detalhada
+
+Os itens **6 e 7** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`), juntos numa etapa — o
+mesmo ramo do `cancelarMovimentacao` (a entrada de uma devolução):
+
+1. **Item 6 — o estorno da devolução para Quarentena desfaz o bloqueio (C239, B761; 1h15, motor).** A devolução para Quarentena grava duas
+   pernas (`returnService.js` ~332: `ENTRADA_DEVOLUCAO` + `BLOQUEIO`, as duas com `referencia DEV-<id>`, sob a trava do material). O estorno da
+   entrada (`stockService.js` ~3294, `devolucaoDaEntrada`) só olha o destino `SUCATA` (`entradaDaSucata`, a guarda da 117) e as séries; o
+   `BLOQUEIO` fica de pé e o disponível fica a menos. Caminho reversível a decidir por sonda (letra B): **(a)** estornar a perna do bloqueio
+   junto, dentro da mesma seção do material, com o desfazer dela no catch (CLAUDE.md: "uma seção só vai do efeito ao livro", Etapa 118), ou
+   **(b)** recusar como a Sucata, mandando estornar o bloqueio antes (literal no molde de `mensagemEntradaDaSucata`). O (b) é o mais barato e o
+   mesmo padrão da Sucata; o (a) é o que o operador espera. Pontos de atenção: o bloqueio pode já ter sido desbloqueado em parte (a guarda
+   *"o bloqueio já foi desfeito"* do estorno de BLOQUEIO, lote incluído — manual 15.3); as séries da quarentena; a caixa (o desbloqueio só cabe
+   no livre fora da caixa). Molde de teste: o da guarda da Sucata (grep "C237" em `tests/api`) e `devolucaoDoQueVoltou.api.test.js`.
+2. **Item 7 — o estorno da entrada de uma devolução de requisição já excluída é recusado (C552; 1h).** Mesma leitura `devolucaoDaEntrada`
+   (`movimentacao_saida_id`): se a saída citada é a entrega de uma requisição **excluída** (a exclusão já descontou a devolução — Etapa 259),
+   recusar **antes do claim**, com uma literal que diga o caminho (um Ajuste). Medir na Fase 0 como a exclusão marca a requisição e se a saída
+   da entrega fica estornada (`cancelado`) ou só ganha a ENTRADA da exclusão. Atenção à ordem com a guarda da Sucata e à `compensacao: true`
+   (não passa).
+- Motor/estorno: Fase 2 e Fase 5 com sonda executada e falha forçada, como nesta.
+- **O que já está pronto e não reabre:** o *"Saiu de"* na tela Movimentações; a guarda da contagem mais recente nos dois ramos do estorno do
+  Ajuste, com o "vivo" = estorno concluído.
+
+## Verificação (medida sobre o código final, `6b18d4de`)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **660/660 arquivos OK** (o mais lento: `propostaClausulasGrava`, 70,8 s).
+  Base antes de começar (sobre `74dd633c`, com o T1 sendo escrito no meio): **658/658**.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, sobre `334752a7`; a tela não mudou depois): **244/244 suítes, 3270/3270 testes**.
+- `CI=true npx react-scripts build`: **Compiled successfully.**
+- `estornoAjustePrateleiraContagem` 14/14 (5 rodadas seguidas), `movimentacoesPrateleirasDaSaida` 8/8, `estornoAjusteForaDeOrdem` 22/22,
+  `ajusteEnderecoCaixaIntegracao` 5/5; os 42 arquivos com ajuste e estorno, um a um, depois do T1: só o J5 caiu (atualizado).
+- Primeiro boot: não se aplica. Nenhum clique no navegador (F (261)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (T1/T2/T3; Fase 2 — a padrão que sobe e o J5 da 104; Fase 5 — o claim provisório).
+- Achados: Fase 2 — 1 importante anterior (declarado), 1 menor consertado, 2 menores declarados, ruídos verificados; Fase 5 — 1 importante
+  (consertado, também no ramo da 258), 1 de cobertura (cenário novo), 1 ruído (desempenho medido).
+- Paralelismo: nenhum galho em paralelo (mesma árvore, em sequência); os revisores rodaram em paralelo com o trabalho. A sabotagem do
+  harness rodou enquanto a Fase 2 sondava o repositório — risco de contaminar a sonda dela; nenhum achado dela dependeu disso (os
+  reproduzidos foram refeitos por mim).
+- Defeito que escapou: (preencher na etapa seguinte). Da 260: nenhum apontado.

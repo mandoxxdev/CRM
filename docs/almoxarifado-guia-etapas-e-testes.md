@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-20 (Etapa 259 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-24 (Etapa 261 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 260 fechada — 2026-11-23.** **A busca de materiais acha pelo fornecedor, a requisição ganha o
+> **O desenvolvimento parou aqui: Etapa 261 fechada — 2026-11-24.** **O histórico de Movimentações diz de quais prateleiras a peça
+> saiu, e o estorno do Ajuste de prateleira respeita a contagem mais recente** (itens 4 e 5 da estimativa de 23/11). **Sem consulta antes do
+> deploy.** **Nenhum clique foi dado** (roteiro na seção da 261). **Onde parou, exatamente:** a **261 está fechada**; a próxima são os itens 6
+> e 7 da estimativa de 23/11 (fim do plano da 261).
+>
+> *(Antes:)* **Etapa 260 fechada — 2026-11-23.** **A busca de materiais acha pelo fornecedor, a requisição ganha o
 > Projeto e a Fila de separação agrupa por setor ou projeto** (itens 1 a 3 da estimativa de 23/11). **Sem consulta antes do deploy.**
 > **Nenhum clique foi dado** (roteiro na seção da 260). **Onde parou, exatamente:** a **260 está fechada**; a próxima são os itens 4 e 5 da
 > estimativa de 23/11 (fim do plano da 260).
@@ -7448,6 +7453,43 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 261 — O histórico diz de quais prateleiras a peça saiu, e o estorno do Ajuste de prateleira respeita a contagem mais recente (ENTREGUE — 2026-11-24)
+
+**Em uma frase:** na tela **Movimentações**, a linha da Saída e do Ajuste do total passa a dizer de quais prateleiras as peças saíram e quanto
+de cada uma (*"Saiu de: A 3 · B 3"*); e o **Estornar** de um Ajuste feito numa prateleira é recusado quando, depois dele, houve uma contagem
+mais nova (Ajuste do total, inventário, ou Ajuste da mesma prateleira e lote).
+
+| Antes | Agora |
+|---|---|
+| Saída que tirou de duas prateleiras: a linha só com *"−6 UN"* | Embaixo: *"Saiu de: A 3 · B 3"* |
+| Ajuste do total que tirou de outra prateleira: nenhuma prateleira | *"Saiu de: B 3 · posição padrão 3"* |
+| *A* 5 → Ajuste de *A* para 3 → Ajuste do total para 7 → **Estornar** o primeiro → total 9 | Recusado, com a mensagem da contagem mais recente; o total fica 7 |
+| *A* 5 → Ajuste de *A* para 3 → Ajuste de *A* para 6 → **Estornar** o primeiro → *A* 8 | Recusado; *A* fica 6 |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **administrador**. Escolha um material sem lote e sem série, com posição padrão *A*, e uma outra prateleira *B*.
+2. **Movimentações → Nova**: Entrada de 3 (sem prateleira) → Entrada de 5 escolhendo *B* → Saída de 6 sem escolher a origem.
+3. Na lista, **Confira:** a linha da Saída mostra *"−6 UN"* e, embaixo, *"Saiu de: A 3 · B 3"* (com o código das suas prateleiras). As linhas
+   das Entradas não têm *"Saiu de"*.
+4. Faça um **Ajuste** do total para 1 → **Confira:** *"Saiu de: B 1"*.
+5. Outro material: Entrada de 5 → Ajuste **da prateleira** *A* para 3 — a tela não oferece a prateleira no Ajuste; faça pela integração
+   (`POST /api/almoxarifado/movimentacoes/v2` com `tipo: "AJUSTE"`, `quantidade: 3`, `localizacao_destino_id` de *A*, motivo e justificativa)
+   → **Ajuste** do total para 7 pela tela.
+6. No primeiro Ajuste, clique **Estornar** (motivo qualquer) → **Confira:** *"Não é possível estornar: há um ajuste deste material feito depois
+   deste (movimentação #⟨número⟩) — a contagem mais recente vale. Estorne primeiro o ajuste mais recente ou faça um novo ajuste."* e o total
+   continua 7.
+7. Estorne o Ajuste para 7 (**Confira:** total 3) e depois o primeiro (**Confira:** total 5).
+8. (Não trava) Com *A* 5 e *B* 4: Ajuste de *A* para 3, Ajuste de *B* para 2 (os dois pela integração), **Estornar** o de *A* → **Confira:** passa, total 7.
+
+**O que esta etapa NÃO cobre:** Saídas e Ajustes de antes de 20/11, o Ajuste do total que só baixou a posição padrão e o Ajuste em que a
+posição padrão subiu ficam sem *"Saiu de"*; o *"Saiu de"* não está no extrato do material, no painel nem no relatório *Histórico de
+movimentações*; o Ajuste de outra prateleira que acerta uma linha negativa sem lote desta não trava o estorno (raro); com material na caixa de
+separação, o caminho depois de duas contagens da prateleira é um Ajuste novo contando a caixa.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 260 — Fornecedores na busca de materiais, projeto na requisição e Fila de separação agrupada (ENTREGUE — 2026-11-23)
 
