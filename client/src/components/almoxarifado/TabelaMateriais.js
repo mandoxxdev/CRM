@@ -38,6 +38,19 @@ export const temLoteImpedido = (m) => m.lote_impedido != null && Number.isFinite
   && Number(m.lote_impedido) > 0;
 export const seloLoteImpedido = (m) => `${Number(m.lote_impedido)}${m.unidade ? ` ${m.unidade}` : ''} em lote impedido`;
 
+// Etapa 260 (RN-260.02, B1610): a linha abaixo do nome — os fornecedores da seção Fornecedores do material (até três, depois "+N").
+// Sem nenhum vinculado, o texto antigo do Fornecedor Principal que a 212 não converteu (marcado como antigo); sem os dois, nada.
+export const MAX_FORNECEDORES_NA_LISTA = 3;
+export const textoFornecedores = (m) => {
+  const nomes = Array.isArray(m && m.fornecedores) ? m.fornecedores.filter(Boolean) : [];
+  if (nomes.length) {
+    const resto = nomes.length - MAX_FORNECEDORES_NA_LISTA;
+    return `Fornecedores: ${nomes.slice(0, MAX_FORNECEDORES_NA_LISTA).join(', ')}${resto > 0 ? ` +${resto}` : ''}`;
+  }
+  const antigo = String((m && m.fornecedor_principal) || '').trim();
+  return antigo ? `Fornecedor (cadastro antigo): ${antigo}` : '';
+};
+
 const getPct = (m) => {
   if (!m.quantidade_maxima || m.quantidade_maxima === 0) return 50;
   return Math.min(100, (m.quantidade_atual / m.quantidade_maxima) * 100);
@@ -84,7 +97,7 @@ export function FiltrosMateriais({
         <FiSearch className="almox-search-icon" />
         <input
           className="almox-search-input"
-          placeholder="Buscar por nome, código ou fornecedor..."
+          placeholder="Buscar por nome, código, fornecedor ou código do fornecedor..."
           value={search}
           onChange={(e) => onSearch(e.target.value)}
         />
@@ -187,8 +200,12 @@ export function TabelaMateriais({ materiais, loading, renderAcoes, mostrarCadast
                         </span>
                       )}
                     </div>
-                    {m.fornecedor_principal && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.fornecedor_principal}</div>
+                    {/* Etapa 260 (RN-260.02, B1610): os fornecedores da seção Fornecedores do material; sem nenhum, o texto antigo
+                        que a migração da 212 não converteu (o formulário também o mostra). */}
+                    {textoFornecedores(m) && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }} data-testid={`fornecedores-${m.id}`}>
+                        {textoFornecedores(m)}
+                      </div>
                     )}
                   </td>
                   <td>

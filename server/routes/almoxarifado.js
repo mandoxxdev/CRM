@@ -13,6 +13,7 @@ const multer = multerComLimiteNoErro(require('multer'));
 // global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
 const { erroComMensagemUsuario } = require('../services/errosApi');
 const { condicaoDeBusca } = require('../services/buscaSemCaixa');
+const fornecedoresDoMaterialSvc = require('../services/compras/fornecedoresDoMaterial'); // Etapa 260 (RN-260.01/02)
 const diaLocal = require('../services/diaLocal');
 // Etapa 192 (RN-192.10): as portas do Compras para o cadastro de material (ver o comentario junto do app.use do modulo).
 const cadastroDeMaterialCompras = require('../services/compras/cadastroDeMaterial');
@@ -475,8 +476,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // Etapa 160 (RN-160.04, C393): aparado e nas tres formas — o cadastro grava como digitado ("VÁLVULA" nao casava com "válvula")
       const busca = condicaoDeBusca(['m.nome', 'm.codigo', 'm.descricao', 'm.fornecedor_principal'], search);
       if (busca.sql) {
-        sql += ` AND ${busca.sql}`;
-        params.push(...busca.params);
+        // Etapa 260 (RN-260.01): tambem pelos fornecedores DO material (Etapa 212) — nome, codigo e descricao comercial da linha. O
+        // fornecedor principal antigo continua na busca (B1610: material cujo texto nao virou vinculo na 212 continua achavel).
+        const pf = await fornecedoresDoMaterialSvc.buscaPorFornecedor(db, (cols) => condicaoDeBusca(cols, search));
+        sql += pf.sql ? ` AND (${busca.sql} OR ${pf.sql})` : ` AND ${busca.sql}`;
+        params.push(...busca.params, ...(pf.sql ? pf.params : []));
       }
       if (categoria) {
         sql += ` AND m.categoria = ?`;
@@ -507,10 +511,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       sql += status === 'inativo' ? ' AND (m.ativo IS NULL OR m.ativo <> 1)' : ' AND m.ativo = 1';
       sql += ` ORDER BY f.nome ASC, m.nome ASC`;
 
-      db.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(enrichMaterialRows(rows).map((r) => ({ ...r, is_epi: !!r.is_epi })));
-      });
+      const rows = await dbAll(db, sql, params);
+      // Etapa 260 (RN-260.02): os nomes dos fornecedores do material (a lista mostra no lugar do fornecedor principal antigo)
+      const fornecedoresDe = await fornecedoresDoMaterialSvc.fornecedoresPorMaterial(db);
+      res.json(enrichMaterialRows(rows).map((r) => ({ ...r, is_epi: !!r.is_epi, fornecedores: fornecedoresDe.get(r.id) || [] })));
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

@@ -240,4 +240,49 @@ function guardarLinhaDoMaterial(db, pode) {
   };
 }
 
-module.exports = { MSG, MARCA_MIGRACAO, guardarLinhaDoMaterial, garantirSchema, migrarFornecedorPrincipal, normalizarNome, criarHandlers, listar, vincular, editar, remover, historicoDePrecos };
+// ── Etapa 260 (item 1, RN-260.01/02): a lista de materiais (Compras e Almoxarifado) com os fornecedores do material ────────────────
+
+/** A tabela core `fornecedores` existe? (o harness e o ambiente parcial nao a tem). PRAGMA, nunca a mensagem de erro (regua da 255). */
+async function temTabelaFornecedores(db) {
+  const cols = await dbAll(db, 'PRAGMA table_info(fornecedores)');
+  const nomes = new Set(cols.map((c) => c.name));
+  return ['id', 'razao_social', 'nome_fantasia'].every((c) => nomes.has(c));
+}
+
+/** O nome do fornecedor como a secao Fornecedores do material o mostra (SELECT_LINHA). */
+const NOME_FORNECEDOR_SQL = (f) => `COALESCE(NULLIF(TRIM(${f}.nome_fantasia), ''), ${f}.razao_social)`;
+
+/**
+ * RN-260.01: o pedaco da busca que casa as linhas de fornecedor DO material (`material_id`): codigo e descricao comercial da linha e,
+ * com a tabela `fornecedores`, a razao social e o nome fantasia. `condicao(colunas)` e o `condicaoDeBusca` do chamador (mesma regua de
+ * caixa). Devolve `{ sql, params }` — um `EXISTS` sobre `m.id` — ou `{ sql: '' }` sem termo.
+ */
+async function buscaPorFornecedor(db, condicao, aliasMaterial = 'm') {
+  const comFornecedores = await temTabelaFornecedores(db);
+  const colunas = ['bif.codigo', 'bif.descricao', ...(comFornecedores ? ['bf.razao_social', 'bf.nome_fantasia'] : [])];
+  const c = condicao(colunas);
+  if (!c.sql) return { sql: '', params: [] };
+  return {
+    sql: `EXISTS (SELECT 1 FROM itens_fornecedor bif ${comFornecedores ? 'LEFT JOIN fornecedores bf ON bf.id = bif.fornecedor_id' : ''}
+      WHERE bif.material_id = ${aliasMaterial}.id AND ${c.sql})`,
+    params: c.params,
+  };
+}
+
+/** RN-260.02: Map(material_id -> [nomes]) dos fornecedores ligados, sem repeticao, em ordem alfabetica. Sem a tabela: Map vazio. */
+async function fornecedoresPorMaterial(db) {
+  if (!(await temTabelaFornecedores(db))) return new Map();
+  const linhas = await dbAll(db, `SELECT i.material_id, ${NOME_FORNECEDOR_SQL('f')} AS nome
+    FROM itens_fornecedor i JOIN fornecedores f ON f.id = i.fornecedor_id WHERE i.material_id IS NOT NULL`);
+  const por = new Map();
+  for (const l of linhas) {
+    const nome = String(l.nome || '').trim();
+    if (!nome) continue;
+    if (!por.has(l.material_id)) por.set(l.material_id, new Set());
+    por.get(l.material_id).add(nome);
+  }
+  const ordem = (a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base', numeric: true });
+  return new Map([...por].map(([id, nomes]) => [id, [...nomes].sort(ordem)]));
+}
+
+module.exports = { MSG, MARCA_MIGRACAO, guardarLinhaDoMaterial, garantirSchema, migrarFornecedorPrincipal, normalizarNome, criarHandlers, listar, vincular, editar, remover, historicoDePrecos, buscaPorFornecedor, fornecedoresPorMaterial };
