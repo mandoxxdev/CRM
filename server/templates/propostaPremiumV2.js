@@ -1313,6 +1313,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .bi-pres li { padding-left: 5mm !important; }
     .bi-pres .bi-par + .bi-par { margin-top: 1.5mm; }
     .bi-item .equip-photo-float { float: none; margin: 0 auto 3mm; }
+    .bi-nota-legal { border: 0.3mm solid #c9d3e3; border-left: 1.2mm solid #1a7f9c; background: #f4f8fb; border-radius: 1.5mm;
+      padding: 2.5mm 3.5mm; margin: 0 0 6mm; break-inside: avoid; }
+    .bi-nota-legal p { font-size: 9pt !important; line-height: 1.35 !important; }
     `;
 
     // Incoterm (RN-BI.09): só quando preenchido — sem ele, nada muda no documento.
@@ -1504,6 +1507,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // global (Fase 2, I12).
     // Igual nas duas línguas (es: "EMPRESA CONTRATANTE:", "CNPJ:") sai uma vez só — não "CNPJ / CNPJ:" (Fase 5, 9).
     const rotuloCampo = (pt) => ((bi && T(pt) !== pt) ? `${pt.replace(/:$/, '')} / ${T(pt)}` : pt);
+    // Nota legal da proposta em outra língua (24/11/2026: "sempre que for em outro idioma, tem que aparecer uma nota legal de que a versão
+    // que vale é a em PTBR, mas isso só deve aparecer quando fazemos a proposta em outras línguas"). Antes dos campos de assinatura — onde
+    // o cliente aceita —, nos três documentos (equipamento, peças, serviço). Em pt-BR é '' e o documento não muda (RN-BI.01).
+    const notaLegalBi = !bi ? '' : (() => {
+      const lingua = { en: 'inglês', es: 'espanhol' }[idiomaDoc] || idiomaDoc;
+      const pt = `Esta proposta é apresentada em português e em ${lingua} apenas para facilitar a leitura. Em caso de divergência ou dúvida de interpretação entre as duas versões, prevalece a versão em português.`;
+      const tr = idiomaDoc === 'es'
+        ? { rotulo: 'Nota legal:', texto: 'Esta propuesta se presenta en portugués y en español únicamente para facilitar su lectura. En caso de divergencia o duda de interpretación entre ambas versiones, prevalecerá la versión en portugués.' }
+        : { rotulo: 'Legal notice:', texto: 'This proposal is presented in Portuguese and English for ease of reading only. In the event of any discrepancy or doubt of interpretation between the two versions, the Portuguese version shall prevail.' };
+      return `<div class="bi-nota-legal">${biPar(`<p><strong>Nota legal:</strong> ${esc(pt)}</p>`, `<p><strong>${esc(tr.rotulo)}</strong> ${esc(tr.texto)}</p>`)}</div>`;
+    })();
     const camposAssinaturaManualHtml = `
       <p class="campo-manual">${esc(rotuloCampo('Data da assinatura:'))} <span class="campo-branco campo-branco-dia"></span>/<span class="campo-branco campo-branco-mes"></span>/<span class="campo-branco campo-branco-ano"></span></p>
       <p class="campo-manual campo-manual-linha">${esc(rotuloCampo('Assinatura e carimbo da empresa CONTRATANTE:'))}</p>`;
@@ -1608,7 +1622,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${corpoHtml}
           ${fimHtml}
           <section class="block avoid-break assinatura-bi">
-            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-meio">${notaLegalBi}${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
               ${biFixo('p', 'Atenciosamente,')}
               ${assinaturasDoDoc}
@@ -1619,7 +1633,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${corpoHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
             <div class="assinatura-topo">${fimHtml}</div>
-            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-meio">${notaLegalBi}${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
               ${bi ? biFixo('p', 'Atenciosamente,') : '<p>Atenciosamente,</p>'}
               ${assinaturasDoDoc}
@@ -1666,7 +1680,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${clausulasPos525NormalHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
             <div class="assinatura-topo">${clausula525Html}</div>
-            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-meio">${notaLegalBi}${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
               ${bi ? biFixo('p', 'Atenciosamente,') : '<p>Atenciosamente,</p>'}
               ${assinaturasDoDoc}
@@ -1942,7 +1956,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
         </div>
 
-        <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+        <div class="assinatura-meio">${notaLegalBi}${camposAssinaturaManualHtml}</div>
 
         <div class="assinatura-rodape">
         <p>Atenciosamente,</p>
