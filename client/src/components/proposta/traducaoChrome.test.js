@@ -2,7 +2,46 @@
  * Proposta bilíngue — tradução no Chrome (specs/proposta-bilingue/README.md, RN-BI.05/07; Fase 2, I5/I18).
  * O tradutor do Chrome é substituído por um falso que erra como o de verdade errou no spike (CONTRATANTE -> CONTRACTOR).
  */
-import { protegerTexto, restaurarTexto, traduzirTexto, textosDoDocumento, temTradutorDoChrome, GLOSSARIO } from './traducaoChrome';
+import {
+  protegerTexto, restaurarTexto, traduzirTexto, textosDoDocumento, temTradutorDoChrome, GLOSSARIO,
+  linguaJaBaixada, traduzirPendentesDaProposta,
+} from './traducaoChrome';
+
+test('[automatica] traduz SO os pendentes do documento do servidor e grava como auto, em lote', async () => {
+  const html = `<div id="proposalSource">
+    <p data-tr-origem="Garantia." data-tr-texto="Warranty.">Warranty.</p>
+    <p class="bi-pendente" data-tr-origem="A CONTRATANTE pagará." data-traduzir="A CONTRATANTE pagará.">x</p>
+    <span class="bi-pendente" data-tr-origem="METODOLOGIA" data-traduzir="METODOLOGIA">x</span></div>`;
+  const api = { get: jest.fn(async () => ({ data: html })), post: jest.fn(async () => ({ data: { gravadas: 2 } })) };
+  const progresso = [];
+  const r = await traduzirPendentesDaProposta({ api, propostaId: 7, idioma: 'en', tradutorPromessa: Promise.resolve(falso),
+    aoProgredir: (f, t) => progresso.push(`${f}/${t}`) });
+  expect(api.get).toHaveBeenCalledWith('/propostas/7/premium?embed=1&bilingue=1', { responseType: 'text' });
+  expect(r).toEqual({ traduzidos: 2, falhas: 0, pendentes: 2 });
+  expect(progresso).toEqual(['1/2', '2/2']);
+  expect(api.post).toHaveBeenCalledTimes(1);
+  const [, corpo] = api.post.mock.calls[0];
+  expect(corpo.origem).toBe('auto');
+  expect(corpo.itens.map((i) => i.texto_origem)).toEqual(['A CONTRATANTE pagará.', 'METODOLOGIA']);
+  expect(corpo.itens[0].texto_traduzido).toContain('CONTRACTING PARTY');
+});
+
+test('[automatica] sem pendente: nem cria nada nem grava', async () => {
+  const api = { get: jest.fn(async () => ({ data: '<p data-tr-origem="A." data-tr-texto="A.">A.</p>' })), post: jest.fn() };
+  const tradutor = jest.fn();
+  expect(await traduzirPendentesDaProposta({ api, propostaId: 1, idioma: 'es', tradutorPromessa: { then: tradutor } }))
+    .toEqual({ traduzidos: 0, falhas: 0, pendentes: 0 });
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+test('[automatica] lingua ja baixada: so "available" traduz sem clique; erro ou Chrome mudo = false', async () => {
+  const jan = (r) => ({ Translator: { create: () => {}, availability: jest.fn(r) } });
+  expect(await linguaJaBaixada('en', jan(async () => 'available'))).toBe(true);
+  expect(await linguaJaBaixada('en', jan(async () => 'downloadable'))).toBe(false);
+  expect(await linguaJaBaixada('en', jan(async () => { throw new Error('x'); }))).toBe(false);
+  expect(await linguaJaBaixada('en', jan(() => new Promise(() => {})), 30)).toBe(false); // nunca responde: teto de tempo
+  expect(await linguaJaBaixada('en', {})).toBe(false);
+});
 
 // Tradutor falso: "traduz" palavra a palavra e REPRODUZ o erro do tradutor real.
 const dicionario = { a: 'the', pagará: 'shall pay', 'pelos': 'for the', equipamentos: 'equipment', proposta: 'proposal', para: 'for',

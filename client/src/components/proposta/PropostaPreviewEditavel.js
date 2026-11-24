@@ -8,6 +8,7 @@ import {
 import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import PainelTraducoes from './PainelTraducoes';
+import { temTradutorDoChrome, criarTradutor, linguaJaBaixada, traduzirPendentesDaProposta } from './traducaoChrome';
 import {
   lerClausulasDoSource,
   sincronizarCampoParaSource,
@@ -98,6 +99,7 @@ export default function PropostaPreviewEditavel() {
   const [modoBilingue, setModoBilingue] = useState(false);
   const [htmlBilingue, setHtmlBilingue] = useState('');
   const [mostrarTraducoes, setMostrarTraducoes] = useState(false);
+  const [traduzindoAuto, setTraduzindoAuto] = useState(null);
   const ehBilingue = idiomaProposta === 'en' || idiomaProposta === 'es';
   // Celular: a folha de acoes que substitui a parede de seis botoes.
   const [acoesAbertas, setAcoesAbertas] = useState(false);
@@ -1381,6 +1383,8 @@ export default function PropostaPreviewEditavel() {
   // Emitir revisão virou ato explícito, no botão ao lado.
   async function salvar() {
     if (!mudancasPendentes) return;
+    // Criado AQUI, antes de qualquer await: o clique em Salvar é o gesto que o Chrome exige para baixar a língua na 1ª vez.
+    const tradutorPromessa = tradutorDoClique();
     setSalvando(true);
     try {
       const doc = iframeRef.current?.contentDocument;
@@ -1404,6 +1408,8 @@ export default function PropostaPreviewEditavel() {
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
+      // Proposta em outro idioma: o que o vendedor acabou de escrever em português já sobe traduzido (em segundo plano).
+      if (tradutorPromessa) traduzirAutomatico(tradutorPromessa);
       setMudancasPendentes(false);
       const desfecho = desfechoDoSalvar(respostaVariaveis, respostaDescricoes, clausulasJaGravadas);
       toast[desfecho.tipo](desfecho.mensagem);
@@ -1455,8 +1461,11 @@ export default function PropostaPreviewEditavel() {
   }
 
   async function baixarPdf() {
+    const tradutorPromessa = tradutorDoClique(); // antes de qualquer await: o clique é o gesto
     setBaixandoPdf(true);
     try {
+      // Proposta em outro idioma: traduz o que estiver pendente ANTES de gerar — o PDF não sai com pendente por esquecimento.
+      await traduzirAutomatico(tradutorPromessa);
       const res = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
@@ -1499,11 +1508,49 @@ export default function PropostaPreviewEditavel() {
     setHtmlBilingue(res.data);
   }
 
+  // ===== Tradução AUTOMÁTICA (pedido de 24/11/2026: "a tradução não está automática!!!!!") =====
+  // O tradutor é criado DENTRO do clique (Salvar, Ver em duas colunas, Baixar PDF) — o gesto que o Chrome exige para baixar a
+  // língua na primeira vez. Ao abrir o preview, traduz sozinho só se a língua já estiver baixada (aí não precisa de clique).
+  function tradutorDoClique() {
+    if (!ehBilingue || !temTradutorDoChrome()) return null;
+    const p = criarTradutor(idiomaProposta);
+    p.catch(() => {}); // sem gesto/sem língua: a falha é tratada em traduzirAutomatico
+    return p;
+  }
+  async function traduzirAutomatico(tradutorPromessa, { silencioso = false } = {}) {
+    if (!tradutorPromessa) return null;
+    try {
+      setTraduzindoAuto('Traduzindo…');
+      const r = await traduzirPendentesDaProposta({
+        api, propostaId: id, idioma: idiomaProposta, tradutorPromessa,
+        aoProgredir: (feitos, total) => setTraduzindoAuto(`Traduzindo ${feitos}/${total}…`),
+      });
+      if (r.falhas && !silencioso) toast.warning(`${r.falhas} texto(s) não foram traduzidos automaticamente — complete em "Traduções".`);
+      return r;
+    } catch (e) {
+      if (!silencioso) toast.warning('A tradução automática não rodou (precisa do Chrome atualizado). Os textos seguem pendentes em "Traduções".');
+      return null;
+    } finally {
+      setTraduzindoAuto(null);
+    }
+  }
+  const idiomaJaTraduzidoAoAbrirRef = useRef(null);
+  useEffect(() => {
+    if (!ehBilingue || idiomaJaTraduzidoAoAbrirRef.current === `${id}:${idiomaProposta}`) return;
+    idiomaJaTraduzidoAoAbrirRef.current = `${id}:${idiomaProposta}`;
+    linguaJaBaixada(idiomaProposta).then((pronta) => {
+      if (pronta) traduzirAutomatico(criarTradutor(idiomaProposta), { silencioso: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehBilingue, idiomaProposta, id]);
+
   async function alternarBilingue() {
     if (modoBilingue) { setModoBilingue(false); return; }
     // O documento bilíngue é montado do que está SALVO: com alteração pendente, ele mostraria o texto antigo.
     if (mudancasPendentes) { toast.warning('Salve as alterações antes de ver em duas colunas.'); return; }
+    const tradutorPromessa = tradutorDoClique();
     try {
+      await traduzirAutomatico(tradutorPromessa);
       await carregarBilingue();
       setModoBilingue(true);
     } catch (e) {
@@ -1593,6 +1640,7 @@ export default function PropostaPreviewEditavel() {
             {numeroProposta ? `Proposta Nº ${numeroProposta}` : `Proposta #${id}`}
           </span>
           {mudancasPendentes && <span className="ppe-badge-pendente">Alterações não salvas</span>}
+          {traduzindoAuto && <span className="ppe-badge-pendente" role="status">{traduzindoAuto}</span>}
         </div>
 
         <input

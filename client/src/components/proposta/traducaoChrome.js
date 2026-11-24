@@ -90,6 +90,52 @@ export async function criarTradutor(idioma, aoProgredir, janela = window) {
 }
 
 /**
+ * A língua já está baixada neste Chrome? ('available' = traduz SEM clique). Com teto de tempo: no painel embutido do app o
+ * availability() chegou a não responder. Qualquer falha = false (aí a tradução espera um clique).
+ */
+export async function linguaJaBaixada(idioma, janela = typeof window !== 'undefined' ? window : undefined, tetoMs = 3000) {
+  if (!temTradutorDoChrome(janela) || typeof janela.Translator.availability !== 'function') return false;
+  try {
+    const r = await Promise.race([
+      janela.Translator.availability({ sourceLanguage: 'pt', targetLanguage: idioma }),
+      new Promise((res) => setTimeout(() => res('timeout'), tetoMs)),
+    ]);
+    return r === 'available';
+  } catch (e) {
+    return false;
+  }
+}
+
+const MAX_CARACTERES = 5000; // limite de cada texto no POST /api/traducoes
+const LOTE = 200;
+
+/**
+ * Tradução AUTOMÁTICA dos pendentes de uma proposta (o pedido: "ao vendedor digitar em PT já suba em ESP ou ING" — e, em
+ * 24/11/2026, "a tradução não está automática!!!!!"). Lê o documento bilíngue do servidor, traduz o que está pendente com o
+ * tradutor do Chrome e grava como 'auto'. Recebe o tradutor PRONTO (`tradutorPromessa`): quem chama o cria no clique (gesto) ou
+ * só quando a língua já está baixada. Devolve { traduzidos, falhas, pendentes }.
+ */
+export async function traduzirPendentesDaProposta({ api, propostaId, idioma, tradutorPromessa, aoProgredir }) {
+  const res = await api.get(`/propostas/${propostaId}/premium?embed=1&bilingue=1`, { responseType: 'text' });
+  const pendentes = textosDoDocumento(res.data).filter((t) => t.pendente);
+  if (pendentes.length === 0) return { traduzidos: 0, falhas: 0, pendentes: 0 };
+  const tradutor = await tradutorPromessa;
+  const prontos = [];
+  let falhas = 0;
+  for (let i = 0; i < pendentes.length; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const tr = await traduzirTexto(tradutor, pendentes[i].chave, idioma);
+    if (tr && tr.length <= MAX_CARACTERES) prontos.push({ texto_origem: pendentes[i].chave, texto_traduzido: tr }); else falhas++;
+    if (aoProgredir) aoProgredir(i + 1, pendentes.length);
+  }
+  for (let i = 0; i < prontos.length; i += LOTE) {
+    // eslint-disable-next-line no-await-in-loop
+    await api.post('/traducoes', { idioma, origem: 'auto', itens: prontos.slice(i, i + LOTE) });
+  }
+  return { traduzidos: prontos.length, falhas, pendentes: pendentes.length };
+}
+
+/**
  * Os textos traduzíveis do documento bilíngue (o HTML do /premium?bilingue=1), sem repetir: a chave vem do atributo
  * `data-tr-origem` que o SERVIDOR escreveu — a mesma que ele procura na memória (Fase 2, I5).
  * [{ chave, traducao (o que o documento mostra hoje na coluna traduzida, '' se pendente), pendente }]
