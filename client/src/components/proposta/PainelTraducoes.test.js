@@ -43,20 +43,38 @@ test('[RN-BI.05] lista os textos do documento bilingue (rota com bilingue=1) e c
   expect(areas.map((a) => a.value)).toEqual(['12-month warranty.', '', '']);
 });
 
-test('[I11] sem o tradutor do Chrome: botao desligado e o aviso para preencher a mao', async () => {
+// "Tradutor" falso: o que o serviço devolveria (CONTRATANTE vem protegido como ficha; maiúsculas vêm em minúsculas).
+const traduzirFalso = (t) => t.replace('A ', 'The ').replace('pagará', 'shall pay').replace('metodologia', 'methodology');
+
+// Desde 24/11/2026 (noite) o painel traduz pelo SERVIDOR, em qualquer navegador: este teste dizia "sem o tradutor do Chrome: botão
+// desligado e o aviso para preencher à mão" e deixou de valer — o pedido foi "deve funcionar em qualquer navegador".
+test('[qualquer navegador] sem o tradutor do Chrome: o botao funciona e traduz pelo servidor', async () => {
+  api.post.mockImplementation(async (url, corpo) => (url === '/traducoes/automatica'
+    ? { data: { traducoes: corpo.textos.map(traduzirFalso) } } : { data: { gravadas: corpo.itens.length, ignoradas: 0 } }));
   await montar();
-  expect(botao('Traduzir pendentes').disabled).toBe(true);
-  expect(container.textContent).toContain('preencha a tradução à mão');
+  expect(container.textContent).not.toContain('preencha a tradução à mão');
+  await clicar(botao('Traduzir pendentes (2)'));
+  expect(api.post.mock.calls[0]).toEqual(['/traducoes/automatica', { idioma: 'en', textos: ['A ⟦0⟧ pagará.', 'metodologia'] }]);
+  const [url, corpo] = api.post.mock.calls[1];
+  expect(url).toBe('/traducoes');
+  expect(corpo.itens).toEqual([
+    { texto_origem: 'A CONTRATANTE pagará.', texto_traduzido: 'The CONTRACTING PARTY shall pay.' },
+    { texto_origem: 'METODOLOGIA', texto_traduzido: 'METHODOLOGY' },
+  ]);
 });
 
-test('[RN-BI.05/07] Traduzir pendentes: so os pendentes, glossario aplicado, grava como auto', async () => {
+test('[RN-BI.05/07] servidor fora do ar: cai no tradutor do Chrome — so os pendentes, glossario aplicado, grava como auto', async () => {
   const visto = [];
-  window.Translator = { create: jest.fn(async () => ({ translate: async (t) => { visto.push(t); return t.replace('A ', 'The ').replace('pagará', 'shall pay').replace('metodologia', 'methodology'); } })) };
+  window.Translator = { create: jest.fn(async () => ({ translate: async (t) => { visto.push(t); return traduzirFalso(t); } })) };
+  api.post.mockImplementation(async (url) => {
+    if (url === '/traducoes/automatica') throw Object.assign(new Error('502'), { response: { status: 502 } });
+    return { data: { gravadas: 2, ignoradas: 0 } };
+  });
   await montar();
   await clicar(botao('Traduzir pendentes (2)'));
   expect(window.Translator.create).toHaveBeenCalledWith({ sourceLanguage: 'pt', targetLanguage: 'en' });
   expect(visto).toEqual(['A ⟦0⟧ pagará.', 'metodologia']); // CONTRATANTE protegido; maiusculas traduzidas em minusculas
-  const [url, corpo] = api.post.mock.calls[0];
+  const [url, corpo] = api.post.mock.calls[1];
   expect(url).toBe('/traducoes');
   expect(corpo).toEqual({ idioma: 'en', origem: 'auto', itens: [
     { texto_origem: 'A CONTRATANTE pagará.', texto_traduzido: 'The CONTRACTING PARTY shall pay.' },
