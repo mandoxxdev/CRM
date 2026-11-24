@@ -10,6 +10,7 @@ const {
 const { prepareDatabaseOnStartup, pruneOldBackups, opcoesDeRetencao, fileSizeIfExists } = require('./services/dbRecovery');
 const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
 const { getClausulasHelices } = require('./clausulasHelices');
+const { getClausulasProjetoConceitual } = require('./clausulasProjetoConceitual');
 
 // Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
 // nao mexe nele — para nao desfazer edicoes que o usuario tenha feito depois.
@@ -65,6 +66,9 @@ function semearModelosClausulas() {
   };
   semear('Equipamentos', 'Contrato completo para equipamentos e sistemas', true, getClausulasDefault());
   semear('Hélices e Discos', 'Contrato reduzido para peças e acessórios', false, getClausulasHelices());
+  // Pedido do Comercial (24/11/2026): servico de engenharia conceitual, contrato da proposta
+  // 01260930/R00. Fica ligado as familias pelo cadastro de familia, como o de helices.
+  semear('Projeto Conceitual', 'Contrato para serviço de engenharia conceitual', false, getClausulasProjetoConceitual());
   // O semear acima nao mexe em modelo que ja existe — de proposito, para nao desfazer
   // edicao do usuario. Mas quando o codigo GANHA uma clausula nova (foi o caso da 3. OFERTA
   // e do bloco de preco), o modelo ja criado ficaria sem ela para sempre. Este completar
