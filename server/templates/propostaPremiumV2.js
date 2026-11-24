@@ -10,6 +10,7 @@ const {
 const propostaEngine = require('../propostaCompositionEngine');
 const { getClausulasDefault, CLAUSULAS_INTRO, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
 const { lerAcessorios, totalAcessorios } = require('../acessoriosItem');
+const Bilingue = require('../propostaBilingue');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -82,7 +83,40 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
 
-    const moedaBRL = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    // ===== Proposta bilíngue, moeda e incoterm (specs/proposta-bilingue/README.md) =====
+    // TUDO o que é novo no documento sai atrás de `bi` (ou de moeda/incoterm preenchidos): a proposta pt-BR em real continua
+    // saindo byte a byte igual (RN-BI.01, tests/helpers/propostaBaseHtml.js).
+    const idiomaDoc = Bilingue.idiomaDaProposta(config.idioma);
+    const bi = Bilingue.ehBilingue(idiomaDoc);
+    const traducoesDoc = (bi && config.traducoes && typeof config.traducoes === 'object') ? config.traducoes : {};
+    const moedaDoc = Bilingue.moedaDaProposta(config.moeda);
+    const incotermDoc = String(config.incoterm || '').trim();
+    // Nome mantido: com BRL é exatamente o toLocaleString('pt-BR', BRL) de antes (BI-M02).
+    const moedaBRL = (v) => Bilingue.formatarMoeda(v, moedaDoc, 'pt-BR');
+    const moedaTr = (v) => Bilingue.formatarMoeda(v, moedaDoc, idiomaDoc);
+    const T = (pt) => Bilingue.t(idiomaDoc, pt);
+    // Um par PT | tradução — UMA unidade para o paginador (RN-BI.03).
+    const biPar = (ptHtml, trHtml, classe = '') => `<div class="bi-par${classe ? ` ${classe}` : ''}"><div class="bi-pt">${ptHtml}</div><div class="bi-tr" lang="${idiomaDoc}">${trHtml}</div></div>`;
+    // Texto fixo (dicionário) num par.
+    const biFixo = (tag, pt) => biPar(`<${tag}>${esc(pt)}</${tag}>`, `<${tag}>${esc(T(pt))}</${tag}>`);
+    // Texto de dado (memória de tradução) num par; pendente sai com o PT marcado (RN-BI.04).
+    const biDado = (tag, pt) => biPar(`<${tag}>${esc(pt)}</${tag}>`, Bilingue.elementoTraduzido(tag, pt, traducoesDoc));
+    // Título bilíngue: UM h2/h3 (o sumário e o "título + primeiro bloco" continuam achando-o como filho direto) com duas metades.
+    // A chave do título é SEM o número (Fase 2, I7: renumerar não pode orfanar a tradução); o número vem do PT.
+    const biTitulo = (tag, tituloPt, { fixo = false } = {}) => {
+      const m = /^\s*(\d+(?:\.\d+)*\.?)\s+([\s\S]*)$/.exec(String(tituloPt || ''));
+      const num = m ? `${m[1]} ` : '';
+      const semNum = m ? m[2] : String(tituloPt || '');
+      const tr = fixo
+        ? `<span class="bi-tr" lang="${idiomaDoc}">${esc(T(tituloPt))}</span>`
+        : (() => {
+            // A chave fica num span INTERNO só com o texto: o número fica de fora. Lendo a coluna inteira, o painel gravaria a correção
+            // com "1. " e o documento sairia "1. 1. TÍTULO".
+            const t = Bilingue.traduzido(semNum, traducoesDoc);
+            return `<span class="bi-tr" lang="${idiomaDoc}">${esc(num)}<span${Bilingue.attrsTraducao(semNum, t)}>${esc(t || semNum)}</span></span>`;
+          })();
+      return `<${tag} class="bi-h"><span class="bi-pt">${esc(tituloPt)}</span>${tr}</${tag}>`;
+    };
 
 
     // Cabeçalho/rodapé por IMAGEM foram removidos: o template usa sempre o cabeçalho e o rodapé
@@ -559,6 +593,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
       let descritivoTec = esc(String(descritivoTecRaw || '').trim());
+      // Bilíngue: o texto puro do descritivo, para virar pares (a versão acima já sai escapada).
+      let descritivoTecTexto = String(descritivoTecRaw || '').trim();
 
       // especificacoes_tecnicas pode vir como JSON string/objeto
       let specs = {};
@@ -584,6 +620,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             ? (specs.descricao || specs.descritivo || specs.descricao_tecnica || specs['Descrição'] || specs['Especificações técnicas'] || '')
             : '';
         descritivoTec = esc(String(cand || '').trim());
+        if (bi) descritivoTecTexto = String(cand || '').trim();
       }
       if (!descritivoTec) descritivoTec = '';
 
@@ -782,6 +819,63 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
            </div>`
         : '';
 
+      if (bi) {
+        // Documento bilíngue (somente leitura): cada linha do item vira um par; sem atributos de edição (data-variavel-*,
+        // data-item-descricao) — Fase 2, C1: duplicá-los corrompia o salvamento. Sem as dicas do editor.
+        const valorDado = (pt) => {
+          const tr = Bilingue.traduzido(pt, traducoesDoc);
+          return `<span${Bilingue.attrsTraducao(pt, tr)}>${esc(tr || Bilingue.normalizarChave(pt))}</span>`;
+        };
+        // Número, medida, código: sai igual nas duas colunas (não vai para o tradutor).
+        const valorNeutro = (v) => /^[\d\s.,:;%/xX×*+\-–()°ºª"'<>=~]*$/.test(String(v));
+        const linha = (rotuloPt, valorPt, traduzir) => biPar(
+          `<p>${esc(rotuloPt)} ${esc(valorPt)}</p>`,
+          `<p>${esc(T(rotuloPt))} ${(traduzir && !valorNeutro(valorPt)) ? valorDado(valorPt) : esc(valorPt)}</p>`);
+        const nomeCapsTxt = String(nomeBruto).toLocaleUpperCase('pt-BR');
+        const modeloCapsTxt = modeloBruto.toLocaleUpperCase('pt-BR');
+        const comModelo = Boolean(modeloCapsTxt) && !nomeCapsTxt.includes(modeloCapsTxt);
+        const trNome = Bilingue.traduzido(nomeCapsTxt, traducoesDoc);
+        // Só o NOME traduzido leva a chave (span interno); número e ", MODEL X" ficam de fora — ver biTitulo.
+        const tituloItem = `<h3 class="bi-h"><span class="bi-pt">${itemNo} ${nomeTitulo}</span><span class="bi-tr" lang="${idiomaDoc}">${esc(itemNo)} <span${Bilingue.attrsTraducao(nomeCapsTxt, trNome)}>${esc(trNome || nomeCapsTxt)}</span>${comModelo ? esc(`${T(', MODELO ')}${modeloCapsTxt}`) : ''}</span></h3>`;
+        const linhasVariaveis = (Array.isArray(variaveisList) ? variaveisList : [])
+          .filter((k) => k && String(k).indexOf('_cond') === -1)
+          .map((k) => {
+            const meta = variaveisLabels[k] || {};
+            const rotulo = semCapsLock((meta && meta.nome) ? meta.nome : k);
+            const pre = meta.prefixo ? `${meta.prefixo} ` : '';
+            const suf = meta.sufixo ? ` ${meta.sufixo}` : '';
+            const bruto = String(meta.tipo || '') === 'manual_proposta'
+              ? String(valoresManuais[`${itemIdPersistencia}:${k}`] || '').trim()
+              : (() => { const v = getSpecValue(specs, k); return (v !== undefined && v !== null) ? String(v).trim() : ''; })();
+            if (!bruto && String(meta.tipo || '') !== 'manual_proposta') return '';
+            const trRot = Bilingue.traduzido(rotulo, traducoesDoc);
+            const rotTr = `<span${Bilingue.attrsTraducao(rotulo, trRot)}>${esc(trRot || rotulo)}</span>`;
+            const valTr = valorNeutro(bruto) ? esc(bruto) : valorDado(bruto);
+            return biPar(`<p>${esc(rotulo)}: ${esc(pre + bruto + suf)}</p>`, `<p>${rotTr}: ${esc(pre)}${valTr}${esc(suf)}</p>`);
+          }).filter(Boolean).join('');
+        const linhaAcessorios = acessoriosDoItem.length > 0
+          ? biPar(
+            `<p>Acessórios: ${acessoriosDoItem.map((ac) => esc(ac.descricao) + (ac.quantidade > 1 ? ` (${esc(ac.quantidade)}x)` : '')).join(' + ')}</p>`,
+            `<p>${esc(T('Acessórios:'))} ${acessoriosDoItem.map((ac) => valorDado(ac.descricao) + (ac.quantidade > 1 ? ` (${esc(ac.quantidade)}x)` : '')).join(' + ')}</p>`)
+          : '';
+        return `
+        ${tituloItem}
+        <div class="equip-specs-kv bi-item">
+          ${fotoHtml}
+          ${descritivoTecTexto ? `${biFixo('p', 'Descritivo técnico:')}<div class="equip-descritivo">${Bilingue.paresDeConteudo(descritivoTecTexto, idiomaDoc, traducoesDoc)}</div>` : ''}
+          ${linha('Equipamento:', String(nomeBruto), true)}
+          ${codigo !== '—' ? linha('Código:', String(it.codigo_produto || it.produto_codigo), false) : ''}
+          ${modelo !== '—' ? linha('Modelo:', modeloBruto, false) : ''}
+          ${linha('Quantidade:', `${Number(it.quantidade) || 1} ${it.unidade || 'UN'}`, false)}
+          ${familia !== '—' ? linha('Família:', String(it.familia_produto || it.produto_familia || it.familia), true) : ''}
+          ${categoria !== '—' ? linha('Categoria:', String(it.categoria), true) : ''}
+          ${ncm !== '—' ? linha('NCM:', String(it.ncm || it.produto_ncm), false) : ''}
+          ${linhasVariaveis}
+          ${linhaAcessorios}
+        </div>
+      `;
+      }
+
       return `
         <h3>${itemNo} ${nomeTitulo}</h3>
         <div class="equip-specs-kv">
@@ -811,7 +905,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // 5.24 — ver I7 em specs/proposta-editavel/review-proposta.md. O `avoid-break` sozinho
     // só impede o título de ficar órfão do primeiro equipamento; sem a quebra, numa proposta
     // curta a seção 4 caía na mesma página das seções 1, 2 e 3. Vale nos DOIS ramos abaixo.
-    const equipDescritivoHtml = equipItems.length === 0
+    const equipDescritivoHtml = bi
+      ? (equipItems.length === 0
+        ? `<section class="block stack-md avoid-break" data-page-break="before">
+          ${biTitulo('h2', '4. ESCOPO DE FORNECIMENTO', { fixo: true })}
+          ${biFixo('p', 'Nenhum equipamento selecionado para esta proposta.')}
+        </section>`
+        : `<section class="block stack-md avoid-break" data-page-break="before">
+          ${biTitulo('h2', '4. ESCOPO DE FORNECIMENTO', { fixo: true })}
+          <section class="block stack-md allow-break">${equipItems[0]}</section>
+        </section>
+        ${equipItems.slice(1).map((item) => `<section class="block stack-md allow-break">${item}</section>`).join('')}`)
+      : equipItems.length === 0
       ? `<section class="block stack-md avoid-break" data-page-break="before">
           <h2>4. ESCOPO DE FORNECIMENTO</h2>
           <p class="muted">Nenhum equipamento selecionado nesta proposta.</p>
@@ -878,6 +983,28 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // qtd 1, o caso destas propostas, unitário = total, sem divisão nem arredondamento).
       const vTotNum = vTotBase + totalAcessorios(it);
       const vUnitNum = qtdNum ? vTotNum / qtdNum : vTotNum;
+      if (bi) {
+        // Bilíngue: a linha leva as duas metades (PT | tradução) — o divisor de tabela corta por linha e nunca separa as
+        // duas línguas (RN-BI.03). Sem data-item-descricao (somente leitura; Fase 2, C1).
+        const descPt = descricaoManual || nomeAutomatico;
+        const techPt = String(descritivoTecRaw || '').trim();
+        const dado = (pt) => {
+          const tr = Bilingue.traduzido(pt, traducoesDoc);
+          return `<span${Bilingue.attrsTraducao(pt, tr)}>${esc(tr || Bilingue.normalizarChave(pt))}</span>`;
+        };
+        return `<tr>
+        <td class="col-center">${itemRef}</td>
+        <td>${esc(descPt)}${techPt ? `<div class="tech-desc">${esc(techPt)}</div>` : ''}</td>
+        <td class="col-right">${qtd}</td>
+        <td class="col-right">${esc(moedaBRL(vUnitNum))}</td>
+        <td class="col-right">${esc(moedaBRL(vTotNum))}</td>
+        <td class="col-center bi-sep">${itemRef}</td>
+        <td>${dado(descPt)}${techPt ? `<div class="tech-desc">${dado(techPt)}</div>` : ''}</td>
+        <td class="col-right">${qtd}</td>
+        <td class="col-right">${esc(moedaTr(vUnitNum))}</td>
+        <td class="col-right">${esc(moedaTr(vTotNum))}</td>
+      </tr>`;
+      }
       return `<tr>
         <td class="col-center">${itemRef}</td>
         <td>${descHtml}</td>
@@ -998,6 +1125,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const secoesIntroHtml = blocosIntro.map((c, i) => {
       const key = esc(keyIntro(c, i));
       const tituloCompleto = String(c.numero ? `${c.numero} ${c.titulo}` : (c.titulo || '')).trim();
+      if (bi) {
+        // Bilíngue (somente leitura): sem data-clausula-* — o editor nunca roda nesta renderização (Fase 2, C1-C3).
+        return `<section class="block stack-md allow-break clausula-corpo">
+        ${biTitulo('h2', tituloCompleto)}
+        <div class="stack-md">${Bilingue.paresDeConteudo(c.conteudo, idiomaDoc, traducoesDoc)}</div>
+      </section>`;
+      }
       return `<section class="block stack-md allow-break clausula-corpo" data-clausula-key="${key}" data-clausula-slot="intro">
         <h2 data-clausula-campo="titulo">${esc(tituloCompleto)}</h2>
         <div class="stack-md" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
@@ -1012,6 +1146,22 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const render524Bloco = (c, i) => {
       const key = esc(key524(c, i));
       const tituloCompleto = String(c.numero ? `${c.numero} ${c.titulo}` : (c.titulo || '')).trim();
+      if (bi) {
+        const pares = Bilingue.paresDeConteudo(c.conteudo, idiomaDoc, traducoesDoc);
+        if (i === 0) {
+          return `<section class="block stack-md allow-break">
+          ${biTitulo('h3', tituloCompleto)}
+          <div class="stack-sm">${pares}</div>
+        </section>`;
+        }
+        // O subtítulo ("CONDIÇÃO DE PAGAMENTO:") sai sem o prefixo numérico, como no PT.
+        const mSub = /^\s*(\d+\.\d+(?:\.\d+)*)\s+([\s\S]*)$/.exec(tituloCompleto);
+        const visivelSub = mSub ? mSub[2] : tituloCompleto;
+        return `<section class="block stack-md allow-break">
+        ${biPar(`<p class="clausula-subtitulo">${esc(visivelSub)}</p>`, Bilingue.elementoTraduzido('p', visivelSub, traducoesDoc, 'clausula-subtitulo'))}
+        <div class="stack-sm clausula-524-condicao">${pares}</div>
+      </section>`;
+      }
       const conteudo = conteudoClausulaHtml(c.conteudo);
       if (i === 0) {
         return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="24">
@@ -1028,11 +1178,142 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>`;
     };
 
+    // Tabelas fiscais no bilíngue: textos do dicionário; a tabela de classificação com as duas metades na mesma linha; a de
+    // alíquotas (só números) com o cabeçalho nas duas línguas. Tributação de exportação é outra etapa (spec).
+    const fiscalBiHtml = (() => {
+      if (!bi) return '';
+      const linhaNcm = (ncm, pt) => `<tr><td class="col-center">${esc(ncm)}</td><td>${esc(pt)}</td><td class="col-center bi-sep">${esc(ncm === 'Nota' ? T('Nota') : ncm)}</td><td>${esc(T(pt))}</td></tr>`;
+      const cabDuplo = (pt) => esc(Bilingue.rotuloDuplo(idiomaDoc, pt));
+      const aliq = (ncm, r1) => `<tr><td class="col-center">${ncm}</td><td class="col-center">${r1}</td><td class="col-center">12,00%</td><td class="col-center">7,00%</td><td class="col-center">0%</td><td class="col-center">0,65%</td><td class="col-center">3,00%</td></tr>`;
+      return `<section class="block stack-md allow-break">
+          ${biPar('<p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>', `<p><strong>${esc(T('IMPOSTOS E CLASSIFICAÇÕES FISCAIS'))}</strong></p>`)}
+          ${biPar(`<div class="table-caption">Tabela de Classificação Fiscal</div>`, `<div class="table-caption">${esc(T('Tabela de Classificação Fiscal'))}</div>`)}
+          <table class="table bi-tabela">
+            <thead><tr><th class="col-center">NCM</th><th>IDENTIFICAÇÃO EQUIPAMENTOS MOINHO YPIRANGA</th><th class="col-center bi-sep">${esc(T('NCM:').replace(/:$/, ''))}</th><th>${esc(T('IDENTIFICAÇÃO EQUIPAMENTOS MOINHO YPIRANGA'))}</th></tr></thead>
+            <tbody>
+              ${linhaNcm('8474.39.00', 'Misturadores, masseiras, dispersores, moinhos, agitadores, hélices e impelidores')}
+              ${linhaNcm('7309.00.90', 'Tachos, moegas, silos, tanques e demais reservatórios metálicos.')}
+              ${linhaNcm('Nota', 'Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.')}
+            </tbody>
+          </table>
+          ${biPar(`<div class="table-caption">Tabela de Impostos e Alíquotas</div>`, `<div class="table-caption">${esc(T('Tabela de Impostos e Alíquotas'))}</div>`)}
+          <table class="table">
+            <thead><tr><th class="col-center">NCM</th><th class="col-center">${cabDuplo('REGIÃO 1')}</th><th class="col-center">${cabDuplo('REGIÃO 2')}</th><th class="col-center">${cabDuplo('REGIÃO 3')}</th><th class="col-center">IPI</th><th class="col-center">PIS</th><th class="col-center">COFINS</th></tr></thead>
+            <tbody>${aliq('8474.39.00', '18,00%')}${aliq('7309.00.90', '12,00%')}</tbody>
+          </table>
+          <div class="stack-sm">
+            ${biFixo('p', 'Texto complementar abaixo das tabelas:')}
+            ${['Região 1: São Paulo (SP)',
+    'Região 2: Minas Gerais (MG), Paraná (PR), Rio de Janeiro (RJ), Rio Grande do Sul (RS) e Santa Catarina (SC)',
+    'Região 3: Acre (AC), Alagoas (AL), Amapá (AP), Amazonas (AM), Bahia (BA), Ceará (CE), Distrito Federal (DF), Espírito Santo (ES), Goiás (GO), Maranhã (MA), Mato Grosso (MT), Mato Grosso do Sul (MS), Pará (PA), Paraíba (PB), Pernambuco (PE), Piauí (PI), Rio Grande do Norte (RN), Rondônia (RO), Roraima (RR), Sergipe (SE) e Tocantins (TO).',
+    'Nota: Redução tributária aplicada nos produtos classificados com NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.',
+    'Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.'].map((pt) => biPar(`<ul><li>${esc(pt)}</li></ul>`, `<ul><li>${esc(T(pt))}</li></ul>`, 'bi-par-li')).join('')}
+          </div>
+      </section>`;
+    })();
+
+    // Apresentação no bilíngue (Fase 2, I13): a página é fixa, fora do paginador, com overflow:hidden — duas colunas não cabem com a
+    // imagem. Sai o texto em pares, sem a imagem, com fonte menor (.bi-pres no CSS bilíngue).
+    const apresentacaoBiHtml = (() => {
+      if (!bi) return '';
+      const p1Pt = 'A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do <strong>MERCOSUL</strong>, destacando nossas competências no fornecimento de plantas em regime Turn-Key.';
+      const p1Chave = 'A MOINHO YPIRANGA é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do MERCOSUL, destacando nossas competências no fornecimento de plantas em regime Turn-Key.';
+      const lista = ['Planejamento;', 'Projeto Básico, Conceitual e Executivo;', 'Documentações do empreendimento;',
+        'Cetesb, Conama, Anvisa, Bombeiro, Prefeitura, outros sob consulta;', 'Cronograma;', 'Gerenciamento e execução da obra;',
+        'Instalações elétrica, hidráulicas, pneumáticas, civil, e outras;', 'Fabricação e desenvolvimento de máquinas e equipamentos;',
+        'Produção e desenvolvimento de softwares e automações;'];
+      return `<div class="pres-text bi-pres">
+          ${biPar('<p style="text-indent:0;"><strong>APRESENTAÇÃO</strong></p>', `<p style="text-indent:0;"><strong>${esc(T('APRESENTAÇÃO'))}</strong></p>`)}
+          ${biPar(`<p>${p1Pt}</p>`, `<p>${esc(T(p1Chave))}</p>`)}
+          ${biFixo('p', 'Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento.')}
+          ${biFixo('p', 'Na contratação Turn-Key, a trajetória do pedido segue:')}
+          ${biPar(`<ul>${lista.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`, `<ul>${lista.map((l) => `<li>${esc(T(l))}</li>`).join('')}</ul>`)}
+          ${biFixo('p', 'Todas as fases desse processo contam com o suporte de recursos tecnológicos adequados, com um moderno sistema de gestão de projetos, além de uma equipe técnica própria e altamente qualificada para atender às necessidades do cliente.')}
+        </div>`;
+    })();
+
+    // CSS do bilíngue — só emitido no bilíngue (RN-BI.01). PT à esquerda, a outra língua à direita, separadas por um filete.
+    const biCss = `
+    /* ===== Proposta bilíngue (specs/proposta-bilingue) ===== */
+    .bi-par, .bi-h, .bi-capa { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6mm; }
+    .bi-par { break-inside: avoid; page-break-inside: avoid; }
+    .bi-par + .bi-par { margin-top: 1.6mm; }
+    .bi-par > .bi-tr, .bi-h > .bi-tr { border-left: 0.4mm solid #c9d3e3; padding-left: 3mm; }
+    .bi-par p, .bi-par ul, .bi-par ol { margin: 0; text-indent: 0; }
+    .bi-par ul, .bi-par ol { padding-left: 5mm; }
+    .bi-par li { text-align: left; }
+    .bi-tr { color: #1f3a66; }
+    .bi-pendente { font-style: italic; color: #9a5b00; }
+    .bi-pendente::after { content: " (tradução pendente)"; font-size: 0.85em; }
+    .bi-tabela { font-size: 7.5pt; table-layout: fixed; width: 100%; }
+    .bi-tabela th, .bi-tabela td { white-space: normal !important; overflow-wrap: break-word; padding-left: 1mm !important; padding-right: 1mm !important; }
+    /* Preços: 10 colunas (5 por língua) — sem largura fixa a tabela vazava pela direita e o overflow da página cortava o total;
+       com largura fixa e o nowrap do estilo base, os valores invadiam a célula vizinha. */
+    /* A fonte vai NAS CÉLULAS: o estilo base da .table define 11pt no th/td e vencia a regra posta só na tabela. */
+    .bi-tabela td { font-size: 7.5pt !important; }
+    .bi-tabela th { font-size: 7pt !important; }
+    .bi-tabela-precos td { font-size: 7pt !important; }
+    .bi-tabela-precos th { font-size: 6.5pt !important; }
+    .bi-tabela-precos th:nth-child(5n+1) { width: 4%; }
+    .bi-tabela-precos th:nth-child(5n+2) { width: 12.5%; }
+    .bi-tabela-precos th:nth-child(5n+3) { width: 5.5%; }
+    .bi-tabela-precos th:nth-child(5n+4), .bi-tabela-precos th:nth-child(5n) { width: 14%; }
+    /* Valor nunca quebra no meio ("€ 162.000, / 00"). */
+    .bi-tabela-precos td.col-right { white-space: nowrap !important; }
+    .bi-tabela .bi-sep { border-left: 0.7mm solid #1f3a66 !important; }
+    .bi-capa > .bi-tr { color: inherit; border-left: 0.4mm solid rgba(255,255,255,0.5); padding-left: 3mm; }
+    .cover-info-title-tr { font-size: 0.75em; font-weight: 600; }
+    .bi-pres { font-size: 9pt; width: 100%; max-width: none; flex: 1 1 auto; }
+    .bi-item .equip-photo-float { float: none; margin: 0 auto 3mm; }
+    `;
+
+    // Incoterm (RN-BI.09): só quando preenchido — sem ele, nada muda no documento.
+    const incotermHtml = !incotermDoc ? '' : (bi
+      ? biPar(`<p class="incoterm-linha"><strong>Incoterm:</strong> ${esc(incotermDoc)}</p>`, `<p class="incoterm-linha"><strong>${esc(T('Incoterm:'))}</strong> ${esc(incotermDoc)}</p>`)
+      : `<p class="incoterm-linha"><strong>Incoterm:</strong> ${esc(incotermDoc)}</p>`);
+
+    // Tabela de preços bilíngue (RN-BI.02/03/08): a metade PT e a traduzida na MESMA linha; cada metade na moeda da proposta,
+    // no formato da sua língua.
+    const tabelaPrecosBiHtml = (() => {
+      if (!bi) return '';
+      const cab = (pt) => esc(pt);
+      const cabTr = (pt) => esc(T(pt));
+      const totalBruto = Number(totais.total) || 0;
+      const descontoPerc = Math.min(100, Math.max(0, Number(proposta.margem_desconto) || 0));
+      const linhaTotal = (rotuloPt, valor, classe = '', riscado = false) => `<tr${classe ? ` class="${classe}"` : ''}>
+                <td class="col-center" colspan="4"><strong>${esc(rotuloPt)}</strong></td>
+                <td class="col-right"><strong${riscado ? ' class="valor-riscado"' : ''}>${esc(moedaBRL(valor))}</strong></td>
+                <td class="col-center bi-sep" colspan="4"><strong>${esc(T(rotuloPt))}</strong></td>
+                <td class="col-right"><strong${riscado ? ' class="valor-riscado"' : ''}>${esc(moedaTr(valor))}</strong></td>
+              </tr>`;
+      const totais2 = descontoPerc <= 0
+        ? linhaTotal('TOTAL DA PROPOSTA', totalBruto)
+        : linhaTotal('TOTAL DA PROPOSTA', totalBruto, 'total-proposta-original', true)
+          + linhaTotal('TOTAL DA PROPOSTA COM DESCONTO', Math.max(0, totalBruto * (1 - descontoPerc / 100)), 'total-proposta-desconto');
+      return `<section class="block stack-md allow-break">
+          ${biPar(`<div class="table-caption">${cab('Tabela de Preços')}</div>`, `<div class="table-caption">${cabTr('Tabela de Preços')}</div>`)}
+          <table class="table bi-tabela bi-tabela-precos">
+            <thead>
+              <tr>
+                <th class="col-center">${cab('ITEM')}</th><th>${cab('DESCRIÇÃO')}</th><th class="col-right">${cab('QUANT.')}</th>
+                <th class="col-right">${cab('PREÇO UNITÁRIO')}</th><th class="col-right">${cab('TOTAL')}</th>
+                <th class="col-center bi-sep">${cabTr('ITEM')}</th><th>${cabTr('DESCRIÇÃO')}</th><th class="col-right">${cabTr('QUANT.')}</th>
+                <th class="col-right">${cabTr('PREÇO UNITÁRIO')}</th><th class="col-right">${cabTr('TOTAL')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">${cab('Nenhum item cadastrado.')}</td><td colspan="5" class="muted bi-sep">${cabTr('Nenhum item cadastrado.')}</td></tr>`}
+              ${totais2}
+            </tbody>
+          </table>
+        </section>`;
+    })();
+
     const sec524PrecoHtml = `
       <section class="block stack-md avoid-break five-24-preco-group" data-page-break="before">
         ${render524Bloco(blocos524[0], 0)}
 
-        <section class="block stack-md allow-break">
+        ${bi ? tabelaPrecosBiHtml : `<section class="block stack-md allow-break">
           <div class="table-caption">Tabela de Preços</div>
           <table class="table">
             <thead>
@@ -1067,12 +1348,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               })()}
             </tbody>
           </table>
-        </section>
+        </section>`}${incotermHtml}
 
         ${blocos524.slice(1).map((c, i) => render524Bloco(c, i + 1)).join('')}
       </section>
 
-      ${(propostaDePecas || propostaDeServico) ? '' : `
+      ${(propostaDePecas || propostaDeServico || bi) ? '' : `
       <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
           <table class="table table-dark">
@@ -1102,7 +1383,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
       `}
 
-      <section class="block stack-md allow-break">
+      ${bi ? fiscalBiHtml : `<section class="block stack-md allow-break">
           <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
           <div class="table-caption">Tabela de Classificação Fiscal</div>
           <table class="table">
@@ -1163,16 +1444,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
             </ul>
           </div>
-      </section>`;
+      </section>`}`;
 
     // Campos preenchidos À MÃO depois de impresso (data e assinatura/carimbo do cliente).
     // Ficam FORA do conteúdo da cláusula 5.24 de propósito: a 5.24 é editável pelo usuário no
     // preview, e se estes campos morassem dentro dela uma edição poderia apagá-los.
     // O traço da assinatura é um ::after com flex:1 — assim ele vai da label até a margem
     // direita sozinho, sem depender de contar underscores (que desalinham se a fonte mudar).
+    // Bilíngue: rótulo nas duas línguas na mesma linha ("PT / tradução:") — nos campos de assinatura e nos rótulos da capa. Os DADOS
+    // da capa (empresa, contato, e-mail, CNPJ) nunca vão para o tradutor: "Moinho Ypiranga" viraria "Ypiranga Mill" na memória
+    // global (Fase 2, I12).
+    // Igual nas duas línguas (es: "EMPRESA CONTRATANTE:", "CNPJ:") sai uma vez só — não "CNPJ / CNPJ:" (Fase 5, 9).
+    const rotuloCampo = (pt) => ((bi && T(pt) !== pt) ? `${pt.replace(/:$/, '')} / ${T(pt)}` : pt);
     const camposAssinaturaManualHtml = `
-      <p class="campo-manual">Data da assinatura: <span class="campo-branco campo-branco-dia"></span>/<span class="campo-branco campo-branco-mes"></span>/<span class="campo-branco campo-branco-ano"></span></p>
-      <p class="campo-manual campo-manual-linha">Assinatura e carimbo da empresa CONTRATANTE:</p>`;
+      <p class="campo-manual">${esc(rotuloCampo('Data da assinatura:'))} <span class="campo-branco campo-branco-dia"></span>/<span class="campo-branco campo-branco-mes"></span>/<span class="campo-branco campo-branco-ano"></span></p>
+      <p class="campo-manual campo-manual-linha">${esc(rotuloCampo('Assinatura e carimbo da empresa CONTRATANTE:'))}</p>`;
 
     const clausulasSection = (() => {
       if (templateConfig && Array.isArray(templateConfig.clausulas_custom) && templateConfig.clausulas_custom.length > 0) {
@@ -1207,10 +1493,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
+        const renderClausulaCustom = (c, idx) => (bi
+          ? `<section class="block stack-md allow-break">
+            ${biTitulo('h3', c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}
+            <div class="stack-sm">${Bilingue.paresDeConteudo(c.conteudo, idiomaDoc, traducoesDoc)}</div>
+          </section>`
+          : `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
             <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
             <div class="stack-sm" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
-          </section>`;
+          </section>`);
+        // Bilíngue: cargos nas duas línguas (nomes, telefones e e-mails não mudam).
+        const assinaturasDoDoc = !bi ? assinaturasHtml
+          : ['Diretor Comercial', 'Gerente Comercial', 'Vendas Técnica', 'Depto. Comercial']
+            .reduce((h, cargo) => h.split(`>${cargo}<`).join(`>${esc(cargo)} / ${esc(T(cargo))}<`), assinaturasHtml);
         // As seções 1–3 (slot intro) saem da lista ANTES do destructuring: elas são
         // renderizadas em posição fixa no começo do documento (secoesIntroHtml) e, sem
         // este filtro, a "1. OBJETIVO DA PROPOSTA" viraria a primeira cláusula da seção 5.
@@ -1243,7 +1538,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         // cortaria as cláusulas no meio (ex.: parava na 5.4).
         return `
           <section class="block stack-md avoid-break five-intro-group" data-page-break="before">
-            <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
+            ${bi ? biTitulo('h2', '5. CONDIÇÕES GERAIS DE FORNECIMENTO', { fixo: true }) : '<h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>'}
             ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
           ${demaisSem524e525.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
@@ -1253,8 +1548,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <div class="assinatura-topo">${clausula525Html}</div>
             <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
-              <p>Atenciosamente,</p>
-              ${assinaturasHtml}
+              ${bi ? biFixo('p', 'Atenciosamente,') : '<p>Atenciosamente,</p>'}
+              ${assinaturasDoDoc}
             </div>
           </section>`;
       }
@@ -1263,7 +1558,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     const blocksHtml = `
       <section class="block stack-md avoid-break" data-page-break-after="true">
-        <p class="cover-strip-titulo" style="text-align: center;">Tabela com Dados Cadastrais da <strong>CONTRATADA</strong></p>
+        <p class="cover-strip-titulo" style="text-align: center;">Tabela com Dados Cadastrais da <strong>CONTRATADA</strong>${bi ? `<br><span lang="${idiomaDoc}">${esc(T('Tabela com Dados Cadastrais da CONTRATADA'))}</span>` : ''}</p>
         ${dadosContratadaB64
           ? `<img src="${dadosContratadaB64}" alt="Tabela com Dados Cadastrais da CONTRATADA"${dadosContratadaDim} style="max-width:100%;height:auto;display:block; font-weight: bold;" />`
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
@@ -2055,7 +2350,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       .proposal-document { display: block; gap: 0; padding: 0; }
       .proposal-page { margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
     }
-  </style>
+  ${bi ? biCss : ''}</style>
 </head>
 <body>
   ${printBar}
@@ -2072,24 +2367,33 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${myLogoB64 ? `<img src="${myLogoB64}" alt="MOINHO YPIRANGA" />` : `<span style="font-weight:700;font-size:11pt;">MOINHO YPIRANGA</span>`}
         </div>
       </div>
-      <div class="cover-blue-strip">
+      ${bi ? `<div class="cover-blue-strip bi-capa">
+        <div class="bi-pt">
+          <p>${esc(tituloCapa)}</p>
+          ${(proposta.titulo && String(proposta.titulo).trim()) ? `<p class="cover-strip-titulo">${esc(String(proposta.titulo).trim())}</p>` : ''}
+        </div>
+        <div class="bi-tr" lang="${idiomaDoc}">
+          <p>${esc(T(tituloCapa))}</p>
+          ${(proposta.titulo && String(proposta.titulo).trim()) ? Bilingue.elementoTraduzido('p', String(proposta.titulo).trim(), traducoesDoc, 'cover-strip-titulo') : ''}
+        </div>
+      </div>` : `<div class="cover-blue-strip">
         <p>${esc(tituloCapa)}</p>
         ${(proposta.titulo && String(proposta.titulo).trim()) ? `<p class="cover-strip-titulo">${esc(String(proposta.titulo).trim())}</p>` : ''}
-      </div>
+      </div>`}
       <div class="cover-info-area">
-        <p class="cover-info-title">PROPOSTA TÉCNICA COMERCIAL</p>
+        <p class="cover-info-title">PROPOSTA TÉCNICA COMERCIAL${bi ? `<br><span class="cover-info-title-tr">${esc(T('PROPOSTA TÉCNICA COMERCIAL'))}</span>` : ''}</p>
         <p class="cover-info-num">Nº ${numero}</p>
         ${clienteLogoB64 ? `<div class="cover-client-logo"><img src="${clienteLogoB64}" alt="Logo do cliente" /></div>` : ''}
         <div class="cover-client-info">
           ${/* Ordem: identificação da EMPRESA (razão social + CNPJ) primeiro, depois os
                dados de CONTATO (pessoa, e-mail, telefone). O CNPJ ficava no meio do
                bloco de contato, separando a empresa da própria identificação fiscal. */''}
-          <p class="cover-field-contratante"><span class="cover-field-rotulo">EMPRESA CONTRATANTE:</span><span data-edit="cliente_nome">${clienteNome}</span></p>
-          <p class="cover-field-cnpj"><span class="cover-field-rotulo">CNPJ:</span>${clienteCnpj}</p>
-          <p class="cover-field-contato"><span class="cover-field-rotulo">Contato:</span><span data-edit="cliente_contato">${clienteContato}</span></p>
-          <p class="cover-field-email"><span class="cover-field-rotulo">Email:</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
-          <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(formatarTelefone(proposta.cliente_telefone || proposta.cliente_telefone_cadastro) || '—')}</span></p>
-          <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
+          <p class="cover-field-contratante"><span class="cover-field-rotulo">${esc(rotuloCampo('EMPRESA CONTRATANTE:'))}</span><span data-edit="cliente_nome">${clienteNome}</span></p>
+          <p class="cover-field-cnpj"><span class="cover-field-rotulo">${esc(rotuloCampo('CNPJ:'))}</span>${clienteCnpj}</p>
+          <p class="cover-field-contato"><span class="cover-field-rotulo">${esc(rotuloCampo('Contato:'))}</span><span data-edit="cliente_contato">${clienteContato}</span></p>
+          <p class="cover-field-email"><span class="cover-field-rotulo">${esc(rotuloCampo('Email:'))}</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
+          <p class="cover-field-telefone"><span class="cover-field-rotulo">${esc(rotuloCampo('Telefone:'))}</span><span data-edit="cliente_telefone">${esc(formatarTelefone(proposta.cliente_telefone || proposta.cliente_telefone_cadastro) || '—')}</span></p>
+          <p class="cover-field-emissao">${esc(rotuloCampo('Data de Emissão:'))} <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>
       ${/* Capa sem rodapé: é folha de rosto, não leva os dados da empresa nem "Pág. X/Y".
@@ -2102,7 +2406,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${pageHeaderTemplateHtml}
       </header>
       <main class="page-content pres-page-content">
-        <div class="pres-text">
+        ${bi ? apresentacaoBiHtml : `<div class="pres-text">
           <p style="text-indent:0;"><strong>APRESENTAÇÃO</strong></p>
           <p>A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do <strong>MERCOSUL</strong>, destacando nossas competências no fornecimento de plantas em regime Turn-Key.</p>
           <p>Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento.</p>
@@ -2122,7 +2426,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
         <div class="pres-image">
           ${projetosB64 ? `<img src="${projetosB64}" alt="Projetos e instalações industriais" />` : ''}
-        </div>
+        </div>`}
       </main>
       <footer class="page-footer">
         ${pageFooterTemplateHtml}
@@ -2134,7 +2438,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${pageHeaderTemplateHtml}
       </header>
       <main class="page-content">
-        <h2 style="text-align:center;margin-bottom:6mm;">SUMÁRIO</h2>
+        <h2 style="text-align:center;margin-bottom:6mm;">SUMÁRIO${bi ? ` / ${esc(T('SUMÁRIO'))}` : ''}</h2>
         <div class="toc-list" id="tocList"></div>
       </main>
       <footer class="page-footer">
@@ -2265,7 +2569,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         let maxCount = 1; // precisa de pelo menos 2 filhos para valer a pena dividir
         const stack = [blockEl];
         while (stack.length) {
-          const el = stack.pop();
+          const el = stack.pop();${bi ? ` if (el !== blockEl && (el.tagName === 'TR' || (el.classList && el.classList.contains('bi-par')))) continue;` : ''}
           const kids = Array.from(el.children).filter(isElement);
           if (kids.length > maxCount) { maxCount = kids.length; container = el; }
           kids.forEach((k) => stack.push(k));
@@ -2357,7 +2661,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         let leaf = null, leafLen = 0;
         const stack = [blockEl];
         while (stack.length) {
-          const el = stack.pop();
+          const el = stack.pop();${bi ? ` if (el !== blockEl && (el.tagName === 'TR' || (el.classList && el.classList.contains('bi-par')))) continue;` : ''}
           const kids = Array.from(el.children).filter(isElement);
           if (kids.length === 0) {
             const len = (el.textContent || '').trim().length;
@@ -2621,7 +2925,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             const numeroImpresso = p.getAttribute('data-page-number');
             if (!numeroImpresso) return;
             p.querySelectorAll('h2, h3').forEach((h) => {
-              const txt = String(h.textContent || '').trim();
+              const txt = String(${bi ? `(h.querySelector('.bi-pt') || h)` : 'h'}.textContent || '').trim();
               if (!/^\\d+(\\.\\d+)?[.\\s]/.test(txt)) return;
               const row = document.createElement('div');
               row.className = 'toc-row' + (h.tagName === 'H3' ? ' toc-sub' : '');
