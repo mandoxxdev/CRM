@@ -1272,7 +1272,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     /* Justificado em meia largura abria buracos entre as palavras ("aspectos      técnicos"): no bilíngue, à esquerda. */
     .bi-par p, .bi-par li, .bi-par div { text-align: left !important; }
     .bi-h { margin-bottom: 3px; }
-    .bi-tr { color: #1f3a66; }
+    /* Cores (24/11/2026: "imagens, cores diferentes, negritos, tem que deixar mais estética a proposta"): o português continua no
+       azul-marinho do documento; a tradução num azul médio, para o olho separar as línguas; o título traduzido no azul-petróleo do
+       cabeçalho (mais escuro que o #41afcc das linhas, para ter contraste de leitura); filete fino sob o título da cláusula. */
+    .bi-tr { color: #1f5f8b; }
+    .bi-h > .bi-tr { color: #1a7f9c; }
+    /* !important: o ".proposal-document h2 { border: none !important }" geral apagava o filete. */
+    .proposal-document h2.bi-h { border-bottom: 0.3mm solid rgba(65,175,204,0.55) !important; padding-bottom: 1.2mm !important; margin-bottom: 2.5mm; }
     /* Pendente: só cor e fundo. O itálico e o "(tradução pendente)" escrito alargavam a metade direita e abriam buraco na esquerda
        em toda linha; quem avisa da pendência é a tela (selo e aviso ao baixar o PDF). */
     .bi-pendente { color: #9a5b00; background: #fff3dc; }
