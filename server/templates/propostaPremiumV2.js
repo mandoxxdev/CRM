@@ -1262,7 +1262,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .bi-par-li + .bi-par-li { margin-top: 0; }
     /* O filete é sombra (não ocupa largura): com borda, o arredondamento para pixel deixava a direita ~0,5px mais larga e uma frase
        no limite quebrava só na esquerda. */
-    .bi-par > .bi-tr, .bi-h > .bi-tr { box-shadow: inset 0.4mm 0 0 #c9d3e3; padding-left: 3.4mm; }
+    /* O filete é uma linha só à esquerda (::before), que não ocupa largura. A sombra interna (box-shadow inset) de 0,4mm, fracionária
+       em pixel, deixava um fio nos outros três lados e a coluna traduzida parecia dentro de uma caixa ("parece que está dentro de uma
+       coluna, deveria estar igual o da esquerda", 24/11/2026). */
+    .bi-par > .bi-tr, .bi-h > .bi-tr { position: relative; padding-left: 3.4mm; }
+    .bi-par > .bi-tr::before, .bi-h > .bi-tr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: #c9d3e3; }
     .bi-par p, .bi-par ul, .bi-par ol, .bi-par li { margin: 0 !important; text-indent: 0 !important; }
     .bi-par ul, .bi-par ol { padding-left: 5mm; }
     /* Justificado em meia largura abria buracos entre as palavras ("aspectos      técnicos"): no bilíngue, à esquerda. */
