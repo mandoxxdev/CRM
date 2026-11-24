@@ -8,6 +8,13 @@ projeto conceitual cadastrado no meu sistema, não sobe para cá"* — a famíli
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Tela de escolher família legível com muitas famílias | 45min | 45min | 45min | — | Ajuste de tela com teste no navegador (~30-45min) | — | — | — |
 | 2 | Produtos que não aparecem na família | 1h30 | 1h30 | 1h30 | — | Regra + rota + tela + teste (~1h a 1h30) | — | — | — |
+| 3 | Preço do item da proposta editável | 45min | 45min | 45min | — | Campo + regra de aprovação + teste | — | — | — |
+| 4 | Proposta de Projeto Conceitual igual ao modelo da empresa | 1h30 | 1h30 | 1h30 | — | Ramo novo do template + modelo + testes | — | — | — |
+| 5 | Ajustes na proposta em inglês e espanhol | 1h | 1h | 1h | `docs/superpowers/plans/2026-11-24-propostas-etapa1-proposta-bilingue.md` | Correção da entrega bilíngue | — | — | — |
+
+**Revisado (24/11/2026, tarde):** chegaram no meio do trabalho — (3) *"devo poder mudar manualmente o preço"*; (4) *"não consegue seguir
+exatamente minha proposta? … Somente nesse caso, o restante das propostas não mexa"*; (5) a apresentação passando do rodapé, *"totalmente
+errado os espaçamentos"* e *"a tradução não está automática!!!!!"* — defeitos da entrega bilíngue da manhã.
 
 ## Como foi medido
 

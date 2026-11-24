@@ -9,5 +9,18 @@ Tempo estimado: *45min*
 Ao renomear uma família, os produtos dela ficavam presos ao nome antigo e sumiam da proposta ("Nenhum produto encontrado nesta família"). Renomear a família passa a levar os produtos junto, e a tela passa a dizer por que não achou nada (produto inativo ou com o nome antigo da família) e o que fazer.
 Tempo estimado: *1h30*
 
-*Total estimado: 2h15*
+*3. Preço do item da proposta editável*
+O preço do item que vem do cadastro passa a poder ser mudado à mão na proposta. Baixar abaixo do preço de tabela conta como desconto e segue a mesma regra de aprovação.
+Tempo estimado: *45min*
+
+*4. Proposta de Projeto Conceitual igual ao modelo da empresa*
+A proposta de Projeto Conceitual passa a sair como o documento padrão da empresa: cláusulas de 1 a 20 na mesma ordem, sem a parte de equipamento (foto, código, modelo) e com o quadro do valor total dos serviços. As demais propostas não mudam.
+Tempo estimado: *1h30*
+
+*5. Ajustes na proposta em inglês e espanhol*
+A página de apresentação não passa mais do rodapé, o espaçamento entre os parágrafos e listas fica como no documento em português, e a tradução passa a acontecer sozinha ao salvar, ao ver em duas colunas e ao baixar o PDF.
+Tempo estimado: *1h*
+
+*Total estimado: 5h30*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
+_Revisado: três pedidos novos chegaram durante o trabalho (itens 3, 4 e 5)._
