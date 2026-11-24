@@ -733,6 +733,19 @@ porque o template desenha toda 5.x abaixo de 5.25 antes da tabela — com o núm
 Entregáveis" virou "Item 5.5". Ele **não** entra no `completarModeloClausulas`: sem histórico de cláusula acrescentada depois, ainda não
 precisa. Teste: `tests/api/modeloProjetoConceitual.api.test.js`.
 
+**Documento de serviço (24/11/2026, tarde) — a spec acima, que descrevia o encaixe do Projeto Conceitual no molde de equipamento (1–3 no
+começo, 5.1–5.17), ESTÁ SUPERADA.** O usuário pediu a proposta de origem. Hoje: modelo numerado 1. a 20. (16.1 = condição de pagamento),
+ressincronizado com o código no boot por `sincronizarModeloClausulas` (index.js — substitui as cláusulas do modelo quando divergem; só
+para modelo que nenhuma tela edita); no template, com `propostaDeServico` o `clausulasSection` desenha as cláusulas em sequência numeradas
+pela **posição** (o número gravado no título é ignorado), sem `secoesIntroHtml`, sem `equipDescritivoHtml`, sem FINAME e fiscais, com o
+quadro "Valor Total dos Serviços" na cláusula de preço (título começando por "Preço") e, da CONSIDERAÇÃO FINAL em diante, na página de
+assinatura. Testes: `modeloProjetoConceitual.api.test.js` PC-02 (ressincroniza) e PC-03/04 (ordem 1–20, nos dois formatos).
+
+**Renomear família leva os produtos (24/11/2026).** `PUT /api/familias/:id` lê o nome antigo e, se mudou, grava o novo em
+`produtos.familia` de todo produto que casa com o antigo pela `normalizarFamiliaComparacao`; a resposta traz `produtos_renomeados`.
+Propostas já feitas não mudam. E a `normalizarFamiliaComparacao` passou a tirar acento de verdade — o regex estava sem colchetes
+(`/̀-ͯ/`) desde sempre: esta spec não falava dele, mas o catálogo dependia dele. Teste: `familiaRenomeadaLevaProdutos.api.test.js`.
+
 **Capa e FINAME por modelo (24/11/2026, segundo pedido do dia).** `carregarVariaveisDasFamilias` leva também
 `templateConfig.modelo_por_familia` (`familias_produto.clausulas_modelo_id` → `clausulas_modelo.nome`, só modelo ativo). No template,
 `MODELOS_DE_SERVICO` (nome do modelo sem acento/caixa → título da capa; hoje só `projeto conceitual` →

@@ -48,9 +48,11 @@ ING/ESP; se for em outra língua deve ser bicolunado. Ter a versão principal em
 - **RN-BI.04** — Texto fixo do documento sai do dicionário; o que vem de dado (cláusulas, itens, variáveis, título) sai da memória de
   tradução. Sem tradução na memória, a coluna da outra língua mostra o PT-BR marcado como *pendente de tradução* — o documento nunca sai
   com a metade em branco calada.
-- **RN-BI.05** — No painel **Traduções** do preview, **Traduzir pendentes** (o clique é o gesto que o Chrome exige) traduz o que estiver
-  pendente com o tradutor do Chrome e grava na memória (`origem = 'auto'`). *(Esta linha dizia "ao abrir o preview no Chrome" — sem gesto o
-  Chrome não baixa a língua na primeira vez; corrigido pela Fase 2, I11.)*
+- **RN-BI.05** — A tradução é **automática**: o que estiver pendente é traduzido pelo tradutor do Chrome e gravado (`origem = 'auto'`) ao
+  **Salvar alterações**, ao **Ver em duas colunas** e ao **Baixar PDF** (o tradutor é criado dentro do clique — o gesto que o Chrome exige
+  para baixar a língua na 1ª vez) e, sem clique, ao abrir o preview quando a língua já está baixada (`availability() === 'available'`).
+  **Traduzir pendentes** no painel continua existindo. *(Esta linha dizia só "no painel, Traduzir pendentes" — o usuário, 24/11/2026: "a
+  tradução não está automática!!!!!". Antes disso dizia "ao abrir o preview", o que sem gesto não funciona na 1ª vez — Fase 2, I11.)*
 - **RN-BI.06** — O vendedor corrige a tradução no painel **Traduções**; a correção grava `origem = 'manual'` e **não** é sobrescrita por
   tradução automática. *(Dizia "na coluna traduzida do preview" — corrigido pela Fase 2, C1–C3.)*
 - **RN-BI.07** — Os termos do glossário saem sempre com a tradução fixa, na tradução automática.

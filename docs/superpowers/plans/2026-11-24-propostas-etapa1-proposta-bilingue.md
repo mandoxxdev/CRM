@@ -166,6 +166,23 @@ Revisor fresco, instruído a refutar; cada achado com cenário e, quando possív
 - **Não tratado, declarado:** `{{#if}}…{{/if}}` que atravesse dois parágrafos de uma cláusula, no bilíngue, pode apagar através da marcação dos
   pares quando a condição é falsa (não reproduzido; os modelos de hoje não usam).
 
+## Ajustes depois da entrega (24/11/2026, tarde) — defeitos vistos pelo usuário no uso
+
+- **A apresentação passava do rodapé** (PDF em espanhol). A página é fixa (fora do paginador) e o `.pres-text p/li` do estilo base fixa 12pt
+  em cada parágrafo, vencendo os 9pt postos só no bloco. Fonte nas linhas. **E o teste não via:** o `propostaBilinguePaginacao` só media
+  as páginas geradas; agora mede as fixas também (falhou nos 6 cenários antes da correção).
+- **Espaçamento "totalmente errado"**: o gap das pilhas (`.stack-sm/.stack-md`) somava com a margem entre pares — lista de 5 itens saía como
+  5 parágrafos; e o justificado em meia largura abria buracos. Pilha com pares sem gap; 2,4mm entre parágrafos, 0,8mm entre itens; à esquerda.
+- **"A tradução não está automática!!!!!"**: o plano tinha feito a tradução depender do clique em **Traduzir pendentes** (o Chrome exige
+  gesto na 1ª vez). Agora ela roda sozinha ao **Salvar**, **Ver em duas colunas** e **Baixar PDF** (o tradutor nasce dentro do clique) e,
+  sem clique, ao abrir o preview quando a língua já está baixada. `traduzirPendentesDaProposta` + `linguaJaBaixada` em `traducaoChrome.js`.
+- **O Projeto Conceitual segue a proposta de origem** (*"Somente nesse caso, o restante das propostas não mexa"*): ramo `propostaDeServico`
+  no `clausulasSection` — cláusulas 1 a 20 numeradas pela posição, sem seção 4 de equipamento, sem FINAME/fiscais, quadro "Valor Total dos
+  Serviços" no 16, 19 e 20 na página de assinatura. Modelo renumerado (`clausulasProjetoConceitual.js`) e **ressincronizado no boot**
+  (`sincronizarModeloClausulas`) — nenhuma tela edita modelo. Equipamento e peças: hash igual ao de antes da etapa (`BI-T01`); o hash do
+  Projeto Conceitual foi regerado de propósito. Achado no caminho: no formato gravado na proposta ("19. CONSIDERAÇÃO FINAL"), o
+  `ehConsideracaoFinal` geral não tira o número com ponto — o ramo de serviço usa o seu.
+
 ## Verificação (sobre o código final: `40cb21ff`, `b8bd5add`, `6f80f20c`)
 
 - `propostaBilingueModulo` 8/8 · `propostaBilingueTemplate` 8/8 · `traducoesProposta` 7/7 (servidor real; PDF com o Chrome instalado via

@@ -527,6 +527,15 @@ serviço (ex.: uma família *Projeto Conceitual*), escolha o modelo **Projeto Co
 já sai com esse contrato. Proposta cujas cláusulas já foram editadas não muda (ela guarda a cópia feita na primeira edição); proposta
 que nunca teve cláusula editada mostra sempre o modelo **atual** da família — trocar o modelo da família muda o contrato dela também.
 
+**O documento da proposta de Projeto Conceitual segue o modelo da empresa** (24/11/2026, à tarde — pedido: *"não consegue seguir
+exatamente minha proposta? … Somente nesse caso, o restante das propostas não mexa"*). A proposta só com itens de famílias ligadas ao
+modelo Projeto Conceitual sai como o documento padrão: capa, apresentação, dados cadastrais, sumário e as **cláusulas de 1 a 20** na ordem
+dele — **sem** a seção de equipamento (foto, "Equipamento:", código, modelo), sem FINAME e sem tabelas fiscais. A cláusula **16. Preço e
+Condição de Pagamento** traz o quadro **Valor Total dos Serviços**; a **19. Consideração Final** e a **20. Validade e Aceite** vão na página
+de assinatura. As outras propostas não mudam. **Proposta de Projeto Conceitual já começada antes desta mudança:** no preview, clique em
+**Resetar cláusulas** para ela pegar a ordem nova (o que tinha sido editado nas cláusulas dela se perde). *(O texto abaixo, sobre a capa,
+continua valendo.)*
+
 **A capa e a tabela FINAME da proposta de Projeto Conceitual** (desde 24/11/2026, no mesmo dia do modelo): proposta só com itens de
 famílias ligadas ao modelo Projeto Conceitual sai com a capa *"Proposta para fornecimento de serviços especializados"* — com o título
 digitado na proposta logo abaixo, ex.: *"Projeto Conceitual – Nova Unidade Fabril"* — e **sem** a tabela *Ref. FINAME / Cartão BNDES*, que
@@ -546,9 +555,11 @@ em qualquer proposta.
 Como usar:
 1. Na proposta, em **Cliente de fora do Brasil**, escolha o idioma, a moeda e, se houver, o incoterm (ex.: *FOB* + *Porto de Santos*). Salve.
 2. Abra a **pré-visualização**. O editor continua em português — é nele que se mexe no texto. Salve as alterações.
-3. Clique em **Traduções** → **Traduzir pendentes**. Na primeira vez, o Chrome pode baixar a língua (alguns segundos). Revise a coluna
-   da direita e corrija o que precisar → **Salvar correções**.
-4. Clique em **Ver em duas colunas** para ver o documento como ele sai no PDF. Depois, **Baixar PDF**.
+3. A tradução é **automática** (desde 24/11/2026, à tarde): acontece sozinha ao **Salvar alterações**, ao clicar em **Ver em duas
+   colunas** e ao **Baixar PDF** — e ao abrir o preview, quando a língua já foi baixada neste computador. Na primeira vez, o Chrome baixa
+   a língua (alguns segundos); um aviso "Traduzindo…" aparece no topo enquanto isso.
+4. Para revisar ou corrigir uma tradução: **Traduções** → corrija a coluna da direita → **Salvar correções**.
+5. **Ver em duas colunas** mostra o documento como ele sai no PDF. Depois, **Baixar PDF**.
 
 O que saber:
 - A tradução automática só funciona no **Chrome 138 ou mais novo**. Em outro navegador, o painel **Traduções** continua funcionando, mas
@@ -569,6 +580,17 @@ O que saber:
 O que **não** está coberto: a tabela de dados cadastrais da CONTRATADA é uma imagem e continua em português (só o título dela é
 traduzido); o cabeçalho e o rodapé das páginas seguem em português; fotos posicionadas à mão podem mudar de página no documento em duas
 colunas (ele tem mais páginas); tributação de exportação.
+
+**Catálogo de produtos na proposta e preço do item** (24/11/2026):
+
+| Antes | Agora |
+|---|---|
+| Com muitas famílias, a tela **Escolher família** achatava os cartões: foto espremida, nome sumido, só a inicial cortada. | Os cartões ficam no tamanho certo, com foto e nome inteiros; a lista rola quando não cabe. |
+| Renomear uma família deixava os produtos dela presos ao nome antigo — eles sumiam do catálogo da proposta ("Nenhum produto encontrado nesta família"). | Renomear a família **leva os produtos junto**. E a família vazia diz **por quê**: produtos inativos, ou produtos gravados com um nome de família que não existe mais (com o código — abra o produto, escolha a família e salve). |
+| O preço do item vindo do catálogo era só leitura. | O **valor unitário** do item do catálogo pode ser mudado à mão; o preço de tabela aparece embaixo. Baixar abaixo da tabela conta como **desconto do item** e segue a mesma regra: acima de 5%, a proposta fica em rascunho e vai para **Aprovações**. Subir o preço não pede aprovação. |
+
+Produto que sumiu **antes** desta correção (família renomeada antes de 24/11/2026) continua com o nome antigo até ser aberto e salvo
+com a família certa — a tela da família vazia mostra quais são.
 
 **O cadastro de família de produto.** Criar, editar, renomear e apagar uma família, trocar a foto e o esquemático, escolher as variáveis
 dela e as opções de cada variável exigem o **Comercial** (a regra da seção 3.3) — é em **Comercial → Produtos → um grupo**. As opções por
