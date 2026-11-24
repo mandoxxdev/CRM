@@ -164,15 +164,54 @@ function marcadoresDe(texto) {
  * O conteúdo de uma cláusula (ou qualquer HTML simples) em pares PT | tradução (RN-BI.02/03).
  * A metade PT guarda o HTML original (negrito, listas); a traduzida é texto, um elemento por parágrafo/item.
  */
+// ===== Negrito na coluna traduzida (24/11/2026: "e as partes de negrito tmb") =====
+// A memória guarda texto puro (a chave é o PT sem tags), então o negrito não atravessa a tradução da frase. Cada trecho em negrito
+// do PT vira uma chave própria (um <span hidden> com data-tr-origem, que a tela traduz junto) e a tradução dele é procurada DENTRO da
+// frase traduzida — achou, ganha <strong>. Não achou (o tradutor usou outra palavra no contexto), a frase sai sem esse negrito:
+// nunca some texto. Parágrafo inteiro em negrito sai inteiro em negrito.
+function trechosEmNegrito(html) {
+  const out = []; const re = /<(strong|b)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi; let m;
+  while ((m = re.exec(String(html || ''))) !== null) { const t = textoDeHtml(m[3]); if (t) out.push(t); }
+  return out;
+}
+const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const semPontuacaoFinal = (s) => normalizarChave(s).replace(/[\s.,;:!?]+$/, '');
+function aplicarNegrito(htmlPt, textoPt, corpoEsc, traducoes) {
+  const trechos = trechosEmNegrito(htmlPt);
+  if (!trechos.length) return corpoEsc;
+  if (semPontuacaoFinal(trechos.join(' ')) === semPontuacaoFinal(textoPt)) return `<strong>${corpoEsc}</strong>`;
+  let html = corpoEsc; let termos = '';
+  trechos.forEach((trecho) => {
+    const tr = traduzido(trecho, traducoes);
+    termos += `<span hidden${attrsTraducao(trecho, tr, 'bi-termo')}></span>`;
+    // Com a pontuação do fim primeiro ("Elaboración:" inteiro em negrito, como no PT); sem ela, se o tradutor a mudou.
+    const candidatos = [tr, tr && semPontuacaoFinal(tr), trecho, semPontuacaoFinal(trecho)].filter(Boolean).map(normalizarChave);
+    for (const alvo of [...new Set(candidatos)]) {
+      const alvoEsc = escHtml(alvo);
+      if (!alvoEsc) continue;
+      // Fora de tag e fora de um <strong> já aplicado.
+      const re = new RegExp(`(^|>)([^<]*?)(${escRegex(alvoEsc)})`, 'i');
+      let feito = false;
+      html = html.replace(re, (m0, a, antes, achado) => { feito = true; return `${a}${antes}<strong>${achado}</strong>`; });
+      if (feito) break;
+    }
+  });
+  return html + termos;
+}
+function elementoTraduzidoComNegrito(tag, htmlPt, textoPt, traducoes) {
+  const t = traduzido(textoPt, traducoes);
+  return `<${tag}${attrsTraducao(textoPt, t)}>${aplicarNegrito(htmlPt, textoPt, escHtml(t || normalizarChave(textoPt)), traducoes)}</${tag}>`;
+}
+
 function paresDeConteudo(conteudo, idioma, traducoes) {
   return segmentarHtml(conteudo).map((b) => {
     if (b.tipo === 'p') {
-      return `<div class="bi-par"><div class="bi-pt"><p>${b.html}</p></div><div class="bi-tr" lang="${idioma}">${elementoTraduzido('p', b.texto, traducoes)}</div></div>`;
+      return `<div class="bi-par"><div class="bi-pt"><p>${b.html}</p></div><div class="bi-tr" lang="${idioma}">${elementoTraduzidoComNegrito('p', b.html, b.texto, traducoes)}</div></div>`;
     }
     // Lista: um par por item — um item longo nunca fica numa página e a tradução dele na outra.
     const fecha = `</${b.tipo}>`;
     return b.itens.map((li) => `<div class="bi-par bi-par-li"><div class="bi-pt">${b.abre}<li>${li}</li>${fecha}</div>`
-      + `<div class="bi-tr" lang="${idioma}">${b.abre}${elementoTraduzido('li', textoDeHtml(li), traducoes)}${fecha}</div></div>`).join('');
+      + `<div class="bi-tr" lang="${idioma}">${b.abre}${elementoTraduzidoComNegrito('li', li, textoDeHtml(li), traducoes)}${fecha}</div></div>`).join('');
   }).join('');
 }
 
@@ -294,6 +333,7 @@ function rotuloDuplo(idioma, pt) {
 }
 
 module.exports = {
+  trechosEmNegrito, aplicarNegrito,
   IDIOMAS, MOEDAS, DICIONARIO,
   idiomaDaProposta, ehBilingue, moedaDaProposta, formatarMoeda, erroIdiomaMoeda,
   normalizarChave, textoDeHtml, segmentarHtml, escHtml, traduzido, attrsTraducao, elementoTraduzido, marcadoresDe, LIMITE_PARAGRAFO,

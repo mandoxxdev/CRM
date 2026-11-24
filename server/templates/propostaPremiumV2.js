@@ -1225,7 +1225,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         'Produção e desenvolvimento de softwares e automações;'];
       return `<div class="pres-text bi-pres">
           ${biPar('<p style="text-indent:0;"><strong>APRESENTAÇÃO</strong></p>', `<p style="text-indent:0;"><strong>${esc(T('APRESENTAÇÃO'))}</strong></p>`)}
-          ${biPar(`<p>${p1Pt}</p>`, `<p>${esc(T(p1Chave))}</p>`)}
+          ${biPar(`<p>${p1Pt}</p>`, `<p>${esc(T(p1Chave)).replace(/MOINHO YPIRANGA|MERCOSUR|MERCOSUL/g, (m) => `<strong>${m}</strong>`)}</p>`)}
           ${biFixo('p', 'Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento.')}
           ${biFixo('p', 'Na contratação Turn-Key, a trajetória do pedido segue:')}
           ${biPar(`<ul>${lista.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`, `<ul>${lista.map((l) => `<li>${esc(T(l))}</li>`).join('')}</ul>`)}
