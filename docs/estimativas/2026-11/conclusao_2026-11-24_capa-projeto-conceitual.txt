@@ -1,0 +1,8 @@
+*Concluído — Capa da proposta de Projeto Conceitual*
+_24/11/2026_
+
+1. Capa de serviços e sem a tabela FINAME no Projeto Conceitual — estimado 1h · realizado 30min
+
+*Total: estimado 1h · realizado 30min*
+
+De quebra, a pré-visualização da proposta passou a mostrar a mesma capa do PDF também quando nenhuma variável técnica está configurada (antes podia mostrar a capa de equipamentos numa proposta de peças).

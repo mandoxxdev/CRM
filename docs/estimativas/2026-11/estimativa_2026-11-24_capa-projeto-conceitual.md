@@ -5,7 +5,12 @@ Continuação do modelo de contrato Projeto Conceitual (mesma data): a "próxima
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Capa de serviços e sem a tabela FINAME no Projeto Conceitual | 1h | 1h | 1h | plano acima, seção "O que fica de fora" | Tarefa anterior do mesmo porte (modelo de contrato, 0,7 h medida hoje) | — | — | — |
+| 1 | Capa de serviços e sem a tabela FINAME no Projeto Conceitual | 1h | 1h | 1h | plano acima, seção "O que fica de fora" | Tarefa anterior do mesmo porte (modelo de contrato, 0,7 h medida hoje) | 0,1 h | 30min | `4de32918`, `29ba440e` |
+
+Fechamento (24/11/2026): `horas.js --grupos "Capa=[Cc]apa"` mediu **0,1 h** — por baixo: o intervalo entre o commit da estimativa e o do
+código passou do limite de sessão do medidor (as rodadas do teste sobem o servidor duas vezes, mais de 60 s cada, nesta pasta do
+OneDrive), e ele contou o trecho como sessão nova. Realizado informado pelo mínimo da regra (30min), sem somar parte fixa. Se o
+medidor continuar cortando assim nesta máquina, a régua do passo 2 da skill precisa de nota.
 
 ## Como foi medido
 
