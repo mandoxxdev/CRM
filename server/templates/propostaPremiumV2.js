@@ -1212,8 +1212,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>`;
     })();
 
-    // Apresentação no bilíngue (Fase 2, I13): a página é fixa, fora do paginador, com overflow:hidden — duas colunas não cabem com a
-    // imagem. Sai o texto em pares, sem a imagem, com fonte menor (.bi-pres no CSS bilíngue).
+    // Apresentação no bilíngue (Fase 2, I13): a página é fixa, fora do paginador, com overflow:hidden. Sai o texto em pares e, desde
+    // 24/11/2026 (noite), a imagem de volta embaixo, como no modelo DOCX — o usuário: "aqui daria para ser maior, ficar mais estético";
+    // a página tinha letra 9pt e um terço vazio. O tamanho da letra é o MAIOR que cabe com a imagem (ajustarApresentacaoBi, no script).
     const apresentacaoBiHtml = (() => {
       if (!bi) return '';
       const p1Pt = 'A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do <strong>MERCOSUL</strong>, destacando nossas competências no fornecimento de plantas em regime Turn-Key.';
@@ -1229,7 +1230,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${biFixo('p', 'Na contratação Turn-Key, a trajetória do pedido segue:')}
           ${biPar(`<ul>${lista.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`, `<ul>${lista.map((l) => `<li>${esc(T(l))}</li>`).join('')}</ul>`)}
           ${biFixo('p', 'Todas as fases desse processo contam com o suporte de recursos tecnológicos adequados, com um moderno sistema de gestão de projetos, além de uma equipe técnica própria e altamente qualificada para atender às necessidades do cliente.')}
-        </div>`;
+        </div>
+        ${projetosB64 ? `<div class="pres-image bi-pres-image"><img src="${projetosB64}" alt="Projetos e instalações industriais" /></div>` : ''}`;
     })();
 
     // CSS do documento de serviço (Projeto Conceitual) — só emitido nele.
@@ -1291,7 +1293,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     /* Apresentação: página FIXA (fora do paginador, overflow:hidden). O .pres-text p/li do estilo base fixa 12pt em cada
        parágrafo e item e vencia o 9pt posto só no bloco — o texto em duas colunas passava do rodapé (visto pelo usuário, 24/11/2026). */
     .bi-pres { width: 100%; max-width: none; flex: 1 1 auto; }
-    .bi-pres p, .bi-pres li { font-size: 9pt !important; line-height: 1.25 !important; margin-bottom: 1.2mm !important; }
+    .bi-pres p, .bi-pres li { font-size: var(--pres-fs, 9pt) !important; line-height: 1.3 !important; margin-bottom: 1.2mm !important; }
+    /* O texto não estica (flex 0): o espaço que sobra fica em volta da imagem, centrada no resto da página. */
+    .pres-page-content > .bi-pres { flex: 0 0 auto; }
+    .bi-pres-image { margin-top: 4mm; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+    .bi-pres-image img { height: var(--pres-img, 47mm); width: auto; max-width: 150mm; }
     .bi-pres p { text-indent: 0 !important; }
     .bi-pres ul { padding-left: 3mm !important; margin: 0 !important; }
     .bi-pres li { padding-left: 5mm !important; }
@@ -2817,7 +2823,70 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }
         return [blockEl];
       }
-      function paginateProposalContent() {
+${bi ? `      // ===== Bilíngue: simetria das duas colunas (24/11/2026: "tem que sempre forçar a ficar parecido ambos, para dar simetria") =====
+      // Cada par é uma linha de grade com a altura da metade mais alta: tradução mais comprida deixava buraco embaixo do português.
+      // Reduz a escala (zoom) da metade mais alta só o necessário para terminar junto da outra, com piso de 88% — só DIMINUI altura,
+      // então não cria transbordo de página. Roda depois da paginação (as páginas são recriadas a cada vez, sem zoom).
+      function alturaDoConteudo(el) { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().height; }
+      // Com a letra menor, as linhas do lado ajustado ficam mais baixas e ele terminava antes do outro (até 13px): a entrelinha cresce na
+      // mesma proporção para os dois lados terminarem juntos. Lê todas as entrelinhas ANTES de escrever (o filho herdaria a já escalada).
+      function compensarEntrelinha(el, alvo) {
+        const h = alturaDoConteudo(el);
+        if (h <= 0 || h >= alvo - 2) return;
+        const fator = Math.min(alvo / h, 1.25);
+        const alvos = [el, ...el.querySelectorAll('p, li, div, span, strong, em, b')];
+        const lidas = alvos.map((x) => parseFloat(getComputedStyle(x).lineHeight));
+        alvos.forEach((x, i) => { if (lidas[i] > 0) x.style.setProperty('line-height', (lidas[i] * fator).toFixed(2) + 'px', 'important'); });
+      }
+      function equalizarPares(raiz) {
+        const PISO = 0.88;
+        if (!raiz || !raiz.querySelectorAll) return;
+        const pares = [...raiz.querySelectorAll('.bi-par, .bi-h')];
+        if (raiz.matches && raiz.matches('.bi-par, .bi-h')) pares.unshift(raiz);
+        pares.forEach((par) => {
+          // Já igualado nesta largura: o paginador põe e tira o mesmo bloco várias vezes ao procurar onde ele cabe.
+          if (par.dataset.eq === String(par.clientWidth)) return;
+          if (par.offsetParent === null || par.querySelector('table, img')) return;
+          par.dataset.eq = String(par.clientWidth);
+          const a = par.querySelector(':scope > .bi-pt'); const b = par.querySelector(':scope > .bi-tr');
+          if (!a || !b) return;
+          [a, b].forEach((x) => { x.style.zoom = ''; [x, ...x.querySelectorAll('*')].forEach((y) => y.style.removeProperty('line-height')); });
+          const ha = alturaDoConteudo(a); const hb = alturaDoConteudo(b);
+          if (Math.abs(ha - hb) < 3) return;
+          const alto = ha > hb ? a : b; const alvo = Math.min(ha, hb); const original = Math.max(ha, hb);
+          let lo = PISO; let hi = 1; let melhor = null;
+          for (let k = 0; k < 7; k++) {
+            const z = (lo + hi) / 2; alto.style.zoom = String(z);
+            if (alturaDoConteudo(alto) <= alvo + 1) { melhor = z; lo = z; } else hi = z;
+          }
+          if (melhor) { alto.style.zoom = String(melhor); compensarEntrelinha(alto, alvo); return; }
+          // Não chega na mesma altura nem no piso: fica no piso se isso tirar ao menos uma linha; senão, sem zoom.
+          alto.style.zoom = String(PISO);
+          if (alturaDoConteudo(alto) >= original - 4) alto.style.zoom = '';
+        });
+      }
+      // Apresentação (página fixa, overflow:hidden): o MAIOR tamanho de letra que cabe com a imagem, entre 12pt e 8pt.
+      function ajustarApresentacaoBi() {
+        const pres = document.querySelector('.bi-pres');
+        const pc = pres && pres.closest('.page-content');
+        if (!pc || pc.offsetParent === null) return;
+        const cabe = () => pc.scrollHeight <= pc.clientHeight + 1;
+        pres.querySelectorAll('.bi-par, .bi-h').forEach((par) => { delete par.dataset.eq; });
+        pres.querySelectorAll('.bi-pt, .bi-tr').forEach((c) => { c.style.zoom = ''; });
+        // Primeiro a letra (com a imagem no mínimo, 32mm de altura), depois a imagem cresce no que sobrar (até 55mm).
+        pc.style.setProperty('--pres-img', '32mm');
+        for (let fs = 11.5; fs >= 8; fs -= 0.1) {
+          pres.style.setProperty('--pres-fs', fs.toFixed(1) + 'pt');
+          if (cabe()) break;
+        }
+        equalizarPares(pres);
+        for (let mm = 55; mm > 32; mm -= 1) {
+          pc.style.setProperty('--pres-img', mm + 'mm');
+          if (cabe()) return;
+        }
+        pc.style.setProperty('--pres-img', '32mm');
+      }
+` : ''}      function paginateProposalContent() {
         const doc = document.getElementById('proposalDocument');
         const template = document.getElementById('proposalPageTemplate');
         const source = document.getElementById('proposalSource');
@@ -2844,7 +2913,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           }
         };
         const fits = (limitPx) => pageContent.scrollHeight <= limitPx;
-        const addNode = (node) => { stack.appendChild(node); };
+        const addNode = (node) => { stack.appendChild(node);${bi ? ' equalizarPares(node); /* simetria AO POSICIONAR: o paginador mede a altura final */' : ''} };
         const pageLimitPx = pageContent.clientHeight;
 
         const wouldOverflowIfAdd = (node) => {
@@ -3039,7 +3108,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         // transbordar, esconde a página do sumário. A cada repaginação o estado é
         // reavaliado (o filtro de páginas ignora display:none), então se o usuário
         // remover cláusulas e o sumário voltar a caber, ele reaparece.
-        const tocPage = document.getElementById('tocPage');
+${bi ? `        ajustarApresentacaoBi();
+` : ''}        const tocPage = document.getElementById('tocPage');
         if (tocPage) {
           tocPage.style.display = '';                    // re-testa a cada repaginação
           preencherSumario(numerarPaginas());            // provisório, para medir
