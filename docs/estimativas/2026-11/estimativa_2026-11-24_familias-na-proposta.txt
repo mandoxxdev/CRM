@@ -1,0 +1,13 @@
+*Planejamento — Escolha de família e produtos na proposta*
+_24/11/2026_
+
+*1. Tela de escolher família legível com muitas famílias*
+Com mais famílias cadastradas, os cartões da tela "Escolher família" ficavam achatados: a foto espremida, o nome cortado e só a inicial aparecendo. Os cartões voltam ao tamanho certo, com foto e nome inteiros, e a lista rola quando não cabe.
+Tempo estimado: *45min*
+
+*2. Produtos que não aparecem na família*
+Ao renomear uma família, os produtos dela ficavam presos ao nome antigo e sumiam da proposta ("Nenhum produto encontrado nesta família"). Renomear a família passa a levar os produtos junto, e a tela passa a dizer por que não achou nada (produto inativo ou com o nome antigo da família) e o que fazer.
+Tempo estimado: *1h30*
+
+*Total estimado: 2h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
