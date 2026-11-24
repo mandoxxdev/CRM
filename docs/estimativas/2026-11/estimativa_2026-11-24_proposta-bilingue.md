@@ -13,12 +13,20 @@ vendedor, grátis, sem servidor), com memória de tradução no servidor e gloss
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Idioma, moeda e incoterm na proposta | 1h | 1h | 1h | `docs/superpowers/plans/2026-11-24-propostas-etapa1-proposta-bilingue.md` | Campo + tela + gravação (~1h) | — | — | — |
-| 2 | Textos fixos do documento em inglês e espanhol | 1h30 | 1h30 | 1h30 | idem | Template + dicionário (~1h a 1h30) | — | — | — |
-| 3 | Duas colunas — capa, textos e cláusulas | 2h | 2h | 2h | idem | Paginação do template (risco: o paginador mede bloco por bloco) | — | — | — |
-| 4 | Duas colunas — tabelas | 2h | 2h | 2h | idem | idem | — | — | — |
-| 5 | Tradução automática (Chrome) com memória e correção | 2h | 2h | 2h | idem | Rota + tabela + front no preview | — | — | — |
-| 6 | Moeda e incoterm na tabela de preços | 1h30 | 1h30 | 1h30 | idem | Template + regra de FINAME | — | — | — |
+| 1 | Idioma, moeda e incoterm na proposta | 1h | 1h | 1h | `docs/superpowers/plans/2026-11-24-propostas-etapa1-proposta-bilingue.md` | Campo + tela + gravação (~1h) | rateio de 1,6 h | 15min | `40cb21ff`, `6f80f20c` |
+| 2 | Textos fixos do documento em inglês e espanhol | 1h30 | 1h30 | 1h30 | idem | Template + dicionário (~1h a 1h30) | rateio de 1,6 h | 15min | `40cb21ff` |
+| 3 | Duas colunas — capa, textos e cláusulas | 2h | 2h | 2h | idem | Paginação do template (risco: o paginador mede bloco por bloco) | rateio de 1,6 h | 30min | `b8bd5add` |
+| 4 | Duas colunas — tabelas | 2h | 2h | 2h | idem | idem | rateio de 1,6 h | 30min | `b8bd5add` |
+| 5 | Tradução automática (Chrome) com memória e correção | 2h | 2h | 2h | idem | Rota + tabela + front no preview | rateio de 1,6 h | 30min | `40cb21ff`, `6f80f20c` |
+| 6 | Moeda e incoterm na tabela de preços | 1h30 | 1h30 | 1h30 | idem | Template + regra de FINAME | rateio de 1,6 h | 15min | `b8bd5add` |
+
+## Fechamento (24/11/2026)
+
+`horas.js --grupos "Bilingue=[Bb]il[ií]ngue"` mediu **1,6 h** para a etapa inteira, rateada pela execução estimada (total 2h15 depois de
+arredondar cada tarefa para cima). **Por baixo, e muito:** o medidor conta o intervalo entre commits, e esta etapa foi commitada toda no
+fim (1 intervalo medido de ~81 min; o resto caiu como sessão nova). O trabalho real incluiu o spike de tradução, duas revisões, quatro
+rodadas de correção e muitas subidas do servidor de mais de 60 s nesta pasta do OneDrive. **Lição para a régua:** commitar por tarefa,
+não no fim — senão o estimado x realizado não diz nada.
 
 ## Medir no fechamento
 

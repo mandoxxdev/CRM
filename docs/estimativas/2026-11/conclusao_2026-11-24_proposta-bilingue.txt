@@ -1,0 +1,13 @@
+*Concluído — Proposta para clientes de fora do Brasil (inglês e espanhol)*
+_24/11/2026_
+
+1. Idioma, moeda e incoterm na proposta — estimado 1h · realizado 15min
+2. Textos fixos do documento em inglês e espanhol — estimado 1h30 · realizado 15min
+3. Proposta em duas colunas — capa, textos e cláusulas — estimado 2h · realizado 30min
+4. Proposta em duas colunas — tabelas — estimado 2h · realizado 30min
+5. Tradução automática do que o vendedor escreve — estimado 2h · realizado 30min
+6. Moeda e incoterm na tabela de preços — estimado 1h30 · realizado 15min
+
+*Total: estimado 10h · realizado 2h15*
+
+O tempo realizado está abaixo do real: a medição conta o intervalo entre os registros do trabalho, e esta entrega foi registrada toda de uma vez, no final. Falta o teste com uma proposta real de um vendedor no Chrome antes de usar com cliente.
