@@ -240,7 +240,8 @@ const AUX = '/api/requisicoes-material/aux/ordens-servico';
     const ids = r.body.map((o) => Number(o.id));
     assert.ok(ids.includes(aberta.id), 'a OS aberta esta na lista');
     assert.ok(!ids.includes(fechada.id), 'a OS fechada nao esta (regua osFechada: caixa e espacos ignorados)');
-    for (const o of r.body) assert.deepStrictEqual(Object.keys(o).sort(), ['id', 'numero_os', 'status'], JSON.stringify(o));
+    // Etapa 260 (RN-260.04, B1613): + projeto_id (o formulario preenche o Projeto com ele) — continua sem cliente
+    for (const o of r.body) assert.deepStrictEqual(Object.keys(o).sort(), ['id', 'numero_os', 'projeto_id', 'status'], JSON.stringify(o));
   });
 
   // Fase 5 da 172: o `?incluir` saiu (nenhum client usava; deixava qualquer logado ler numero e status de OS fechada
