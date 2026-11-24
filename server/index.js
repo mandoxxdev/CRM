@@ -9925,8 +9925,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivoPdfProposta(proposta, id)}"`);
     // Proposta bilingue: quantos textos sairam sem traducao (RN-BI.04) — a tela avisa antes de o vendedor mandar o PDF.
-    // O trecho em negrito (span hidden .bi-termo) nao conta: e auxiliar, o texto visivel dele ja conta pelo paragrafo.
-    const pendentesNoPdf = (html.match(/ data-traduzir="/g) || []).length - (html.match(/class="bi-termo[^"]*"[^>]*? data-traduzir="/g) || []).length;
+    // Frase que so pede para ser refeita com o negrito (data-tr-refazer) nao conta: ela ja sai traduzida.
+    const pendentesNoPdf = (html.match(/ data-traduzir="/g) || []).length - (html.match(/ data-tr-refazer="1" data-traduzir="/g) || []).length;
     res.setHeader('X-Traducoes-Pendentes', String(pendentesNoPdf));
     res.setHeader('Access-Control-Expose-Headers', 'X-Traducoes-Pendentes, Content-Disposition');
     res.end(pdfBuffer);

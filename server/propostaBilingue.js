@@ -164,43 +164,41 @@ function marcadoresDe(texto) {
  * O conteúdo de uma cláusula (ou qualquer HTML simples) em pares PT | tradução (RN-BI.02/03).
  * A metade PT guarda o HTML original (negrito, listas); a traduzida é texto, um elemento por parágrafo/item.
  */
-// ===== Negrito na coluna traduzida (24/11/2026: "e as partes de negrito tmb") =====
-// A memória guarda texto puro (a chave é o PT sem tags), então o negrito não atravessa a tradução da frase. Cada trecho em negrito
-// do PT vira uma chave própria (um <span hidden> com data-tr-origem, que a tela traduz junto) e a tradução dele é procurada DENTRO da
-// frase traduzida — achou, ganha <strong>. Não achou (o tradutor usou outra palavra no contexto), a frase sai sem esse negrito:
-// nunca some texto. Parágrafo inteiro em negrito sai inteiro em negrito.
+// ===== Negrito na coluna traduzida (24/11/2026: "e as partes de negrito tmb"; e, com o serviço de verdade, "cadê o negrito na versão
+// em esp") =====
+// A chave da memória é o PT sem tags. A primeira versão (c8ef5543) traduzia cada trecho em negrito SOZINHO e o procurava dentro da frase
+// traduzida — com o tradutor de verdade não achava: sozinho, "PROJETO CONCEITUAL" virava "DISEÑO CONCEPTUAL"; na frase, "PROYECTO
+// CONCEPTUAL" (e "Excelência Operacional", "Excelencia operativa" x "Excelencia Operacional"). Agora a FRASE é traduzida com o negrito
+// marcado (data-tr-marcado: o PT com ⟦b⟧…⟦/b⟧; a tela troca as marcas por fichas e o tradutor as devolve no lugar certo) e a tradução
+// guarda o negrito como **…** (o painel Traduções mostra assim; quem corrige pode tirar ou pôr). Ao montar, **…** vira <strong>.
+// Tradução antiga, sem **, de frase que tem negrito: o elemento pede para ser refeito (data-tr-refazer + data-traduzir) e continua
+// aparecendo traduzido enquanto isso. A correção manual nunca é sobrescrita por automática (gravarTraducoes), então uma manual sem **
+// fica sem negrito. Parágrafo inteiro em negrito sai inteiro em negrito, sem marca.
 function trechosEmNegrito(html) {
   const out = []; const re = /<(strong|b)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi; let m;
   while ((m = re.exec(String(html || ''))) !== null) { const t = textoDeHtml(m[3]); if (t) out.push(t); }
   return out;
 }
-const escRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const semPontuacaoFinal = (s) => normalizarChave(s).replace(/[\s.,;:!?]+$/, '');
-function aplicarNegrito(htmlPt, textoPt, corpoEsc, traducoes) {
-  const trechos = trechosEmNegrito(htmlPt);
-  if (!trechos.length) return corpoEsc;
-  if (semPontuacaoFinal(trechos.join(' ')) === semPontuacaoFinal(textoPt)) return `<strong>${corpoEsc}</strong>`;
-  let html = corpoEsc; let termos = '';
-  trechos.forEach((trecho) => {
-    const tr = traduzido(trecho, traducoes);
-    termos += `<span hidden${attrsTraducao(trecho, tr, 'bi-termo')}></span>`;
-    // Com a pontuação do fim primeiro ("Elaboración:" inteiro em negrito, como no PT); sem ela, se o tradutor a mudou.
-    const candidatos = [tr, tr && semPontuacaoFinal(tr), trecho, semPontuacaoFinal(trecho)].filter(Boolean).map(normalizarChave);
-    for (const alvo of [...new Set(candidatos)]) {
-      const alvoEsc = escHtml(alvo);
-      if (!alvoEsc) continue;
-      // Fora de tag e fora de um <strong> já aplicado.
-      const re = new RegExp(`(^|>)([^<]*?)(${escRegex(alvoEsc)})`, 'i');
-      let feito = false;
-      html = html.replace(re, (m0, a, antes, achado) => { feito = true; return `${a}${antes}<strong>${achado}</strong>`; });
-      if (feito) break;
-    }
-  });
-  return html + termos;
+/** O PT em texto, com o negrito marcado: "do ⟦b⟧PROJETO CONCEITUAL⟦/b⟧ para". */
+function marcarNegrito(html) {
+  return textoDeHtml(String(html || '').replace(/<(strong|b)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi, (m0, t, a, dentro) => (textoDeHtml(dentro) ? `⟦b⟧${dentro}⟦/b⟧` : dentro)))
+    .replace(/⟦b⟧\s+/g, ' ⟦b⟧').replace(/\s+⟦\/b⟧/g, '⟦/b⟧ ').replace(/\s+/g, ' ').trim();
 }
+const temNegritoMarcado = (t) => /\*\*[^*]+?\*\*/.test(String(t || ''));
+/** Texto já escapado: **x** -> <strong>x</strong>; ⟦b⟧x⟦/b⟧ (o PT pendente) também. */
+const negritoDasMarcas = (esc) => esc.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>').replace(/⟦b⟧([\s\S]*?)⟦\/b⟧/g, '<strong>$1</strong>');
 function elementoTraduzidoComNegrito(tag, htmlPt, textoPt, traducoes) {
   const t = traduzido(textoPt, traducoes);
-  return `<${tag}${attrsTraducao(textoPt, t)}>${aplicarNegrito(htmlPt, textoPt, escHtml(t || normalizarChave(textoPt)), traducoes)}</${tag}>`;
+  const trechos = trechosEmNegrito(htmlPt);
+  const inteiro = trechos.length > 0 && semPontuacaoFinal(trechos.join(' ')) === semPontuacaoFinal(textoPt);
+  const marcado = trechos.length > 0 && !inteiro ? marcarNegrito(htmlPt) : null;
+  let corpo = t ? negritoDasMarcas(escHtml(t)) : (marcado ? negritoDasMarcas(escHtml(marcado)) : escHtml(normalizarChave(textoPt)));
+  if (inteiro) corpo = `<strong>${corpo}</strong>`;
+  const refazer = Boolean(t && marcado && !temNegritoMarcado(t));
+  const extra = (marcado ? ` data-tr-marcado="${attrCru(marcado)}"` : '')
+    + (refazer ? ` data-tr-refazer="1" data-traduzir="${attrCru(normalizarChave(textoPt))}"` : '');
+  return `<${tag}${attrsTraducao(textoPt, t)}${extra}>${corpo}</${tag}>`;
 }
 
 // Edição na tela de duas colunas (24/11/2026: "eu devo poder mudar todos os textos e depois ele traduz de forma simultânea"): o <p>/<li>
@@ -337,7 +335,7 @@ function rotuloDuplo(idioma, pt) {
 }
 
 module.exports = {
-  trechosEmNegrito, aplicarNegrito,
+  trechosEmNegrito, marcarNegrito, negritoDasMarcas,
   IDIOMAS, MOEDAS, DICIONARIO,
   idiomaDaProposta, ehBilingue, moedaDaProposta, formatarMoeda, erroIdiomaMoeda,
   normalizarChave, textoDeHtml, segmentarHtml, escHtml, traduzido, attrsTraducao, elementoTraduzido, marcadoresDe, LIMITE_PARAGRAFO,

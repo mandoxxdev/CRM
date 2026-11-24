@@ -81,9 +81,10 @@ test('BI-M05 pares: um por paragrafo e por item; PT com HTML; traducao ou penden
   assert.strictEqual((h.match(/class="bi-par/g) || []).length, 3, 'um par por paragrafo e por item');
   // Desde 24/11/2026 (noite) o <p> do PT leva o HTML original em data-pt-html, para a edição na tela de duas colunas.
   assert.ok(h.includes('<div class="bi-pt"><p data-pt-html="Garantia de &lt;strong&gt;12&lt;/strong&gt; meses.">Garantia de <strong>12</strong> meses.</p></div>'), 'a metade PT guarda o HTML');
-  // Desde 24/11/2026 (noite) o negrito do PT atravessa para a tradução ("e as partes de negrito tmb"): o "12" em negrito sai em negrito
-  // e vira uma chave própria (span hidden .bi-termo). Esta linha esperava a tradução sem negrito — o comportamento anterior.
-  assert.ok(h.includes('<p data-tr-origem="Garantia de 12 meses." data-tr-texto="12-month warranty."><strong>12</strong>-month warranty.<span hidden class="bi-termo bi-pendente" data-tr-origem="12" data-traduzir="12"></span></p>'), 'traducao da memoria, com o negrito do PT');
+  // Desde 24/11/2026 (noite) o negrito do PT atravessa para a tradução: a frase com negrito leva o PT marcado (data-tr-marcado) e uma
+  // tradução sem **…** pede para ser refeita com o negrito (data-tr-refazer), aparecendo traduzida enquanto isso. Esta linha esperava a
+  // tradução sem nada disso (antes) e, numa versão do mesmo dia, um span por trecho (descartado: traduzido sozinho, o trecho mudava).
+  assert.ok(h.includes('<p data-tr-origem="Garantia de 12 meses." data-tr-texto="12-month warranty." data-tr-marcado="Garantia de ⟦b⟧12⟦/b⟧ meses." data-tr-refazer="1" data-traduzir="Garantia de 12 meses.">12-month warranty.</p>'), 'traducao da memoria; sem ** pede o negrito');
   assert.ok(h.includes('<li class="bi-pendente" data-tr-origem="Sem par;" data-traduzir="Sem par;">Sem par;</li>'), 'sem traducao: pendente com o PT');
   assert.ok(h.includes('lang="en"'));
   // texto com aspas e sinais na chave sai escapado no atributo (nao quebra o HTML)

@@ -64,7 +64,11 @@ export function restaurarTexto(traduzido, fichas) {
 export function prepararTexto(textoPt, idioma) {
   // Protege PRIMEIRO (marcadores e glossário saem do texto como fichas) e só então decide a caixa: o marcador {{cliente.nome}} é
   // minúsculo e fazia um título todo em maiúsculas parecer misto (achado pelo teste [I18]).
-  const { texto, fichas } = protegerTexto(textoPt, idioma);
+  const protegido = protegerTexto(textoPt, idioma);
+  const { fichas } = protegido;
+  // Negrito marcado pelo servidor (⟦b⟧…⟦/b⟧, data-tr-marcado): cada marca vira uma ficha que volta como "**" — o tradutor devolve as
+  // fichas no lugar certo DA FRASE traduzida (24/11/2026: traduzido sozinho, o trecho saía com outra palavra e o negrito sumia).
+  const texto = protegido.texto.replace(/⟦\/?b⟧/g, () => { fichas.push('**'); return `⟦${fichas.length - 1}⟧`; });
   const maiusculo = ehTudoMaiusculo(texto.replace(/⟦\d+⟧/g, ''));
   return { entrada: maiusculo ? texto.toLocaleLowerCase('pt-BR') : texto, fichas, maiusculo };
 }
@@ -80,7 +84,9 @@ export function finalizarTexto(saida, preparo, idioma) {
     if (new RegExp(`\\s⟦${i}⟧`).test(preparo.entrada)) base = base.replace(new RegExp(`(\\S)⟦\\s*${i}\\s*⟧`, 'g'), `$1 ⟦${i}⟧`);
     if (new RegExp(`⟦${i}⟧\\s`).test(preparo.entrada)) base = base.replace(new RegExp(`⟦\\s*${i}\\s*⟧(?=[^\\s.,;:!?)])`, 'g'), `⟦${i}⟧ `);
   });
-  return restaurarTexto(base, preparo.fichas);
+  const pronto = restaurarTexto(base, preparo.fichas);
+  // "** PROYECTO **" (o tradutor pôs espaço dentro da marca) -> "**PROYECTO**".
+  return pronto && pronto.replace(/\*\*\s*([^*]+?)\s*\*\*/g, '**$1**');
 }
 
 /**
@@ -174,6 +180,20 @@ const MAX_CARACTERES = 5000; // limite de cada texto no POST /api/traducoes
 const LOTE = 200;
 
 /**
+ * Traduz os itens de `textosDoDocumento` ({ chave, marcado }): com negrito, a frase MARCADA (o negrito volta como **…**); se o tradutor
+ * perder uma marca, a frase sem marca (sai sem negrito, mas traduzida). Devolve [texto | null] na ordem dos itens.
+ */
+export async function traduzirItens({ api, idioma, tradutorPromessa, itens, aoProgredir }) {
+  const tr = await traduzirComReserva({ api, idioma, tradutorPromessa, textos: itens.map((p) => p.marcado || p.chave), aoProgredir });
+  const deNovo = itens.map((p, i) => (p.marcado && !tr[i] ? i : -1)).filter((i) => i >= 0);
+  if (deNovo.length) {
+    const tr2 = await traduzirComReserva({ api, idioma, tradutorPromessa, textos: deNovo.map((i) => itens[i].chave) });
+    deNovo.forEach((i, k) => { tr[i] = tr2[k]; });
+  }
+  return tr;
+}
+
+/**
  * Traduz `textos` pelo SERVIDOR do CRM (qualquer navegador); se ele falhar e houver tradutor do Chrome (`tradutorPromessa`, criado
  * no clique), tenta por ele. Sem nenhum dos dois, a exceção sobe. Devolve [texto | null] na mesma ordem.
  */
@@ -196,7 +216,7 @@ export async function traduzirPendentesDaProposta({ api, propostaId, idioma, tra
   const res = await api.get(`/propostas/${propostaId}/premium?embed=1&bilingue=1`, { responseType: 'text' });
   const pendentes = textosDoDocumento(res.data).filter((t) => t.pendente);
   if (pendentes.length === 0) return { traduzidos: 0, falhas: 0, pendentes: 0 };
-  const traducoes = await traduzirComReserva({ api, idioma, tradutorPromessa, textos: pendentes.map((p) => p.chave), aoProgredir });
+  const traducoes = await traduzirItens({ api, idioma, tradutorPromessa, itens: pendentes, aoProgredir });
   const prontos = [];
   let falhas = 0;
   pendentes.forEach((p, i) => {
@@ -224,10 +244,13 @@ export function textosDoDocumento(html, ParserCls = typeof DOMParser !== 'undefi
     const chave = el.getAttribute('data-tr-origem');
     if (!chave || porChave.has(chave)) return;
     const pendente = el.hasAttribute('data-traduzir');
+    // Com negrito: o PT marcado (⟦b⟧…⟦/b⟧) que vai ao tradutor. Frase já traduzida que só pede o negrito (data-tr-refazer) mostra a
+    // tradução de agora no painel.
+    const marcado = el.getAttribute('data-tr-marcado') || null;
     // A tradução vem do atributo `data-tr-texto` (a de ANTES da troca dos marcadores), nunca do texto visível: nele o {{cliente.nome}}
     // já virou o nome deste cliente, e corrigir a partir dele gravava esse nome na memória global (Fase 5, crítico 1).
     const cru = el.getAttribute('data-tr-texto');
-    porChave.set(chave, { chave, traducao: pendente ? '' : (cru != null ? cru : (el.textContent || '').trim()), pendente });
+    porChave.set(chave, { chave, marcado, traducao: cru != null ? cru : (pendente ? '' : (el.textContent || '').trim()), pendente });
   });
   return [...porChave.values()];
 }

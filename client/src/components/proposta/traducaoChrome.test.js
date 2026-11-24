@@ -144,12 +144,54 @@ test('[RN-BI.05] textos do documento: chave do servidor (entidade das chaves dec
     <p data-tr-origem="Aceite de &#123;&#123;cliente.nome&#125;&#125;." data-tr-texto="Acceptance by &#123;&#123;cliente.nome&#125;&#125;.">Acceptance by ACME SA.</p>
   </div>`;
   expect(textosDoDocumento(html)).toEqual([
-    { chave: 'Garantia de 12 meses.', traducao: '12-month warranty.', pendente: false },
-    { chave: 'Proposta para {{cliente.nome}}.', traducao: '', pendente: true },
-    { chave: 'METODOLOGIA', traducao: 'METHODOLOGY', pendente: false },
+    { chave: 'Garantia de 12 meses.', marcado: null, traducao: '12-month warranty.', pendente: false },
+    { chave: 'Proposta para {{cliente.nome}}.', marcado: null, traducao: '', pendente: true },
+    { chave: 'METODOLOGIA', marcado: null, traducao: 'METHODOLOGY', pendente: false },
     // Fase 5, critico 1: a traducao vem do atributo (com o marcador), nunca do visivel (com o nome deste cliente)
-    { chave: 'Aceite de {{cliente.nome}}.', traducao: 'Acceptance by {{cliente.nome}}.', pendente: false },
+    { chave: 'Aceite de {{cliente.nome}}.', marcado: null, traducao: 'Acceptance by {{cliente.nome}}.', pendente: false },
   ]);
+});
+
+// "cadê o negrito na versão em esp" (24/11/2026): traduzido SOZINHO, o trecho em negrito saía com outra palavra que a da frase.
+test('[negrito] a frase vai MARCADA ao tradutor e o negrito volta como **…** no lugar que ele devolveu', async () => {
+  const html = `<p data-tr-origem="O PROJETO CONCEITUAL será feito." data-tr-marcado="O ⟦b⟧PROJETO CONCEITUAL⟦/b⟧ será feito."
+    data-traduzir="O PROJETO CONCEITUAL será feito.">x</p>
+    <p data-tr-origem="Prazo." data-tr-texto="Plazo." data-tr-marcado="⟦b⟧Prazo⟦/b⟧." data-tr-refazer="1" data-traduzir="Prazo.">Plazo.</p>`;
+  const itens = textosDoDocumento(html);
+  expect(itens.map((i) => [i.marcado, i.traducao])).toEqual([['O ⟦b⟧PROJETO CONCEITUAL⟦/b⟧ será feito.', ''], ['⟦b⟧Prazo⟦/b⟧.', 'Plazo.']]);
+  const enviados = [];
+  const api = {
+    get: jest.fn(async () => ({ data: html })),
+    post: jest.fn(async (url, corpo) => {
+      if (url === '/traducoes/automatica') {
+        enviados.push(...corpo.textos);
+        // como o serviço real: muda a palavra no contexto e devolve as fichas no lugar, com espaço dentro
+        return { data: { traducoes: corpo.textos.map((t) => t.replace('O ', 'El ').replace('será feito', 'se hará').replace('Prazo', 'Plazo')) } };
+      }
+      return { data: { gravadas: corpo.itens.length } };
+    }),
+  };
+  await traduzirPendentesDaProposta({ api, propostaId: 1, idioma: 'es' });
+  expect(enviados).toEqual(['O ⟦0⟧PROJETO CONCEITUAL⟦1⟧ será feito.', '⟦0⟧Prazo⟦1⟧.']);
+  const gravado = api.post.mock.calls.find(([u]) => u === '/traducoes')[1].itens;
+  expect(gravado).toEqual([
+    { texto_origem: 'O PROJETO CONCEITUAL será feito.', texto_traduzido: 'El **PROJETO CONCEITUAL** se hará.' },
+    { texto_origem: 'Prazo.', texto_traduzido: '**Plazo**.' },
+  ]);
+});
+
+test('[negrito] o tradutor perdeu a marca: traduz a frase sem marca (sai sem negrito, mas traduzida)', async () => {
+  const html = '<p data-tr-origem="Um teste." data-tr-marcado="Um ⟦b⟧teste⟦/b⟧." data-traduzir="Um teste.">x</p>';
+  const api = {
+    get: jest.fn(async () => ({ data: html })),
+    post: jest.fn(async (url, corpo) => (url === '/traducoes/automatica'
+      ? { data: { traducoes: corpo.textos.map((t) => t.replace(/⟦\d+⟧/g, '').replace('Um teste', 'Una prueba')) } }
+      : { data: { gravadas: corpo.itens.length } })),
+  };
+  const r = await traduzirPendentesDaProposta({ api, propostaId: 1, idioma: 'es' });
+  expect(r).toEqual({ traduzidos: 1, falhas: 0, pendentes: 1 });
+  expect(api.post.mock.calls.filter(([u]) => u === '/traducoes/automatica').map(([, c]) => c.textos)).toEqual([['Um ⟦0⟧teste⟦1⟧.'], ['Um teste.']]);
+  expect(api.post.mock.calls.find(([u]) => u === '/traducoes')[1].itens).toEqual([{ texto_origem: 'Um teste.', texto_traduzido: 'Una prueba.' }]);
 });
 
 test('tradutor do Chrome: so com window.Translator.create', () => {

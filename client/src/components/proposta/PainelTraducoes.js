@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { FiX, FiGlobe, FiSave } from 'react-icons/fi';
 import api from '../../services/api';
-import { textosDoDocumento, temTradutorDoChrome, criarTradutor, traduzirComReserva } from './traducaoChrome';
+import { textosDoDocumento, temTradutorDoChrome, criarTradutor, traduzirItens } from './traducaoChrome';
 
 const NOME_IDIOMA = { en: 'inglês', es: 'espanhol' };
 const LOTE = 200;
@@ -64,8 +64,8 @@ export default function PainelTraducoes({ propostaId, idioma, onFechar, onAtuali
     try {
       let traducoes;
       try {
-        traducoes = await traduzirComReserva({
-          api, idioma, tradutorPromessa, textos: pendentes.map((p) => p.chave),
+        traducoes = await traduzirItens({
+          api, idioma, tradutorPromessa, itens: pendentes,
           aoProgredir: (feitos, total) => setTraduzindo({ feitos, total }),
         });
       } catch (e) {
@@ -129,7 +129,8 @@ export default function PainelTraducoes({ propostaId, idioma, onFechar, onAtuali
           </button>
         </div>
         <p className="ppe-traducoes-aviso">
-          A tradução vale para todas as propostas: corrigir um texto aqui corrige o mesmo texto onde ele aparecer.
+          A tradução vale para todas as propostas: corrigir um texto aqui corrige o mesmo texto onde ele aparecer. Trechos entre
+          ** (ex.: **PROYECTO CONCEPTUAL**) saem em negrito.
         </p>
         <ul className="ppe-traducoes-lista">
           {textos.map((t) => (
