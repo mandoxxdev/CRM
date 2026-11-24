@@ -1,0 +1,6 @@
+*Concluído — excluir uma requisição devolve as peças às prateleiras de onde saíram*
+_20/11/2026_
+
+1. Excluir uma requisição já entregue devolve cada peça à prateleira de onde ela saiu — estimado 1h15 · realizado 1h
+
+*Total: estimado 1h15 · realizado 1h*
