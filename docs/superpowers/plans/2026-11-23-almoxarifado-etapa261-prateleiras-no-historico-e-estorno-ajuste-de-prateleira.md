@@ -72,6 +72,29 @@
 - `GET /api/almoxarifado/movimentacoes` — cada linha ganha `prateleiras` (RN-261.03/04). Nada sai do contrato.
 - Banco: nada novo. Sem consulta de produção (letra A não se aplica).
 
+## Fase 2 (revisor fresco, 24/11 — a primeira rodada foi cortada pelo limite de uso; refeita sobre o código já escrito)
+
+Sonda `scratchpad/fase2-261-sondaR.js` (pela rota, `:memory:`). Literais e ordem das recusas conferidas; nenhum chamador interno estorna
+AJUSTE com localização (só Saída/Entrada em `epiService`, `scrapService`, `thirdPartyService`); galhos independentes.
+
+1. **[importante, anterior, reproduzido]** O Ajuste de **outra** prateleira pode reescrever a linha deste por `absorverNegativosSemLote`:
+   padrão *A*, Entrada 5, Entrada 10 em *B*/L1, Ajuste de *A* para 3, Saída de 5 sem lote (*A* −2), Ajuste de *B*/L1 para 0 (total 0, *A* −2 → 0);
+   estorno do Ajuste de *A* → 200, total **2** (sem ele, 0). → **declarado** (D (261) 1). A RN-261.02 dizia, sem exceção, que a outra
+   prateleira "dá o número certo" — **estava incompleta**. Conserto exigiria gravar as linhas que o Ajuste com endereço **absorve** (o registro
+   de hoje é de quem **baixa**); raro: material sem negativo, linha sem lote negativa e saldo em lote.
+2. **[menor, reproduzido]** RN-261.04 com a padrão que **sobe** (negativa, material que permite negativo): *A* −2, *B* 5, Ajuste para 1 →
+   *"Saiu de: B 4"* num total que caiu 2; Ajuste **para cima** que drenou → *"Saiu de: B 1"*. → **consertado**: quando a parte da padrão dá
+   negativa, o Ajuste fica sem *"Saiu de"* (`[]`); cenário [RN-261.04, Fase 2 achado 2]; sabotagem R8.
+3. **[menor]** Total que não batia com as linhas (legado): a parte "posição padrão" leva o que nunca teve endereço. → declarado (D (261) 2).
+4. **[menor]** Ajuste do total que só baixou a padrão (sem drenar) não tem registro e fica sem *"Saiu de"*. → declarado (D (261) 3; guia).
+5. **[ruído]** Ajuste sem localização com lote feito depois trava (certo); o id citado é o maior; `saldo_id` não se reaproveita
+   (AUTOINCREMENT), linha não muda de endereço, registro que falhou → `[]` (omite, não mente).
+
+**Achado da integração (não da revisão):** os 42 arquivos com ajuste e estorno, um a um, derrubaram o **J5 da Etapa 104** (caixa de 4 em *A*,
+Ajuste de *A* para 0, Ajuste de *A* para 3, estorno do primeiro → 7). Pela RN-261.01 o estorno passa a ser recusado; o caminho é o da recusa,
+um Ajuste novo de *A* contando a caixa (7, sem aviso) — **B1616**. O aviso A1 da 104 ainda manda *"estorne o ajuste que baixou o estoque"*;
+com um ajuste da mesma prateleira depois, isso é recusado (**C554**). Teste atualizado em `61ead3b6`.
+
 ## Tasks
 
 - [ ] **T1 (tronco, motor)** item 5: a guarda no ramo com localização (a mesma consulta da RN-258.07 extraída num helper, parametrizada);

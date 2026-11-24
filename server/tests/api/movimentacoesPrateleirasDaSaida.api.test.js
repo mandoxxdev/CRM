@@ -125,6 +125,20 @@ const API = '/api/almoxarifado';
       assert.strictEqual(texto((await historico(m)).get(s).prateleiras), 'A261H 3');
     });
 
+  await test('[RN-261.04, Fase 2 achado 2] Ajuste em que a padrao SUBIU (estava negativa): sem "Saiu de" — a Saida antes, com', async () => {
+    const m = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_lote,
+      controle_serie, permite_saldo_negativo, localizacao_padrao_id, custo_unitario) VALUES ('PRS261-NEG','PRS261-NEG','UN',0,1,0,0,1,?,1)`,
+    [A.id])).lastID;
+    const s = await mov(m, 'SAIDA', 2); // padrao A -2 (permite negativo)
+    await mov(m, 'ENTRADA', 5, { localizacao_destino_id: B.id }); // B 5
+    const aj = await mov(m, 'AJUSTE', 1); // total 3 -> 1: B cede 4, A -2 -> 0
+    const h = await historico(m);
+    assert.strictEqual(texto(h.get(s).prateleiras), 'A261H 2', 'premissa: a Saida tem registro');
+    const reg = await dbGet(db, 'SELECT SUM(quantidade) q FROM ajuste_linhas_drenadas_almoxarifado WHERE movimentacao_id = ?', [aj]);
+    assert.ok(Number(reg.q) > 2, `premissa: o Ajuste drenou mais do que baixou (${reg.q})`);
+    assert.deepStrictEqual(h.get(aj).prateleiras, []);
+  });
+
   await test('[RN-261.06] mais de 500 movimentos na pagina: o registro do movimento do 2o bloco tambem aparece', async () => {
     const m = await material();
     await mov(m, 'ENTRADA', 5);

@@ -1460,6 +1460,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         const drenado = partes.reduce((s, p) => s + p.quantidade, 0);
         const daPadrao = Math.round((Number(r.saldo_anterior) - Number(r.saldo_posterior) - drenado) * 1e6) / 1e6;
         if (daPadrao > 1e-6) partes.push({ localizacao_id: null, codigo: null, padrao: true, quantidade: daPadrao });
+        // Fase 2 (achado 2): a padrao SUBIU (estava negativa, material que permite negativo — ou o Ajuste subiu o total e ainda drenou):
+        // o "Saiu de" nao somaria o que o Ajuste fez (A -2, B 5, Ajuste para 1 -> "B 4" num total que caiu 2). Nada, como antes.
+        if (daPadrao < -1e-6) { r.prateleiras = []; continue; }
       }
       r.prateleiras = partes;
     }
