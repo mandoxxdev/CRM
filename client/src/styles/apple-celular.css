@@ -14,6 +14,106 @@
    Só no celular (até 768px). Carregado por ÚLTIMO (App.js), para não depender da ordem dos outros.
    ========================================================================== */
 @media (max-width: 768px) {
+  /* ── Margem ÚNICA de toda página: 16px ───────────────────────────────────────
+     O .main-content não tem margem e cada tela trazia a sua: o título começava a 10, 14, 15, 16, 24, 26, 28, 32, 33, 48 ou 49px da
+     borda, conforme a tela (medido nas 17 telas do Comercial). Agora toda página filha do .main-content tem 16px dos dois lados — o
+     chat, que é tela cheia, fica de fora. */
+  .main-content > div:not(.chat-page) {
+    padding-left: 16px !important; padding-right: 16px !important;
+    margin-left: 0 !important; margin-right: 0 !important; max-width: 100% !important; box-sizing: border-box !important;
+  }
+  /* Cabeçalho da página sem caixa: título e subtítulo direto no fundo, como na referência (alguns vinham num cartão com margem
+     própria e empurravam o título mais 16 a 33px para dentro). */
+  .main-content > div > [class*="header"]:has(h1) {
+    padding-left: 0 !important; padding-right: 0 !important; margin-left: 0 !important; margin-right: 0 !important;
+    background: transparent !important; background-image: none !important; border: none !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    flex-wrap: wrap !important; height: auto !important;
+  }
+  /* Os botões do cabeçalho embaixo do título, no fluxo: em Relatórios eles eram `position: absolute` e cobriam o título inteiro
+     (já era assim antes deste repasse). */
+  .main-content > div > [class*="header"]:has(h1) .header-actions {
+    position: static !important; inset: auto !important; transform: none !important;
+    display: flex !important; flex-wrap: wrap !important; gap: 8px !important; width: 100% !important; margin-top: 10px !important;
+  }
+  /* Do tamanho do conteúdo (esticados, o "+" só de ícone virava uma barra azul da largura da tela). */
+  .main-content > div > [class*="header"]:has(h1) .header-actions > button,
+  .main-content > div > [class*="header"]:has(h1) .header-actions > a { flex: 0 1 auto !important; justify-content: center !important; text-align: center !important; }
+  /* O bloco do título dentro do cabeçalho também sem caixa, alinhado à esquerda (Máquinas Vendidas vinha num cartão centralizado). */
+  .main-content > div > [class*="header"]:has(h1),
+  .main-content > div > [class*="header"]:has(h1) > div:has(h1) {
+    text-align: left !important; justify-content: flex-start !important; align-items: flex-start !important;
+  }
+  .main-content > div > [class*="header"]:has(h1) > div:has(h1) {
+    background: transparent !important; background-image: none !important; border: none !important; box-shadow: none !important;
+    padding-left: 0 !important; padding-right: 0 !important;
+  }
+  .main-content > div > [class*="header"]:has(h1)::before, .main-content > div > [class*="header"]:has(h1)::after { display: none !important; }
+
+  /* ── Aba ativa: texto BRANCO sobre o azul (em Ordens de Serviço era azul-escuro sobre azul, apagado) ─ */
+  .ui-tab-ativa, .ui-tab-ativa * { color: #fff !important; -webkit-text-fill-color: #fff !important; }
+
+  /* ── Números de resumo (Aprovações, Atividades…): DOIS por linha, compactos ─
+     Vinham um por linha, cada um num cartão com ícone grande — três números ocupavam a tela inteira. */
+  .main-content :has(> .stat-card), .main-content .resumo-cards { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  .main-content .resumo-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .resumo-card svg { width: 17px !important; height: 17px !important; }
+  .main-content .resumo-card [class*="icon"] { width: 34px !important; height: 34px !important; min-width: 34px !important; border-radius: 10px !important; }
+  .main-content .resumo-card .resumo-content { min-width: 0 !important; }
+  .main-content .resumo-card h3 { font-size: 18px !important; line-height: 1.15 !important; overflow-wrap: anywhere !important; }
+  .main-content .resumo-card p { font-size: 11.5px !important; }
+  /* Relatórios: os indicadores (kpi-card) também dois por linha, compactos. */
+  .main-content .kpis-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  .main-content .kpi-card { padding: 12px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .kpi-card [class*="icon"] { width: 36px !important; height: 36px !important; min-width: 36px !important; margin-bottom: 6px !important; border-radius: 10px !important; }
+  .main-content .kpi-card [class*="icon"] svg { width: 18px !important; height: 18px !important; }
+  .main-content .kpi-card .kpi-label { font-size: 10.5px !important; }
+  .main-content .kpi-card [class*="value"] { font-size: 22px !important; }
+  .main-content .stat-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .stat-card .stat-icon, .main-content .stat-card [class*="stat-icon"] { width: 34px !important; height: 34px !important; min-width: 34px !important; border-radius: 10px !important; }
+  .main-content .stat-card .stat-icon svg, .main-content .stat-card [class*="stat-icon"] svg { width: 17px !important; height: 17px !important; }
+  .main-content .stat-card .stat-value { font-size: 22px !important; line-height: 1.1 !important; }
+  .main-content .stat-card .stat-label, .main-content .stat-card [class*="stat-label"] { font-size: 11px !important; letter-spacing: .02em !important; }
+
+  /* ── Filtros com ícone: o ícone DENTRO da linha, à esquerda (vinha solto em cima do campo) ─ */
+  .main-content .filter-group { flex-direction: row !important; align-items: center !important; gap: 10px !important; }
+  .main-content .filter-group > svg { flex: 0 0 auto !important; width: 18px !important; height: 18px !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
+  .main-content .filter-group > select, .main-content .filter-group > input { flex: 1 1 auto !important; min-width: 0 !important; }
+
+  /* ── Abas que não cabem: rolam de lado (as de Ordens de Serviço passavam da borda) ─ */
+  .ui-tabs, [class*="ui-tabs"] { flex-wrap: nowrap !important; overflow-x: auto !important; scrollbar-width: none; }
+  .ui-tab { flex: 0 0 auto !important; white-space: nowrap !important; }
+
+  /* ── Tabela em cartões que cabe na tela (Relatórios: 730px numa tela de 375) ─ */
+  table.tabela-cartoes, table.tabela-cartoes tbody, table.tabela-cartoes tr { width: 100% !important; min-width: 0 !important; max-width: 100% !important; box-sizing: border-box !important; }
+  table.tabela-cartoes td { max-width: 100% !important; overflow-wrap: anywhere !important; }
+
+  /* ── Chat: tela cheia sem vazar 8px pela direita ─────────────────────────── */
+  /* O chat tinha margem -16px (para anular um recuo do pai que no celular não existe) e encostava/vazava pela esquerda. */
+  .chat-page { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; max-width: 100vw !important; overflow-x: hidden !important; }
+
+  /* ── Formulários ───────────────────────────────────────────────────────────── */
+  /* CNPJ e o botão de buscar na MESMA linha (o botão virava uma barra azul da largura da tela, com uma lupa minúscula). */
+  .cnpj-input-group { flex-direction: row !important; align-items: stretch !important; gap: 8px !important; }
+  .cnpj-input-group > input { flex: 1 1 auto !important; min-width: 0 !important; }
+  .cnpj-input-group .btn-buscar-cnpj { flex: 0 0 48px !important; width: 48px !important; min-width: 48px !important; padding: 0 !important; border-radius: 14px !important; }
+  .cnpj-input-group .btn-buscar-cnpj svg { width: 18px !important; height: 18px !important; }
+  /* "Cancelar" do topo do formulário: do tamanho do texto, não uma barra. */
+  .form-header .btn-secondary { flex: 0 0 auto !important; width: auto !important; align-self: flex-start !important; }
+  /* Busca com a lupa por cima do campo: o texto começa depois da lupa (em Custos de Viagens ficava por baixo dela). */
+  .busca-principal .busca-input-moderno { padding-left: 42px !important; }
+  /* Painel Financeiro: os números em dois por linha, como nos outros painéis (eram um cartão enorme por linha, dentro de outra caixa). */
+  .financeiro-dashboard .dashboard-cards-row:not(#_) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card:not(#_) { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; padding: 14px !important; min-width: 0 !important; border-radius: 20px !important; }
+  /* :not(#_) soma especificidade de id: o glass-override pinta todo [class*="-card"] de branco com uma regra de 10 classes. */
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card-content:not(#_), .financeiro-dashboard .dashboard-cards-row .dashboard-card-content:not(#_) * { background: transparent !important; box-shadow: none !important; border: 0 !important; }
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card-content { width: 100% !important; min-width: 0 !important; padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card-label { font-size: 11px !important; }
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card-content > .dashboard-card-value { font-size: 18px !important; overflow-wrap: anywhere; }
+  .financeiro-dashboard .dashboard-cards-row .dashboard-card-content > :not(.dashboard-card-label):not(.dashboard-card-value) { font-size: 11px !important; }
+  /* Filtros em lista (Custos de Viagens): cada select ocupa a linha toda, sem a sobra branca ao lado. */
+  .filtros-dropdowns .filtro-dropdown, .filtros-dropdowns .select-moderno { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; }
+
   /* ── Títulos de página: grandes, com respiro ─────────────────────────────── */
   .page-header h1, .plm-topo h1, .plm-topo h2 { font-size: 28px !important; font-weight: 750 !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; }
   .page-header p { font-size: 14px !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
@@ -24,6 +124,10 @@
     border-radius: 980px !important; font-weight: 600 !important;
   }
   .btn-primary svg, .btn-premium svg, .plm-nova svg, .prm-novo svg, .plm-aplicar svg { color: #fff !important; stroke: #fff !important; }
+  /* "Exportar PDF" (Relatórios) ficava com o fundo transparente e o texto branco: invisível. */
+  .btn-export { background: var(--gmp-primary, #0071E3) !important; color: #fff !important; -webkit-text-fill-color: #fff !important;
+    border: none !important; border-radius: 980px !important; min-height: 40px !important; padding: 0 18px !important; }
+  .btn-export svg { color: #fff !important; stroke: #fff !important; }
 
   /* ── Pílulas de filtro: UMA linha que rola de lado (como as categorias da referência) ─ */
   .plm-chips, .prm-chips {
@@ -68,6 +172,13 @@
   .plm-busca input, .search-box input, .filters .filter-select, .clientes .filter-select {
     border-radius: 16px !important; min-height: 46px !important;
   }
+
+  /* ── Produtos: grupos em DUAS colunas (um por linha, cada cartão ocupava a tela) ─ */
+  html .grupos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
+  html .grupo-card .grupo-card-body { padding: 32px 12px 12px !important; }
+  html .grupo-card .grupo-card-nome { font-size: 15px !important; }
+  html .grupo-card .grupo-card-cta-label { font-size: 12px !important; margin-top: 4px !important; }
+  html .grupo-card .btn-icon-grupo { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; }
 
   /* ── Início: cartões dos módulos do MESMO tamanho ─────────────────────────── */
   .orion-grid { grid-auto-rows: 1fr !important; gap: 12px !important; }
