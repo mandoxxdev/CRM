@@ -1,0 +1,9 @@
+*Planejamento — Alinhamento das tabelas*
+_25/11/2026_
+
+*1. Lista de Clientes alinhada e botões de ação visíveis em todas as tabelas*
+Na lista de Clientes, o nome passa a começar sempre no mesmo lugar, com ou sem logo, e o CNPJ cabe numa linha. Em todas as tabelas do sistema, o botão de editar deixa de aparecer como um quadradinho cinza: editar e desativar ficam do mesmo tamanho, lado a lado, com o ícone inteiro.
+Tempo estimado: *45min*
+
+*Total estimado: 45min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
