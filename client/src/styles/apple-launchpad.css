@@ -1,0 +1,260 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPLE-LAUNCHPAD — a tela de modulos (/), refeita por completo (24/11/2026)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   O P.O. viu a grade de icones (iOS) e disse: "essa tela deveria mudar por
+   completo; assim nao esta me agradando". A composicao nova segue a referencia
+   que ele mandou (dashboard "V14") e a home do site da GMP:
+
+   - tela branca (preta no escuro), tipografia grande e leve;
+   - no topo, o lockup Orion a esquerda e o usuario a direita;
+   - a saudacao em 52px com a DATA embaixo, e o CATAVENTO da GMP (a animacao do
+     site, CataventoGMP.js) girando ao lado — da cinco voltas e assenta;
+   - "Continuar": o ultimo modulo usado vira um CARTAO HEROI com o degrade do
+     modulo, nome grande, descricao e um botao "Abrir"; os outros recentes
+     ficam numa lista compacta ao lado;
+   - "Seus modulos": CARTOES brancos com fio, icone em squircle colorido, nome
+     e DESCRICAO (vinha do modulosMeta e nao era mostrada), que sobem no hover;
+   - "Sem acesso": os mesmos cartoes, apagados, com cadeado.
+
+   Entra em App.js por ultimo. Tudo com `html .tipo-selecao` na frente, porque
+   o TipoSelecao.css chega no chunk da rota, depois desta folha.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 0. A pagina ──────────────────────────────────────────────────────────── */
+html .tipo-selecao {
+  background: var(--gmp-bg) !important; background-image: none !important;
+  color: var(--gmp-text) !important;
+  min-height: 100vh; padding: 0 !important;
+}
+html .tipo-selecao::before, html .tipo-selecao::after,
+html .tipo-selecao .floating-balls-bg, html .tipo-selecao .tipo-selecao__bird-logo { display: none !important; }
+html .tipo-selecao .tipo-selecao__inner { max-width: 1180px !important; margin: 0 auto !important; padding: 26px 40px 80px !important; }
+
+/* ── 1. Topo: lockup Orion + "Administrador" discreto ─────────────────────── */
+html .tipo-selecao .tipo-selecao__header-top { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 0 !important; gap: 12px; }
+html .tipo-selecao .tipo-selecao__brand { display: flex !important; align-items: center !important; gap: 10px !important; }
+html .tipo-selecao .tipo-selecao__brand-divider, html .tipo-selecao .tipo-selecao__constellation { display: none !important; }
+html .tipo-selecao .tipo-selecao__orion-mark { display: flex !important; align-items: center !important; gap: 8px !important; }
+html .tipo-selecao .tipo-selecao__gmp-logo { width: 28px !important; height: 28px !important; border-radius: 8px !important; object-fit: cover !important; filter: none !important; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+html .tipo-selecao .tipo-selecao__wordmark {
+  font-size: 15px !important; font-weight: 700 !important; letter-spacing: -0.02em !important; text-transform: none !important;
+  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; background: none !important;
+}
+html .tipo-selecao .tipo-selecao__admin-badge {
+  margin-left: 6px; padding: 3px 9px !important; border-radius: 980px !important;
+  background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text-light) !important; border: none !important;
+  font-size: 11px !important; font-weight: 600 !important; letter-spacing: .02em !important; text-transform: none !important; white-space: nowrap;
+}
+
+/* ── 2. Saudacao grande + catavento ───────────────────────────────────────── */
+html .tipo-selecao .tipo-selecao__greeting {
+  display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 24px;
+  padding: 44px 0 6px !important; text-align: left !important;
+}
+html .tipo-selecao .tipo-selecao__greeting-text { min-width: 0; }
+html .tipo-selecao .tipo-selecao__greeting h1 {
+  font-size: clamp(34px, 4.6vw, 52px) !important; font-weight: 600 !important; letter-spacing: -0.035em !important; line-height: 1.02 !important;
+  margin: 0 !important; color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; background: none !important; text-shadow: none !important;
+}
+html .tipo-selecao .tipo-selecao__greeting p { font-size: 15px !important; font-weight: 400 !important; color: var(--gmp-text-light) !important; margin: 10px 0 0 !important; }
+html .tipo-selecao .tipo-selecao__access-tier {
+  display: inline-block !important; margin-top: 12px !important; padding: 3px 9px !important; border-radius: 980px !important;
+  background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text-light) !important; border: none !important;
+  font-size: 11px !important; font-weight: 600 !important; letter-spacing: .02em !important; text-transform: none !important;
+}
+/* "O catavento pode ser bem maior": ate 240px no computador (a saudacao ocupa a esquerda). */
+html .tipo-selecao .tipo-selecao__catavento { --cv-size: clamp(140px, 17vw, 240px); flex: 0 0 auto; margin-right: clamp(0px, 3vw, 48px); }
+html .tipo-selecao .tipo-selecao__greeting { min-height: 280px; }
+html .tipo-selecao .tipo-selecao__catavento .catavento { filter: drop-shadow(0 14px 22px rgba(0,0,0,.14)); }
+/* A versao (V02) ao lado do nome. */
+html .tipo-selecao .tipo-selecao__versao {
+  display: inline-block; padding: 2px 7px; border-radius: 980px;
+  background: var(--ds-panel, #F5F5F7); color: var(--gmp-text-light);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; line-height: 1.3;
+}
+
+/* ── 3. Busca: pilula larga, a esquerda ───────────────────────────────────── */
+html .tipo-selecao .tipo-selecao__search-wrap { position: relative; max-width: 520px !important; margin: 26px 0 0 !important; }
+html .tipo-selecao .tipo-selecao__search {
+  width: 100%; min-height: 44px; padding: 11px 16px 11px 44px !important; font-size: 15px !important;
+  background: rgba(118,118,128,.12) !important; border: 1px solid transparent !important; border-radius: 14px !important; box-shadow: none !important;
+  color: var(--gmp-text) !important;
+}
+html[data-theme="dark"] .tipo-selecao .tipo-selecao__search { background: rgba(118,118,128,.24) !important; }
+html .tipo-selecao .tipo-selecao__search:focus { background: var(--gmp-surface) !important; border-color: var(--gmp-primary) !important; box-shadow: 0 0 0 4px rgba(0,113,227,.18) !important; }
+html .tipo-selecao .tipo-selecao__search-icon { position: absolute; left: 16px !important; top: 50%; transform: translateY(-50%); color: var(--gmp-gray-500) !important; font-size: 16px; }
+html .tipo-selecao .tipo-selecao__search-clear { right: 10px !important; }
+
+/* ── 4. Secoes ────────────────────────────────────────────────────────────── */
+html .tipo-selecao .tipo-selecao__sections { margin-top: 10px; }
+html .tipo-selecao .tipo-selecao__section { margin-top: 36px !important; }
+html .tipo-selecao .tipo-selecao__section-title {
+  font-size: 13px !important; font-weight: 600 !important; letter-spacing: .04em !important; text-transform: uppercase !important;
+  color: var(--gmp-text-light) !important; margin: 0 0 14px !important; text-align: left !important;
+}
+html .tipo-selecao .tipo-selecao__empty { font-size: 14px !important; color: var(--gmp-text-light) !important; }
+
+/* 4.1 Continuar: heroi + recentes */
+html .tipo-selecao .orion-continuar { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+html .tipo-selecao .orion-hero {
+  position: relative; overflow: hidden; cursor: pointer;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 22px;
+  min-height: 156px; padding: 26px 28px; border: none; border-radius: 24px; text-align: left;
+  background: var(--tile-gradient); color: #FFFFFF; font-family: inherit;
+  box-shadow: 0 30px 50px -28px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.22);
+  transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s ease;
+}
+html .tipo-selecao .orion-hero::after {
+  content: ''; position: absolute; right: -60px; top: -80px; width: 260px; height: 260px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255,255,255,.30), rgba(255,255,255,0));
+  animation: ds-sheen 9s ease-in-out infinite;
+}
+html .tipo-selecao .orion-hero:hover { transform: translateY(-2px); box-shadow: 0 36px 56px -28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.22); }
+html .tipo-selecao .orion-hero:active { transform: scale(.99); }
+html .tipo-selecao .orion-hero__icone {
+  width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 30px;
+  background: rgba(255,255,255,.18); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: inset 0 1px 0 rgba(255,255,255,.25);
+}
+html .tipo-selecao .orion-hero__texto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+html .tipo-selecao .orion-hero__eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .78; }
+html .tipo-selecao .orion-hero__nome { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+html .tipo-selecao .orion-hero__desc { font-size: 14px; opacity: .86; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html .tipo-selecao .orion-hero__abrir {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 980px;
+  background: #FFFFFF; color: #1D1D1F; font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  transition: transform .18s ease;
+}
+html .tipo-selecao .orion-hero:hover .orion-hero__abrir { transform: translateX(2px); }
+html .tipo-selecao .orion-recentes { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 20px; background: var(--ds-panel, #F5F5F7); }
+html .tipo-selecao .orion-recente {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; cursor: pointer; text-align: left; font-family: inherit;
+  background: transparent; border: none; border-radius: 14px; color: var(--gmp-text);
+  transition: background-color .18s ease, transform .18s ease;
+}
+html .tipo-selecao .orion-recente:hover { background: var(--gmp-surface); }
+html[data-theme="dark"] .tipo-selecao .orion-recente:hover { background: #2C2C2E; }
+html .tipo-selecao .orion-recente__icone { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; background: var(--tile-gradient); flex: 0 0 auto; }
+html .tipo-selecao .orion-recente__nome { flex: 1 1 auto; min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html .tipo-selecao .orion-recente__chevron { color: var(--gmp-gray-400); font-size: 16px; flex: 0 0 auto; }
+
+/* 4.2 Seus modulos: cartoes */
+html .tipo-selecao .orion-grid {
+  display: grid !important; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important; gap: 14px !important; justify-items: stretch !important;
+}
+html .tipo-selecao .orion-scroll { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important; gap: 14px !important; padding: 0 !important; overflow: visible !important; }
+html .tipo-selecao .orion-tile, html .tipo-selecao .orion-tile--compact {
+  position: relative !important; display: flex !important; flex-direction: column !important; align-items: flex-start !important; justify-content: flex-start !important;
+  width: auto !important; min-width: 0 !important; height: auto !important; aspect-ratio: auto !important;
+  padding: 18px 18px 16px !important; margin: 0 !important;
+  background: var(--gmp-surface) !important; background-image: none !important;
+  border: 1px solid var(--ds-hair, rgba(0,0,0,.07)) !important; border-radius: 20px !important;
+  box-shadow: none !important; filter: none !important; overflow: visible !important;
+  color: var(--gmp-text) !important; text-align: left !important; cursor: pointer;
+  transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s ease, border-color .22s ease !important;
+}
+html[data-theme="dark"] .tipo-selecao .orion-tile { background: #1C1C1E !important; border-color: rgba(255,255,255,.08) !important; }
+html .tipo-selecao .orion-tile--ativo:hover { transform: translateY(-3px) !important; box-shadow: 0 22px 40px -26px rgba(0,0,0,.35) !important; border-color: rgba(0,0,0,.12) !important; }
+html[data-theme="dark"] .tipo-selecao .orion-tile--ativo:hover { border-color: rgba(255,255,255,.16) !important; }
+html .tipo-selecao .orion-tile--ativo:active { transform: scale(.98) !important; }
+html .tipo-selecao .orion-tile__shade, html .tipo-selecao .orion-tile__play { display: none !important; }
+html .tipo-selecao .orion-tile__icon-wrap, html .tipo-selecao .orion-tile--compact .orion-tile__icon-wrap {
+  position: static !important; width: 52px !important; height: 52px !important; margin: 0 0 16px !important;
+  border-radius: 16px !important; background: var(--tile-gradient) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  transform: none !important; box-shadow: 0 10px 20px -12px rgba(0,0,0,.4) !important; pointer-events: none;
+  transition: transform .22s cubic-bezier(.22,1,.36,1) !important;
+}
+html .tipo-selecao .orion-tile--ativo:hover .orion-tile__icon-wrap { transform: scale(1.05) !important; }
+html .tipo-selecao .orion-tile__icon { font-size: 24px !important; color: #fff !important; stroke-width: 1.8 !important; opacity: 1 !important; }
+html .tipo-selecao .orion-tile__info { margin: 0 !important; width: 100% !important; align-self: stretch !important; }
+html .tipo-selecao .orion-tile h3, html .tipo-selecao .orion-tile .orion-tile__title, html .tipo-selecao .orion-tile--compact h3 {
+  display: flex !important; align-items: center !important; gap: 6px !important; flex-wrap: wrap;
+  font-size: 15px !important; font-weight: 600 !important; letter-spacing: -0.01em !important; line-height: 1.25 !important; margin: 0 0 4px !important;
+  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; text-shadow: none !important; text-align: left !important;
+  -webkit-line-clamp: unset !important; overflow: visible !important;
+}
+html .tipo-selecao .orion-tile__desc {
+  margin: 0 !important; font-size: 13px !important; line-height: 1.4 !important; color: var(--gmp-text-light) !important;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+html .tipo-selecao .orion-tile__tipo-pill {
+  display: inline-block !important; margin: 0 !important; padding: 2px 6px !important; border-radius: 980px !important; border: none !important;
+  font-size: 9.5px !important; font-weight: 700 !important; letter-spacing: .06em !important;
+  background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text-light) !important;
+}
+html .tipo-selecao .orion-tile__gear {
+  position: absolute !important; top: 12px !important; right: 12px !important; left: auto !important; margin: 0 !important;
+  width: 26px !important; height: 26px !important; border-radius: 50% !important; font-size: 12px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text-light) !important; box-shadow: none !important;
+  opacity: 0; transition: opacity .16s ease, background-color .16s ease;
+}
+html .tipo-selecao .orion-tile:hover .orion-tile__gear, html .tipo-selecao .orion-tile__gear:focus { opacity: 1; }
+html .tipo-selecao .orion-tile__gear:hover { background: var(--ds-panel-hover, #EBEBEF) !important; color: var(--gmp-text) !important; }
+@media (hover: none) { html .tipo-selecao .orion-tile__gear { opacity: 1; } }
+html .tipo-selecao .orion-tile__lock {
+  position: absolute !important; top: 14px !important; right: 14px !important; left: auto !important; margin: 0 !important;
+  width: 24px !important; height: 24px !important; border-radius: 50% !important; font-size: 11px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  background: rgba(0,0,0,.07) !important; color: var(--gmp-text-light) !important;
+}
+html .tipo-selecao .orion-tile--bloqueado { cursor: default; opacity: .72; }
+html .tipo-selecao .orion-tile--bloqueado .orion-tile__icon-wrap { filter: grayscale(1) opacity(.6) !important; box-shadow: none !important; }
+
+/* 4.3 Espera */
+html .tipo-selecao .tipo-selecao-loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 80px 0; }
+html .tipo-selecao .tipo-selecao-loading p { font-size: 13px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+
+/* ── 5. Entrada em cena (cascata) ─────────────────────────────────────────── */
+html .tipo-selecao .tipo-selecao__header-top,
+html .tipo-selecao .tipo-selecao__greeting-text,
+html .tipo-selecao .tipo-selecao__search-wrap,
+html .tipo-selecao .orion-hero, html .tipo-selecao .orion-recentes,
+html .tipo-selecao .orion-tile { animation: ds-rise-o .7s cubic-bezier(.22,1,.36,1) backwards; }
+html .tipo-selecao .tipo-selecao__greeting-text { animation-delay: .05s; }
+html .tipo-selecao .tipo-selecao__search-wrap { animation-delay: .12s; }
+html .tipo-selecao .orion-hero { animation-delay: .18s; }
+html .tipo-selecao .orion-recentes { animation-delay: .26s; }
+html .tipo-selecao .orion-tile:nth-child(1) { animation-delay: .22s; }
+html .tipo-selecao .orion-tile:nth-child(2) { animation-delay: .27s; }
+html .tipo-selecao .orion-tile:nth-child(3) { animation-delay: .32s; }
+html .tipo-selecao .orion-tile:nth-child(4) { animation-delay: .37s; }
+html .tipo-selecao .orion-tile:nth-child(5) { animation-delay: .42s; }
+html .tipo-selecao .orion-tile:nth-child(6) { animation-delay: .47s; }
+html .tipo-selecao .orion-tile:nth-child(n+7) { animation-delay: .52s; }
+
+/* ── 6. Celular ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  html .tipo-selecao .tipo-selecao__inner { padding: 18px 16px 60px !important; }
+  html .tipo-selecao .tipo-selecao__admin-badge { display: none !important; }
+  html .tipo-selecao .tipo-selecao__greeting { padding: 26px 0 4px !important; gap: 14px; }
+  html .tipo-selecao .tipo-selecao__greeting h1 { font-size: 32px !important; }
+  html .tipo-selecao .tipo-selecao__greeting p { font-size: 14px !important; margin-top: 6px !important; }
+  html .tipo-selecao .tipo-selecao__catavento { --cv-size: 96px; margin-right: 0; }
+  /* medido a 375px: o svg saia com 53px (regra de icone do celular); fixa o tamanho */
+  html .tipo-selecao .tipo-selecao__catavento > .catavento { width: 96px !important; height: 96px !important; }
+  html .tipo-selecao .tipo-selecao__greeting { min-height: 0; }
+  html .tipo-selecao .tipo-selecao__search-wrap { margin-top: 18px !important; max-width: none !important; }
+  html .tipo-selecao .tipo-selecao__section { margin-top: 28px !important; }
+  html .tipo-selecao .orion-continuar { grid-template-columns: 1fr; gap: 12px; }
+  html .tipo-selecao .orion-hero { grid-template-columns: auto minmax(0, 1fr); gap: 16px; min-height: 0; padding: 20px; border-radius: 22px; }
+  html .tipo-selecao .orion-hero__icone { width: 52px; height: 52px; border-radius: 16px; font-size: 24px; }
+  html .tipo-selecao .orion-hero__nome { font-size: 22px; }
+  html .tipo-selecao .orion-hero__desc { white-space: normal; font-size: 13px; }
+  html .tipo-selecao .orion-hero__abrir { display: none; }
+  html .tipo-selecao .orion-grid, html .tipo-selecao .orion-scroll { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+  html .tipo-selecao .orion-tile, html .tipo-selecao .orion-tile--compact { padding: 14px 14px 12px !important; border-radius: 18px !important; }
+  html .tipo-selecao .orion-tile__icon-wrap, html .tipo-selecao .orion-tile--compact .orion-tile__icon-wrap { width: 44px !important; height: 44px !important; border-radius: 14px !important; margin-bottom: 12px !important; }
+  html .tipo-selecao .orion-tile__icon { font-size: 20px !important; }
+  html .tipo-selecao .orion-tile h3 { font-size: 14px !important; }
+  html .tipo-selecao .orion-tile__desc { font-size: 12px !important; }
+}
+@media (max-width: 1000px) and (min-width: 769px) {
+  html .tipo-selecao .tipo-selecao__inner { padding: 22px 24px 60px !important; }
+  html .tipo-selecao .orion-continuar { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html .tipo-selecao .tipo-selecao__header-top, html .tipo-selecao .tipo-selecao__greeting-text, html .tipo-selecao .tipo-selecao__search-wrap,
+  html .tipo-selecao .orion-hero, html .tipo-selecao .orion-recentes, html .tipo-selecao .orion-tile, html .tipo-selecao .orion-hero::after { animation: none !important; }
+}

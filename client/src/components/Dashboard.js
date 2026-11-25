@@ -321,14 +321,23 @@ const Dashboard = () => {
     taxaConversao: 0
   }, [stats]);
 
-  const COLORS = useMemo(() => ['#0066cc', '#00c853', '#00a8e8', '#ff9800', '#003d7a', '#9c27b0'], []);
+  // Paleta dos graficos (24/11/2026): UMA familia de cor (azul da marca) mais
+  // neutros, como a referencia que o P.O. mandou — e nao azul/verde/laranja. Sao
+  // variaveis CSS (apple-charts.css) para o escuro trocar a cor sozinho; o
+  // fallback e o valor claro. (So cor: nenhum dado ou calculo muda.)
+  const COLORS = useMemo(() => [
+    'var(--chart-1, #0A6CF0)', 'var(--chart-2, #8EC1FF)', 'var(--chart-3, #0348B5)',
+    'var(--chart-4, #B9C4D6)', 'var(--chart-5, #34AADC)', 'var(--chart-ink, #1D1D1F)'
+  ], []);
   const GMP_COLORS = useMemo(() => ({
-    primary: '#0066cc',
-    secondary: '#00a8e8',
-    success: '#00c853',
-    warning: '#ff9800',
-    accent: '#003d7a'
+    primary: 'var(--chart-1, #0A6CF0)',
+    secondary: 'var(--chart-2, #8EC1FF)',
+    success: 'var(--chart-3, #0348B5)',
+    warning: 'var(--chart-ink, #1D1D1F)',
+    accent: 'var(--chart-5, #34AADC)'
   }), []);
+  // Movimento dos graficos: as series crescem em 900ms, uma depois da outra.
+  const CHART_MOTION = useMemo(() => ({ animationDuration: 900, animationEasing: 'ease-out' }), []);
 
   const formatCurrency = useCallback((value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -766,56 +775,46 @@ const Dashboard = () => {
                   <stop offset="95%" stopColor={GMP_COLORS.warning} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-              <XAxis 
-                dataKey="name" 
-                stroke="#64748b" 
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                axisLine={{ stroke: '#e2e8f0' }}
-              />
-              <YAxis 
+              {/* Grade so horizontal, sem linha de eixo nem tracinho de tick: a pele
+                  (cor, fonte, fio) vem do apple-charts.css. A legenda ja esta no
+                  cabecalho do cartao (chart-legend-inline) — a do Recharts duplicava. */}
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} dy={6} />
+              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} width={36} />
+              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} width={44} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--chart-cursor, rgba(0,0,0,.045))' }} />
+              <Area
                 yAxisId="left"
-                stroke="#64748b" 
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                axisLine={{ stroke: '#e2e8f0' }}
-              />
-              <YAxis 
-                yAxisId="right" 
-                orientation="right"
-                stroke="#64748b" 
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                axisLine={{ stroke: '#e2e8f0' }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend 
-                wrapperStyle={{ paddingTop: '20px' }}
-                iconType="circle"
-              />
-              <Area 
-                yAxisId="left"
-                type="monotone" 
-                dataKey="clientes" 
-                fill="url(#colorClientes)" 
-                stroke={GMP_COLORS.primary} 
+                type="monotone"
+                dataKey="clientes"
+                fill="url(#colorClientes)"
+                stroke={GMP_COLORS.primary}
                 strokeWidth={2}
                 name="Clientes"
+                {...CHART_MOTION}
+                animationBegin={0}
               />
-              <Bar 
+              <Bar
                 yAxisId="left"
-                dataKey="projetos" 
-                fill={GMP_COLORS.success} 
-                radius={[8, 8, 0, 0]}
+                dataKey="projetos"
+                fill={GMP_COLORS.secondary}
+                radius={[6, 6, 0, 0]}
+                maxBarSize={28}
                 name="Projetos"
+                {...CHART_MOTION}
+                animationBegin={150}
               />
-              <Line 
+              <Line
                 yAxisId="right"
-                type="monotone" 
-                dataKey="receita" 
-                stroke={GMP_COLORS.warning} 
-                strokeWidth={3}
-                dot={{ fill: GMP_COLORS.warning, r: 5 }}
-                activeDot={false}
+                type="monotone"
+                dataKey="receita"
+                stroke={GMP_COLORS.warning}
+                strokeWidth={2}
+                dot={{ fill: GMP_COLORS.warning, r: 3.5, strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
                 name="Receita (R$)"
+                {...CHART_MOTION}
+                animationBegin={300}
               />
             </ComposedChart>
                   </ResponsiveContainer>
@@ -857,27 +856,30 @@ const Dashboard = () => {
                   label={({ name, percent, value }) => 
                     `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
                   }
-                  outerRadius={isMobile ? 70 : 100}
-                  innerRadius={isMobile ? 35 : 50}
+                  outerRadius={isMobile ? 72 : 100}
+                  innerRadius={isMobile ? 44 : 62}
                   fill="#8884d8"
                   dataKey="total"
-                  paddingAngle={2}
+                  paddingAngle={3}
+                  cornerRadius={6}
+                  {...CHART_MOTION}
                 >
                   {safeStats.propostasPorStatus.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
+                    <Cell
+                      key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
-                      stroke="#fff"
-                      strokeWidth={2}
+                      stroke="var(--chart-gap, #fff)"
+                      strokeWidth={3}
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#ffffff', 
-                    border: '1px solid #e2e8f0',
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--gmp-surface, #ffffff)',
+                    border: '1px solid var(--chart-grid, #e2e8f0)',
                     borderRadius: '12px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                    boxShadow: '0 18px 40px -18px rgba(0,0,0,0.32)',
+                    fontSize: '12px'
                   }}
                 />
                 </PieChart>
@@ -918,32 +920,31 @@ const Dashboard = () => {
                     <stop offset="100%" stopColor={GMP_COLORS.secondary} stopOpacity={0.8}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-                <XAxis 
-                  dataKey="status" 
-                  stroke="#64748b" 
-                  tick={{ fill: '#64748b', fontSize: isMobile ? 10 : 12 }}
-                  axisLine={{ stroke: '#e2e8f0' }}
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="status"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: isMobile ? 10 : 11 }}
                   angle={isMobile ? -45 : 0}
                   textAnchor={isMobile ? 'end' : 'middle'}
-                  height={isMobile ? 60 : 40}
+                  height={isMobile ? 60 : 36}
+                  dy={6}
                 />
-                <YAxis 
-                  stroke="#64748b" 
-                  tick={{ fill: '#64748b', fontSize: isMobile ? 10 : 12 }}
-                  axisLine={{ stroke: '#e2e8f0' }}
-                  width={isMobile ? 50 : 60}
-                />
-                <Tooltip 
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: isMobile ? 10 : 11 }} width={isMobile ? 40 : 36} />
+                <Tooltip
                   content={<CustomTooltip />}
-                  cursor={{ fill: 'rgba(0, 102, 204, 0.1)' }}
+                  cursor={{ fill: 'var(--chart-cursor, rgba(0,0,0,.045))' }}
                 />
-                <Legend />
-                <Bar 
-                  dataKey="total" 
-                  fill="url(#barGradient)" 
-                  radius={[12, 12, 0, 0]}
+                {/* Uma serie so: barra solida da cor da marca, fina e arredondada;
+                    a legenda "Quantidade" nao dizia nada e saiu. */}
+                <Bar
+                  dataKey="total"
+                  fill={GMP_COLORS.primary}
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={36}
                   name="Quantidade"
+                  {...CHART_MOTION}
                 />
               </BarChart>
                 </ResponsiveContainer>
@@ -967,35 +968,32 @@ const Dashboard = () => {
             <AreaChart data={trendData}>
               <defs>
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={GMP_COLORS.warning} stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor={GMP_COLORS.warning} stopOpacity={0}/>
+                  <stop offset="5%" stopColor={GMP_COLORS.primary} stopOpacity={0.35}/>
+                  <stop offset="95%" stopColor={GMP_COLORS.primary} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
-              <XAxis 
-                dataKey="name" 
-                stroke="#64748b" 
-                tick={{ fill: '#64748b', fontSize: 12 }}
-                axisLine={{ stroke: '#e2e8f0' }}
-              />
-              <YAxis 
-                stroke="#64748b" 
-                tick={{ fill: '#64748b', fontSize: isMobile ? 10 : 12 }}
-                axisLine={{ stroke: '#e2e8f0' }}
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} dy={6} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: isMobile ? 10 : 11 }}
                 tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
                 width={isMobile ? 50 : 60}
               />
-              <Tooltip 
+              <Tooltip
                 content={<CustomTooltip />}
                 formatter={(value) => formatCurrency(value)}
+                cursor={{ stroke: 'var(--chart-grid, rgba(0,0,0,.07))' }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="receita" 
-                stroke={GMP_COLORS.warning} 
-                strokeWidth={3}
+              <Area
+                type="monotone"
+                dataKey="receita"
+                stroke={GMP_COLORS.primary}
+                strokeWidth={2}
                 fill="url(#areaGradient)"
                 name="Receita"
+                {...CHART_MOTION}
               />
             </AreaChart>
               </ResponsiveContainer>

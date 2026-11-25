@@ -1,0 +1,523 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPLE-DESKTOP — o COMPUTADOR (769px+), segunda tentativa
+   ═══════════════════════════════════════════════════════════════════════════
+
+   A primeira versao do desktop (source list cinza, toolbar de vidro, cartao
+   "Resumo Comercial" com cabecalho, widgets com icone colorido) foi reprovada
+   pelo P.O. em 24/11/2026 com uma captura e um video de referencia (dashboard
+   "V14": tela branca e arejada, navegacao em pilulas, saudacao grande, UM
+   numero gigante, UM cartao em gradiente como heroi, KPIs soltos sem caixa,
+   uma cor de destaque, versao escura com o mesmo cartao).
+
+   Esta folha e essa linguagem, com a nossa cor:
+   - tela BRANCA (e preta no escuro), sem "fundo de pagina" cinza;
+   - barra lateral branca, sem borda pesada, linhas de 34px, item ativo em
+     PILULA ESCURA (clara no escuro), usuario no rodape com acoes em icone;
+   - titulo da tela grande e leve, sem cartao, sem toolbar de vidro;
+   - botao principal = pilula escura; secundario = pilula cinza-clara;
+   - Dashboard: o valor aprovado vira o numero heroi, "Propostas por status"
+     vira o CARTAO em gradiente azul, taxa e clientes viram estatisticas soltas;
+     graficos em paineis cinza-claros sem borda nem fio azul;
+   - tabelas sem caixa: cabecalho cinza, fios finos, hover suave.
+
+   So CSS. Nenhum elemento entra ou sai do DOM; eventos e dados sao os mesmos.
+   Entra em App.js DEPOIS de apple-structure.css (que guarda o celular e o
+   login). Tudo com `html .layout` na frente: o CSS de componente chega no
+   chunk da rota, depois desta folha, e sem o degrau a mais ele ganharia o
+   empate de !important. O celular (ate 768px) NAO le nada daqui.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 769px) {
+
+  /* ── 0. Tokens do computador ───────────────────────────────────────────── */
+  :root {
+    --gmp-bg: #FFFFFF;                 /* tela branca, como a referencia */
+    --ds-ink: #1D1D1F;                 /* a pilula escura (nav ativo, botao principal) */
+    --ds-ink-text: #FFFFFF;
+    --ds-panel: #F5F5F7;               /* painel cinza-claro (graficos, controles) */
+    --ds-panel-hover: #EBEBEF;
+    --ds-hair: rgba(0, 0, 0, 0.07);    /* o fio */
+    --ds-muted: #86868B;
+    --ds-sidebar: 236px;
+    --ds-hero-grad: linear-gradient(135deg, #3B9CFF 0%, #0A6CF0 48%, #0348B5 100%);
+    --ds-hero-shadow: 0 30px 50px -24px rgba(10, 108, 240, 0.55);
+  }
+  :root[data-theme="dark"] {
+    --gmp-bg: #000000;
+    --ds-ink: #F5F5F7;
+    --ds-ink-text: #1D1D1F;
+    --ds-panel: #1C1C1E;
+    --ds-panel-hover: #2C2C2E;
+    --ds-hair: rgba(255, 255, 255, 0.09);
+    --ds-muted: #98989D;
+    --ds-hero-shadow: 0 30px 50px -24px rgba(10, 108, 240, 0.45);
+  }
+  @media (max-width: 1100px) { :root { --ds-sidebar: 212px; } }
+
+  /* ── 1. A tela ─────────────────────────────────────────────────────────── */
+  html body, html .layout, html .layout .main-content { background: var(--gmp-bg) !important; }
+
+  /* O Layout.css reserva 70px no topo para um header fixo que nao existe mais
+     (so a barra lateral e renderizada) — era o buraco acima do titulo. */
+  html .layout .main-content {
+    padding-top: 0 !important;
+    height: 100vh !important; max-height: 100vh !important;
+    margin-left: var(--ds-sidebar) !important;
+    width: calc(100vw - var(--ds-sidebar)) !important;
+    max-width: calc(100vw - var(--ds-sidebar)) !important;
+  }
+
+  /* ── 2. Barra lateral ──────────────────────────────────────────────────── */
+  html .layout .sidebar {
+    width: var(--ds-sidebar) !important;
+    display: flex !important; flex-direction: column !important;
+    padding: 0 !important;
+    background: var(--gmp-bg) !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+    border-right: 1px solid var(--ds-hair) !important;
+    box-shadow: none !important;
+    color: var(--gmp-text) !important;
+  }
+
+  /* Cabecalho: marca + wordmark a esquerda, engrenagem discreta a direita. */
+  html .layout .sidebar .sidebar-header {
+    order: 0;
+    display: flex !important; align-items: center !important; justify-content: space-between !important;
+    min-height: 0 !important; padding: 16px 12px 10px 24px !important;
+    border: none !important; background: transparent !important;
+  }
+  /* O P.O. achou a marca "largada": medido, o Layout.css centraliza o bloco
+     (`justify-content: center`), entao o icone caia em x=64 enquanto os icones
+     do menu comecam em x=24 — flutuava solta. Alinhada a coluna do menu, com o
+     icone do tamanho da linha e a palavra colada, vira um lockup. */
+  html .layout .sidebar .sidebar-logo {
+    display: flex !important; align-items: center !important; justify-content: flex-start !important;
+    gap: 8px !important; width: auto !important; flex: 1 1 auto; min-width: 0;
+  }
+  html .layout .sidebar .sidebar-logo .logo-image {
+    width: 28px !important; height: 28px !important; border-radius: 8px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+  html .layout .sidebar .sidebar-logo::after { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; color: var(--gmp-text); order: 1; }
+  /* A versao (V02) depois da palavra: o ::after "Orion" e um item flex, dai o `order`. */
+  html .layout .sidebar .sidebar-versao {
+    order: 2; margin-left: 2px; padding: 2px 6px; border-radius: 980px;
+    background: var(--ds-panel); color: var(--ds-muted);
+    font-size: 10px; font-weight: 700; letter-spacing: .04em; line-height: 1.3;
+  }
+  html .layout .sidebar .sidebar-header-actions { position: static !important; }
+  html .layout .sidebar .botao-preferencias {
+    width: 30px !important; height: 30px !important; padding: 0 !important;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    border-radius: 8px !important; border: none !important; box-shadow: none !important;
+    background: transparent !important; color: var(--ds-muted) !important; font-size: 16px;
+  }
+  html .layout .sidebar .botao-preferencias:hover { background: var(--ds-panel) !important; color: var(--gmp-text) !important; }
+
+  /* "Selecionar Modulo": um botaozinho cinza-claro, nao uma caixa com borda. */
+  html .layout .sidebar .sidebar-nav { order: 1; flex: 1 1 auto; padding: 0 0 10px !important; }
+  /* (.nav-item.nav-item-module-selector, nao so .nav-item-module-selector: a
+     regra generica de .nav-item logo abaixo tem a mesma especificidade e vem
+     depois — medido, ela zerava o fundo deste botao.) */
+  html .layout .sidebar .nav-item.nav-item-module-selector,
+  html .layout .sidebar .nav-item.nav-item-module-selector:hover {
+    display: flex !important; align-items: center !important; gap: 8px !important;
+    width: calc(100% - 32px) !important; min-height: 32px !important;
+    margin: 4px 16px 14px !important; padding: 0 12px !important;
+    background: var(--ds-panel) !important; color: var(--gmp-text-light) !important;
+    border: none !important; border-radius: 9px !important; box-shadow: none !important;
+    font-size: 12.5px !important; font-weight: 600 !important;
+  }
+  html .layout .sidebar .nav-item.nav-item-module-selector:hover { background: var(--ds-panel-hover) !important; color: var(--gmp-text) !important; }
+  html .layout .sidebar .nav-item.nav-item-module-selector svg { font-size: 15px !important; color: inherit !important; }
+
+  /* As linhas: 34px, 13.5px, icone cinza; hover cinza-claro; ativo = pilula escura. */
+  html .layout .sidebar .nav-item {
+    display: flex !important; align-items: center !important; gap: 10px !important;
+    min-height: 34px !important; padding: 0 12px !important; margin: 1px 12px !important;
+    border: none !important; border-radius: 10px !important; box-shadow: none !important;
+    background: transparent !important; color: var(--gmp-text) !important;
+    font-size: 13.5px !important; font-weight: 500 !important; letter-spacing: -0.005em;
+    transform: none !important;
+  }
+  html .layout .sidebar .nav-item::before, html .layout .sidebar .nav-item::after { display: none !important; }
+  html .layout .sidebar .nav-item svg { font-size: 17px !important; min-width: 17px !important; color: var(--ds-muted) !important; }
+  html .layout .sidebar .nav-item span { color: inherit !important; }
+  html .layout .sidebar .nav-item:hover { background: var(--ds-panel) !important; color: var(--gmp-text) !important; }
+  html .layout .sidebar .nav-item.active,
+  html .layout .sidebar .nav-item.active:hover {
+    background: var(--ds-ink) !important; color: var(--ds-ink-text) !important; font-weight: 600 !important;
+  }
+  html .layout .sidebar .nav-item.active svg,
+  html .layout .sidebar .nav-item.active span { color: var(--ds-ink-text) !important; }
+  /* Medido no escuro: `[data-theme="dark"] .layout .sidebar .nav-item.active`
+     do apple-theme (0,5,0) vencia a regra acima (0,4,1) e a pilula ficava azul
+     translucida com o texto escuro — invisivel. Um degrau a mais, so no escuro. */
+  html[data-theme="dark"] .layout .sidebar .nav-item.active,
+  html[data-theme="dark"] .layout .sidebar .nav-item.active:hover { background: var(--ds-ink) !important; color: var(--ds-ink-text) !important; }
+  html .layout .sidebar .nav-item .chat-nav-badge { margin-left: auto; }
+
+  /* Rodape: avatar + nome numa linha, "Minha Conta" e "Sair" como icones. O
+     selo "FULL ACCESS" (que estourava a largura) e os selos de modulo saem. */
+  html .layout .sidebar .sidebar-footer {
+    order: 2;
+    display: flex !important; flex-wrap: wrap; align-items: center; gap: 2px;
+    padding: 10px 10px 14px 12px !important;
+    border-top: 1px solid var(--ds-hair) !important; background: transparent !important;
+  }
+  html .layout .sidebar .sidebar-footer .user-info {
+    flex: 1 1 0; min-width: 0;
+    display: flex !important; align-items: center !important; gap: 10px !important;
+    margin: 0 !important; padding: 4px 6px !important;
+    background: transparent !important; border: none !important; border-radius: 0 !important;
+  }
+  html .layout .sidebar .user-avatar-mini { width: 30px !important; height: 30px !important; border-radius: 50% !important; flex: 0 0 auto; }
+  html .layout .sidebar .user-info-text { min-width: 0; }
+  html .layout .sidebar .user-name {
+    font-size: 13px !important; font-weight: 600 !important; margin: 0 !important;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  html .layout .sidebar .user-role, html .layout .sidebar .user-modulos-badges { display: none !important; }
+  html .layout .sidebar .sidebar-footer .account-button,
+  html .layout .sidebar .sidebar-footer .logout-button {
+    flex: 0 0 auto;
+    width: 30px !important; height: 30px !important; min-height: 0 !important;
+    margin: 0 !important; padding: 0 !important;
+    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    background: transparent !important; border: none !important; border-radius: 8px !important; box-shadow: none !important;
+    color: var(--ds-muted) !important; font-size: 15px !important;
+  }
+  html .layout .sidebar .sidebar-footer .account-button span,
+  html .layout .sidebar .sidebar-footer .logout-button span { display: none !important; }
+  html .layout .sidebar .sidebar-footer .account-button:hover { background: var(--ds-panel) !important; color: var(--gmp-text) !important; }
+  html .layout .sidebar .sidebar-footer .logout-button:hover { background: var(--gmp-error-50) !important; color: var(--gmp-error) !important; }
+  /* "Instalar app" (quando o navegador oferece) desce para a propria linha. */
+  html .layout .sidebar .sidebar-footer > *:not(.user-info):not(.account-button):not(.logout-button) { flex-basis: 100%; order: 3; margin-top: 6px; }
+
+  /* ── 2b. UMA largura para todas as telas ──────────────────────────────────
+     Medido: Clientes (.clientes) tinha max-width 1600 e padding 32; Propostas
+     (.propostas-list) max-width 1400 — por isso uma comecava em x=309 e a outra
+     em x=409 na mesma janela. O P.O. quer tudo como Clientes. A raiz de cada
+     tela (filha direta de .main-content) recebe a MESMA caixa: 1600 no maximo,
+     centrada, 40px de respiro. Ficam de fora as telas que ocupam a area inteira
+     (chat, kanban, mapa, scanner) e o que nao e tela (overlay, botao, espera). */
+  html .layout .main-content > *:not(.sidebar-overlay):not(.mobile-menu-toggle):not(.module-loading):not(nav):not([class*='chat']):not([class*='kanban']):not([class*='todolist']):not([class*='mapa']):not([class*='scanner']) {
+    box-sizing: border-box;
+    width: auto !important; max-width: 1600px !important;
+    margin: 0 auto !important; padding: 28px 40px 64px !important;
+  }
+  @media (max-width: 1100px) {
+    html .layout .main-content > *:not(.sidebar-overlay):not(.mobile-menu-toggle):not(.module-loading):not(nav):not([class*='chat']):not([class*='kanban']):not([class*='todolist']):not([class*='mapa']):not([class*='scanner']) {
+      padding: 22px 24px 48px !important;
+    }
+  }
+  /* Cabecalhos que nao usam .page-header (ex.: Propostas, .propostas-list-header):
+     o mesmo titulo de 30px, sem o fio embaixo. */
+  html .layout .main-content > * > header:not(.chart-header),
+  html .layout .main-content > * > [class*='-header']:not(.chart-header):not(.summary-header):not(.modal-header) {
+    border-bottom: none !important; background: transparent !important; box-shadow: none !important;
+    padding: 8px 0 0 !important; margin: 0 0 28px !important;
+  }
+  html .layout .main-content > * > header h1,
+  html .layout .main-content > * > [class*='-header'] > h1 {
+    font-size: 30px !important; font-weight: 600 !important; letter-spacing: -0.025em !important; line-height: 1.1 !important; margin: 0 !important;
+  }
+
+  /* ── 3. Cabecalho da tela: titulo grande e leve, sem cartao ───────────── */
+  html .layout .page-header,
+  html .layout .dashboard-header.premium-header {
+    position: static !important;
+    display: flex !important; align-items: flex-end !important; justify-content: space-between !important;
+    gap: 16px; flex-wrap: wrap;
+    margin: 0 0 28px !important; padding: 8px 0 0 !important;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; transform: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  html .layout .page-header:hover, html .layout .dashboard-header.premium-header:hover { transform: none !important; box-shadow: none !important; }
+  html .layout .page-header h1,
+  html .layout .dashboard-header.premium-header h1 {
+    font-size: 30px !important; font-weight: 600 !important; letter-spacing: -0.025em !important;
+    line-height: 1.1 !important; margin: 0 !important;
+    color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important;
+    background: none !important; text-shadow: none !important;
+  }
+  html .layout .page-header p,
+  html .layout .dashboard-header.premium-header > div > p {
+    display: block !important; font-size: 14px !important; font-weight: 400 !important;
+    color: var(--gmp-text-light) !important; margin: 6px 0 0 !important;
+  }
+  html .layout .header-actions {
+    position: static !important; width: auto !important;
+    display: flex !important; align-items: center !important; justify-content: flex-end; flex-wrap: wrap;
+    gap: 8px !important; margin-left: auto;
+  }
+
+  /* ── 4. Botoes: pilula escura (principal) e cinza-clara (secundario) ──── */
+  html body .layout .btn-premium, html body .layout .btn-primary, html body .layout .btn.btn-pri,
+  html body .layout [class*='btn-primar'], html body .layout [class*='-primario'],
+  html body [class*='modal'] .btn-primary, html body [class*='modal'] .btn-premium {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 38px !important; padding: 0 18px !important;
+    background: var(--ds-ink) !important; background-image: none !important;
+    color: var(--ds-ink-text) !important;
+    border: none !important; border-radius: 980px !important; box-shadow: none !important;
+    font-size: 13.5px !important; font-weight: 600 !important; letter-spacing: -0.005em;
+    transition: opacity 140ms ease, transform 120ms cubic-bezier(.25,.1,.25,1) !important;
+  }
+  html body .layout .btn-premium *, html body .layout .btn-primary *,
+  html body [class*='modal'] .btn-primary *, html body [class*='modal'] .btn-premium * { color: var(--ds-ink-text) !important; }
+  html body .layout .btn-premium:hover, html body .layout .btn-primary:hover:not(:disabled),
+  html body [class*='modal'] .btn-primary:hover:not(:disabled) { background: var(--ds-ink) !important; opacity: .84; }
+  html body .layout .btn-premium-icon { width: 18px !important; height: 18px !important; background: transparent !important; }
+  html body .layout .btn-secondary, html body .layout .btn.btn-sec, html body [class*='modal'] .btn-secondary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 38px !important; padding: 0 16px !important;
+    background: var(--ds-panel) !important; color: var(--gmp-text) !important;
+    border: none !important; border-radius: 980px !important; box-shadow: none !important;
+    font-size: 13.5px !important; font-weight: 600 !important;
+  }
+  html body .layout .btn-secondary:hover:not(:disabled), html body [class*='modal'] .btn-secondary:hover:not(:disabled) { background: var(--ds-panel-hover) !important; color: var(--gmp-text) !important; }
+
+  /* ── 5. Busca e filtros: pilulas soltas, sem cartao em volta ──────────── */
+  html .layout .filters {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px !important;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; padding: 0 !important; margin: 0 0 20px !important;
+  }
+  html .layout .search-box { flex: 1 1 300px; max-width: 420px; }
+  html .layout .search-box input { min-height: 36px; padding: 8px 12px 8px 36px !important; font-size: 13.5px !important; border-radius: 10px !important; }
+  html .layout .search-box svg { left: 12px !important; font-size: 14px; }
+  html .layout .filter-select { min-height: 36px; padding: 8px 30px 8px 12px !important; font-size: 13.5px !important; border-radius: 10px !important; }
+
+  /* ── 6. Tabela: sem caixa, cabecalho cinza, fios finos ────────────────── */
+  html .layout .table-container {
+    background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  html .layout .data-table th, html .layout table th {
+    padding: 10px 12px !important;
+    font-size: 12px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important;
+    color: var(--ds-muted) !important; background: transparent !important;
+    border-bottom: 1px solid var(--ds-hair) !important;
+  }
+  html .layout .data-table td, html .layout table td {
+    padding: 13px 12px !important; font-size: 13.5px !important;
+    border-bottom: 1px solid var(--ds-hair) !important; border-top: none !important;
+    background: transparent;
+  }
+  html .layout .data-table tbody tr:hover td, html .layout table tbody tr:hover td { background: var(--ds-panel) !important; }
+  html .layout .data-table .btn-icon, html .layout .action-buttons .btn-icon,
+  html .layout .action-buttons a, html .layout .action-buttons button { width: 30px !important; height: 30px !important; border-radius: 8px !important; }
+
+  /* ── 7. Cartoes de formulario: branco com um fio; de dados: painel cinza ─
+     Medido: o glass-override.css pinta TUDO que tem "-card" no nome com
+     `[class*="-card"]:not(...)x8 { box-shadow: var(--glass-shadow) !important }`,
+     uma regra de especificidade (0,9,0). `html .layout .x` (0,2,1) perdia e o
+     sumario e os graficos continuavam em caixa branca com sombra. O `:not(#_)`
+     (um id que nao existe) sobe para (1,2,1) e decide por especificidade, sem
+     depender da ordem de carga — e o unico lugar desta folha que usa o truque. */
+  html .layout .card:not(#_), html .layout .card-premium:not(#_), html .layout .card-glass:not(#_), html .layout .card-container:not(#_),
+  html .layout .form-section, html .layout .form-card:not(#_), html .layout .form-box, html .layout .form-wrapper, html .layout .form-container {
+    background: var(--gmp-surface) !important; border: 1px solid var(--ds-hair) !important;
+    border-radius: 20px !important; box-shadow: none !important;
+  }
+  :root[data-theme="dark"] .layout .card, :root[data-theme="dark"] .layout .form-section,
+  :root[data-theme="dark"] .layout .form-card, :root[data-theme="dark"] .layout .form-container { background: var(--ds-panel) !important; }
+
+  /* ── 8. DASHBOARD ──────────────────────────────────────────────────────── */
+  /* (a caixa do Dashboard e a mesma de todas as telas — ver 2b) */
+  html .layout .dashboard-clientes-confiam {
+    margin: -28px -40px 22px !important; background: transparent !important;
+    border-bottom: 1px solid var(--ds-hair) !important;
+  }
+  @media (max-width: 1100px) {
+    html .layout .dashboard-clientes-confiam { margin: -22px -24px 18px !important; }
+  }
+  /* O sino. O painel de notificacoes e position:fixed, mas .dashboard carrega
+     transform + will-change (Dashboard.css) e .header-actions uma animacao com
+     transform: um ancestral transformado vira o bloco de contencao do fixed —
+     medido, o painel caia no meio da tela e POR BAIXO do cartao heroi. Sem o
+     transform nos ancestrais, o painel volta a ser do viewport e fica por cima. */
+  html .layout .dashboard, html .layout .premium-dashboard { will-change: auto !important; transform: none !important; animation: none !important; }
+  html .layout .dashboard-header .header-actions { transform: none !important; animation: none !important; }
+  html .layout .notificacoes-dropdown {
+    width: 380px !important; max-width: calc(100vw - 32px); max-height: 70vh !important;
+    background: var(--gmp-surface) !important; border: 1px solid var(--ds-hair) !important;
+    border-radius: 16px !important; box-shadow: 0 24px 60px -24px rgba(0,0,0,.35) !important;
+  }
+  html .layout .notificacoes-header {
+    padding: 14px 16px !important; background: transparent !important; background-image: none !important;
+    color: var(--gmp-text) !important; border-bottom: 1px solid var(--ds-hair) !important;
+  }
+  html .layout .notificacoes-header h3 { font-size: 15px !important; font-weight: 600 !important; color: var(--gmp-text) !important; }
+  html .layout .notificacoes-header .btn-close {
+    width: 28px; height: 28px; padding: 0 !important; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--gmp-text-light) !important; font-size: 16px !important;
+  }
+  html .layout .notificacoes-header .btn-close:hover { background: var(--ds-panel) !important; color: var(--gmp-text) !important; }
+  html .layout .notificacoes-list { padding: 8px !important; }
+  html .layout .notificacao-item { padding: 12px !important; border-radius: 12px !important; gap: 12px !important; border: none !important; }
+  html .layout .notificacao-item:hover { background: var(--ds-panel) !important; }
+  html .layout .notificacoes-empty { padding: 36px 16px !important; color: var(--gmp-text-light) !important; font-size: 13.5px !important; text-align: center; }
+
+  /* 8.1 Controles do cabecalho: segmentado estilo macOS, sino e "Filtros" em pilula. */
+  html .layout .dashboard-toggle {
+    display: inline-flex; gap: 2px !important; padding: 3px !important;
+    background: var(--ds-panel) !important; border: none !important; border-radius: 10px !important; box-shadow: none !important;
+  }
+  html .layout .toggle-view-btn {
+    min-height: 30px; padding: 0 14px !important; gap: 6px !important;
+    background: transparent !important; color: var(--gmp-text-light) !important;
+    border: none !important; border-radius: 8px !important; box-shadow: none !important;
+    font-size: 13px !important; font-weight: 500 !important;
+  }
+  html .layout .toggle-view-btn svg { font-size: 14px; }
+  html .layout .toggle-view-btn:hover { color: var(--gmp-text) !important; }
+  html .layout .toggle-view-btn.active {
+    background: var(--gmp-surface) !important; color: var(--gmp-text) !important; font-weight: 600 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04) !important;
+  }
+  :root[data-theme="dark"] .layout .toggle-view-btn.active { background: #636366 !important; color: #FFFFFF !important; }
+  html .layout .notificacoes-bell {
+    width: 36px !important; height: 36px !important; padding: 0 !important;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    background: var(--ds-panel) !important; color: var(--gmp-text) !important;
+    border: none !important; border-radius: 50% !important; box-shadow: none !important;
+  }
+  html .layout .notificacoes-bell:hover { background: var(--ds-panel-hover) !important; transform: none !important; }
+  html .layout .btn-filter {
+    min-height: 36px !important; padding: 0 14px !important;
+    background: var(--ds-panel) !important; color: var(--gmp-text) !important;
+    border: none !important; border-radius: 980px !important; box-shadow: none !important;
+    font-size: 13.5px !important; font-weight: 600 !important; transform: none !important;
+  }
+  html .layout .btn-filter:hover { background: var(--ds-panel-hover) !important; color: var(--gmp-text) !important; transform: none !important; box-shadow: none !important; }
+  html .layout .btn-filter.com-filtro { background: var(--ds-ink) !important; color: var(--ds-ink-text) !important; }
+  html .layout .dashboard-filtros-painel {
+    background: var(--gmp-surface) !important; border: 1px solid var(--ds-hair) !important;
+    border-radius: 16px !important; box-shadow: 0 24px 60px -24px rgba(0,0,0,.28) !important;
+  }
+
+  /* 8.2 O "Resumo Comercial" vira o HEROI da referencia: numero gigante a
+     esquerda, cartao em gradiente ao lado, duas estatisticas soltas. O cartao
+     com cabecalho "RESUMO COMERCIAL" e os quatro blocos com icone saem. */
+  html .layout .summary-card.premium-summary:not(#_) {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    padding: 0 !important; margin: 0 0 40px !important; border-radius: 0 !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  html .layout .summary-header { display: none !important; }
+  html .layout .summary-content.premium-summary-content {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .72fr) !important;
+    grid-template-areas: "hero card s1" "hero card s2" !important;
+    gap: 14px 28px !important; align-items: stretch;
+  }
+  @media (max-width: 1180px) {
+    html .layout .summary-content.premium-summary-content {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+      grid-template-areas: "hero card" "s1 s2" !important;
+      gap: 22px 24px !important;
+    }
+  }
+  @media (max-width: 1000px) {
+    html .layout .summary-content.premium-summary-content {
+      grid-template-areas: "hero hero" "card card" "s1 s2" !important;
+    }
+  }
+
+  /* Todos os quatro voltam a ser texto solto: sem caixa, sem icone, sem hover que anda. */
+  html .layout .summary-item.premium-summary-item {
+    position: relative;
+    display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: flex-start !important;
+    gap: 0 !important; min-width: 0; overflow: visible;
+    background: transparent !important; border: none !important; border-radius: 0 !important;
+    padding: 0 !important; box-shadow: none !important; transform: none !important;
+  }
+  html .layout .summary-item.premium-summary-item:hover { transform: none !important; box-shadow: none !important; border-color: transparent !important; }
+  html .layout .premium-summary-item::before { display: none !important; }
+  html .layout .summary-icon { display: none !important; }
+  html .layout .summary-info { display: flex !important; flex-direction: column !important; gap: 4px !important; width: 100%; min-width: 0; }
+  html .layout .summary-label {
+    order: 1; font-size: 13px !important; font-weight: 500 !important;
+    text-transform: none !important; letter-spacing: 0 !important; white-space: normal !important;
+    color: var(--gmp-text-light) !important;
+  }
+  html .layout .summary-value {
+    order: 2; font-size: 28px !important; font-weight: 600 !important; letter-spacing: -0.02em !important;
+    line-height: 1.1 !important; color: var(--gmp-text) !important; white-space: nowrap;
+  }
+  html .layout .summary-change {
+    order: 3; display: flex; align-items: center; gap: 4px;
+    font-size: 12.5px !important; font-weight: 500 !important; margin-top: 2px !important;
+    color: var(--ds-muted) !important;
+  }
+  html .layout .summary-change.negative { color: var(--gmp-error) !important; }
+
+  /* (1) Propostas aprovadas = o numero heroi. */
+  html .layout .premium-summary-item:nth-child(1) { grid-area: hero; padding: 4px 0 !important; }
+  html .layout .premium-summary-item:nth-child(1) .summary-label { font-size: 14px !important; }
+  html .layout .premium-summary-item:nth-child(1) .summary-value {
+    font-size: clamp(34px, 3.8vw, 54px) !important; font-weight: 600 !important;
+    letter-spacing: -0.035em !important; line-height: 1 !important; margin: 6px 0 4px !important;
+  }
+  html .layout .premium-summary-item:nth-child(1) .summary-change { font-size: 13.5px !important; }
+
+  /* (4) Propostas por status = o CARTAO em gradiente, com o icone e a marca. */
+  html .layout .premium-summary-item:nth-child(4) {
+    grid-area: card;
+    justify-content: space-between !important;
+    min-height: 172px; padding: 22px 24px !important;
+    border-radius: 24px !important; overflow: hidden !important;
+    background: var(--ds-hero-grad) !important;
+    box-shadow: var(--ds-hero-shadow), inset 0 1px 0 rgba(255,255,255,.28) !important;
+    color: #FFFFFF !important;
+  }
+  html .layout .premium-summary-item:nth-child(4)::after {
+    content: ''; position: absolute; right: -50px; top: -70px; width: 240px; height: 240px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255,255,255,.30), rgba(255,255,255,0)); pointer-events: none;
+  }
+  /* o ::before, que era a barrinha azul do hover, vira a marca no canto do cartao */
+  html .layout .premium-summary-item:nth-child(4)::before {
+    content: 'Orion'; display: block !important;
+    position: absolute; left: auto !important; top: auto !important; right: 22px; bottom: 18px;
+    width: auto !important; height: auto !important; background: none !important; transform: none !important;
+    font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.72);
+  }
+  html .layout .premium-summary-item:nth-child(4) .summary-icon {
+    display: flex !important; position: absolute; top: 20px; right: 20px;
+    width: 36px !important; height: 36px !important; border-radius: 12px !important; font-size: 16px !important;
+    background: rgba(255,255,255,.18) !important; box-shadow: none !important; filter: none !important;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  html .layout .premium-summary-item:nth-child(4) .summary-info { padding-right: 48px; gap: 6px !important; }
+  html .layout .premium-summary-item:nth-child(4) .summary-label {
+    color: rgba(255,255,255,.78) !important; font-size: 12px !important; font-weight: 600 !important;
+    text-transform: uppercase !important; letter-spacing: .08em !important;
+  }
+  html .layout .premium-summary-item:nth-child(4) .summary-value { color: #FFFFFF !important; font-size: 40px !important; letter-spacing: -0.03em !important; }
+  html .layout .premium-summary-item:nth-child(4) .summary-change,
+  html .layout .premium-summary-item:nth-child(4) .summary-change.positive { color: rgba(255,255,255,.86) !important; font-size: 13px !important; }
+
+  /* (2) taxa e (3) clientes = estatisticas soltas, com um fio a esquerda. */
+  html .layout .premium-summary-item:nth-child(2) { grid-area: s1; }
+  html .layout .premium-summary-item:nth-child(3) { grid-area: s2; }
+  html .layout .premium-summary-item:nth-child(2),
+  html .layout .premium-summary-item:nth-child(3) { padding: 10px 0 10px 18px !important; border-left: 1px solid var(--ds-hair) !important; border-radius: 0 !important; }
+
+  /* 8.3 Graficos: paineis cinza-claros, sem borda, sem fio azul, sem pulo. */
+  html .layout .chart-card:not(#_), html .layout .premium-chart-card:not(#_) {
+    background: var(--ds-panel) !important; border: none !important; border-radius: 24px !important;
+    padding: 24px !important; box-shadow: none !important; transform: none !important;
+  }
+  html .layout .premium-chart-card::before { display: none !important; }
+  html .layout .premium-chart-card:not(#_):hover, html .layout .chart-clickable:not(#_):hover { transform: none !important; box-shadow: none !important; border-color: transparent !important; background: var(--ds-panel-hover) !important; }
+  html .layout .chart-header { border-bottom: none !important; padding-bottom: 0 !important; margin-bottom: 14px !important; align-items: flex-start !important; }
+  html .layout .chart-header h3 { font-size: 17px !important; font-weight: 600 !important; letter-spacing: -0.015em !important; margin: 0 0 2px !important; }
+  html .layout .chart-header p { font-size: 13px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+  html .layout .legend-item { font-size: 12px !important; }
+  html .layout .charts-grid { gap: 20px !important; margin-bottom: 20px !important; }
+  html .layout .section-title { font-size: 22px !important; font-weight: 600 !important; letter-spacing: -0.02em !important; margin: 40px 0 16px !important; }
+  html .layout .custom-tooltip { border-radius: 12px !important; border: 1px solid var(--ds-hair) !important; box-shadow: 0 16px 40px -16px rgba(0,0,0,.3) !important; }
+}

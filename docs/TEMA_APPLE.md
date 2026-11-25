@@ -1,11 +1,15 @@
 # Tema visual Apple — o sistema inteiro (computador e celular)
 
-> **Onde parou:** o visual do sistema todo foi trocado por um tema inspirado na Apple —
-> fundo quase branco, superfícies brancas, vidro de verdade só onde conteúdo passa por
-> baixo (barra lateral, topo, dock, modais), **uma** cor de ação (azul `#0071E3`), botão
-> principal em pílula, cantos suaves, sombras quase invisíveis, tipografia do sistema,
-> movimento curto e **sem fundo animado**. O login ganhou um cartão de vidro centrado e
-> um **logo novo** em estilo de ícone de aplicativo. Nenhuma função mudou.
+> **Onde parou (24/11/2026, terceira rodada):** o computador foi **refeito** depois de o
+> P.O. reprovar a primeira versão com uma captura ("olha o lixo que está o nosso") e um
+> vídeo de referência (dashboard "V14": tela branca, pílulas, número gigante, cartão em
+> gradiente). Hoje: tela branca, barra lateral com pílula escura, título grande sem
+> cartão, **uma largura só** para todas as telas, Dashboard com número herói + cartão
+> azul + gráficos redesenhados (uma família de cor, barras finas, grade mínima),
+> **movimento** (entrada em cascata, contagem, varredura na troca de tema), a **tela de
+> módulos nova** (saudação + catavento da GMP escrevendo "GMP Industriais", cartão
+> "Continuar", cartões com descrição), telas de espera com o **catavento**, fonte **Inter**
+> em tudo e a versão **V02** visível. Veja "Terceira rodada" abaixo. Nenhuma função mudou.
 
 ## O que você vê (Antes → Agora)
 
@@ -22,6 +26,84 @@
 | Fundo animado (malha, constelação, esferas) | Em todas as telas | **Sai de todas** — calma é parte do estilo |
 | Selo "Orion-BETA-V0" | Flutuava no canto | Some |
 | Celular | Pele de vidro **azul** (três manchas fortes, botão em gradiente) | A mesma estrutura (dock em pílula, gaveta, cartões ricos), agora em vidro **neutro**: fundo quase branco, manchas como um sopro, botão principal azul sólido |
+
+## Segunda rodada: a FORMA das telas (iOS no celular, macOS no computador)
+
+O tema acima trocou cor, canto e sombra; a composição das telas continuava a mesma e o
+P.O. apontou isso ("você só está tirando coisa"). A segunda camada,
+`client/src/styles/apple-structure.css` (importada logo após o tema), muda a **forma**:
+
+| Onde | Agora |
+|---|---|
+| Tela inicial (seletor de módulos) | **Launchpad / tela de início do iOS**: ícones squircle (62–84px) pintados com a cor do módulo, glifo branco, nome embaixo; saudação grande e leve; busca estilo Spotlight centrada. A parede de ladrilhos saiu. |
+| Listas (Clientes, `MobileList`, tabela convertida) no celular | **Lista agrupada do iOS**: um bloco branco contínuo, fio entre as linhas, avatar à esquerda, título 17px, chevron à direita; ações como ícones discretos |
+| Títulos no celular | **Large Title** (34px), subtítulo cinza; o "+" vira ação no canto do título e "Exportar" vira texto azul |
+| Busca e filtros no celular | Pílula cinza de busca + filtros em pílula, sem cartão em volta |
+| Login | **Apple ID**: logo 96px, uma linha, os dois campos **num único bloco agrupado** (fio entre eles), botão pílula; sem subtítulos, rótulos ou ícones nos campos |
+| Barra lateral no computador | **Source list do macOS**: chip de conta (avatar + nome) no topo, linhas de 32px com ícone cinza, seleção em pílula azul-clara, "Minha Conta"/"Sair" discretos |
+| Cabeçalhos de página no computador | **Toolbar unificada** de vidro, fixa no topo: título 17px à esquerda, ações à direita (secundário em texto azul, principal em pílula) — inclusive o cabeçalho do Dashboard, que tinha título em gradiente |
+| Tabelas no computador | Estilo **Finder**: cabeçalho em texto cinza, linhas de 40px, zebra sutil, hover azul-claro |
+| Dashboard | KPIs como **widgets** (blocos brancos de canto 20, número grande, legenda pequena), em grade |
+| Telas de espera (`ModuleLoading`, `SplashScreen`, spinners, skeleton) | Mínimas: ícone do app centrado, indicador de atividade fino e cinza, uma linha de texto; sem cartão, brilho, barras de skeleton ou "100%" |
+| Marca | O ícone novo (`orion-mark.svg`, **animado**: anel orbital gira, estrela percorre a órbita) passa a ser a marca em todo lugar — login, barra lateral (+ wordmark "Orion"), barra de topo, seletor, splash, loading, tela de erro e favicon. O `logo.png` continua no repositório. |
+
+Continua sendo visual: nenhum elemento entra ou sai do DOM, nenhum evento muda. As únicas
+mudanças em JSX são os `src` dos `<img>` de logo. Para voltar só a forma, remova o import
+de `apple-structure.css`; para voltar a marca, troque os `src` de volta para `/logo.png`.
+
+> Pendente, a depender do P.O.: a home estilo **apple.com** (hero com fotos grandes das
+> máquinas) precisa de fotos em alta qualidade em `client/public/maquinas/` — sem elas não
+> há o que mostrar.
+
+## Terceira rodada (24/11/2026): o computador refeito, gráficos, movimento, tela de módulos
+
+A segunda rodada no computador (source list cinza, toolbar de vidro, widgets com ícone)
+foi **reprovada**: o P.O. mandou uma captura do Dashboard e um vídeo de referência (um
+dashboard de fintech: tela branca e arejada, navegação em pílulas, saudação grande, um
+número gigante, um cartão em gradiente, estatísticas soltas, gráficos de uma cor,
+versão escura com o mesmo cartão) e pediu "disso para melhor", "as animações muito
+parecidas", "gráficos refeitos", "fontes", "espaçamento igual em todas as telas", "tela
+de módulos por completo", "o catavento do site da GMP em algum lugar", "V02".
+
+| Onde | Agora |
+|---|---|
+| Tela (computador) | **Branca** (preta no escuro); o buraco de 70px no topo (reserva de um header que não existe) saiu |
+| Barra lateral | Branca com um fio; lockup **Orion + V02** alinhado à coluna do menu (estava centrado e "largado"); "Selecionar Módulo" em botão cinza-claro; linhas de 34px; item ativo em **pílula escura** (clara no escuro); rodapé com avatar + nome e **Minha Conta / Sair como ícones** (o selo "FULL ACCESS" que estourava a largura saiu) |
+| Cabeçalho das telas | Título 30px leve + subtítulo, sem cartão, sem toolbar de vidro; botão principal = **pílula escura**, secundário = pílula cinza-clara (também `.btn-pri/.btn-sec` das Propostas) |
+| **Largura padrão** | A raiz de toda tela recebe a mesma caixa: máx. 1600, centrada, 40px de respiro (Clientes tinha 1600 e Propostas 1400 — começavam em x diferentes). Fora: chat, kanban, mapa, scanner |
+| Dashboard | "Propostas aprovadas" vira o **número herói** (até 54px); "Propostas por status" vira o **cartão em gradiente azul** com brilho que respira e a marca no canto; taxa e clientes viram estatísticas soltas; o cartão "RESUMO COMERCIAL" com cabeçalho saiu; segmentado Geral/Vendas estilo macOS; sino e Filtros em pílula |
+| **Gráficos** (`apple-charts.css` + `Dashboard.js`) | Paleta de **uma família** (azuis + neutros, em variáveis `--chart-*` que trocam no escuro) em vez de azul/verde/laranja; barras finas e arredondadas; grade só horizontal num fio; sem linha de eixo; ticks 11px cinza; tooltip em folha branca; rosca com cantos arredondados e vão da cor do painel; painéis cinza-claros sem borda nem fio azul; séries crescem em 900ms uma após a outra |
+| **Movimento** | Entrada em cascata (título, herói, cartão, estatísticas, gráficos, cartões da tela de módulos); fade na troca Geral↔Vendas; brilho lento no cartão herói; **troca de tema por varredura** (View Transition: um círculo cresce a partir do controle tocado; onde a API não existe, troca como antes); tudo desligado com `prefers-reduced-motion` |
+| Notificações | O painel caía no meio da tela e por baixo do cartão herói (ancestral com `transform`/`will-change` vira bloco de contenção do `position: fixed`). Sem o transform nos ancestrais, abre sob o sino; folha branca de canto 16 |
+| **Fonte** | **Inter** em tudo (a pilha "do sistema" caía no Segoe UI no Windows — "as fontes zoadas") |
+| **Tela de módulos** (`apple-launchpad.css`, `TipoSelecao.js`) | Refeita: lockup Orion + V02 no topo; saudação 52px com a **data** e o número de módulos; o **catavento da GMP** (até 240px) ao lado, que dá cinco voltas, assenta e **escreve "GMP Industriais"** em Caveat (a manuscrita do site, revelada em 2,6s, com um traço laranja); **"Continuar"** = o último módulo como cartão herói com o degradê do módulo + os outros recentes numa lista; **"Seus módulos"** = cartões brancos com fio, ícone em squircle, nome e **descrição** (existia em `modulosMeta` e não era mostrada); "Sem acesso" apagado com cadeado. No celular: 2 colunas |
+| **Catavento** (`CataventoGMP.js/.css`) | A peça do site gmpindustriais.com (seção "g26") portada: 4 pás (verde, amarelo, vermelho, azul) com degradê e cubo branco; `entrada` (5 voltas + giro lento de 80s), `girando` (espera), `parado`; `legenda`/`legendaDestaque` escrevem a assinatura |
+| Telas de espera | `ModuleLoading`: o catavento girando É o indicador (64px; 22px no compacto). `SplashScreen`: catavento com a assinatura + "Orion" + nome do módulo + fio de progresso — o logo com o ícone do módulo girando por cima ("símbolo de alvo") saiu |
+| Versão | `constants/versao.js` (`V02`), ao lado do lockup na tela de módulos e na barra lateral |
+
+Arquivos novos: `client/src/styles/apple-desktop.css`, `apple-charts.css`,
+`apple-launchpad.css`, `client/src/components/CataventoGMP.js` + `.css`,
+`client/src/constants/versao.js`. Alterados: `App.js` (imports), `apple-theme.css`
+(Inter), `apple-structure.css` (saíram 1.2, 2.7 e 3.1–3.5, que esta rodada substitui),
+`Dashboard.js` (paleta, eixos, raio e animação das séries — nenhum dado ou cálculo),
+`ThemeContext.js` (varredura), `Layout.js` (title nos ícones, V02), `TipoSelecao.js`,
+`ModuleLoading.js`, `SplashScreen.js`, `index.html` (Caveat).
+
+**Para voltar atrás** por partes: remover um import em `App.js` desfaz a camada
+correspondente (`apple-desktop.css` = computador; `apple-charts.css` = gráficos e
+movimento; `apple-launchpad.css` = tela de módulos). A varredura de tema some apagando o
+bloco `startViewTransition` de `ThemeContext.js` (volta o `setTheme` puro).
+
+**Como foi verificado:** `CI=true npx react-scripts build` **passou**; no painel, por
+medição e captura (as capturas com `backdrop-filter` saem lavadas — medi e, quando
+precisei ver, desliguei o filtro só na captura): Dashboard a 874px e 1280px claro e
+escuro, Clientes, Propostas (x=317 nas duas), formulário de cliente, tela de módulos a
+1660px e 375px, painel de notificações sob o sino (x=1268 para o sino em 1697), troca de
+tema (`data-theme` claro→escuro→claro com `--vt-*` gravados), splash do Comercial.
+
+**O que não cobre:** as outras telas de cada módulo só receberam as regras globais
+(largura, cabeçalho, botões, tabela); telas com cabeçalho ou botão de classe própria
+podem ainda destoar — é olhar uma a uma. A home apple.com continua esperando fotos.
 
 ## Por que isto não quebra nada
 

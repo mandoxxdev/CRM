@@ -15,6 +15,9 @@
     <meta name="theme-color" content="#10141D" />
     <link rel="manifest" href="/manifest.json" />
 
+    <!-- A marca nova (vetor, animada) como icone da aba; o PNG fica de reserva para
+         navegadores sem suporte a SVG no favicon. -->
+    <link rel="icon" type="image/svg+xml" href="/orion-mark.svg" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <!-- O iOS ignora o manifest para o ícone da tela de início: ele usa ESTA tag, e
          precisa de um PNG quadrado e opaco. `/logo.png` é 172x80 e ficaria esmagado. -->
@@ -29,7 +32,9 @@
     <meta name="apple-mobile-web-app-title" content="Orion" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Inter e a fonte do sistema; Caveat e a manuscrita do site da GMP ("a forca esta na
+         gravidade"), usada na assinatura "GMP Industriais" sob o catavento. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
     <title>Orion - GMP</title>
   </head>
   <body>

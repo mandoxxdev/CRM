@@ -1,0 +1,483 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPLE-STRUCTURE — a COMPOSICAO das telas (iOS no celular, macOS no computador)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   O apple-theme.css trocou cor, canto, sombra e tipo. O P.O. olhou e disse, com
+   razao: "voce so esta tirando coisa; a tela de inicio e a mesma". Tema nao e
+   forma. Esta folha muda a FORMA: onde cada coisa fica, como a lista se agrupa,
+   o que e um icone e o que e um bloco.
+
+   Continua sendo so CSS. Nenhum elemento sai ou entra no DOM; o que muda e o
+   desenho (flex/grid/order/pseudo-elementos). Eventos, estado, rotas e dados
+   sao exatamente os de antes. Entra em App.js depois do apple-theme.css.
+
+   Direcao escolhida pelo P.O.: iOS no celular (large title, lista agrupada,
+   Launchpad, dock, login Apple ID) e macOS no computador (source list
+   translucida, toolbar unificada, tabela estilo Finder, widgets).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═════════════════════════ PARTE 1 — COMUM (login e Launchpad) ══════════════ */
+
+/* ── 1.1 Login estilo Apple ID ─────────────────────────────────────────────────
+   Um logo, uma frase, DOIS campos num unico bloco agrupado (o de cima com os
+   cantos de cima, o de baixo com os de baixo, um fio entre eles), um botao. O
+   resto — subtitulo, legendas acima dos campos, icone dentro do campo — sai,
+   porque e ruido para quem so quer entrar. */
+.login-header-content h2,
+.login-subtitle,
+.login-form .form-group label,
+.login-form .input-icon { display: none !important; }
+
+.login-header { margin-bottom: 22px !important; }
+.login-header-content h1 { font-size: 22px !important; font-weight: 600 !important; letter-spacing: -0.01em !important; margin: 0 !important; }
+/* O logo e a peca principal: maior, como o icone de um app na App Store. */
+.login-logo { width: 96px !important; height: 96px !important; border-radius: 22px !important; }
+
+.login-form { gap: 0 !important; }
+.login-form .form-group { margin: 0 !important; }
+/* Medido no celular: `.login-form .form-group input` (0,2,1) PERDIA para as regras
+   globais de campo, que carregam uma cadeia de `:not()` e valem (0,6,1)+ — o raio
+   agrupado e o padding simetrico nao entravam (ficava raio 10 nos dois campos e
+   o recuo de 41px do icone antigo). Repetir a mesma cadeia aqui leva o seletor
+   a (0,9,1) e decide por especificidade, nao por ordem de carga. */
+.login-form .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]) {
+  padding: 15px 16px !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--gmp-border) !important;
+  background: var(--gmp-surface) !important;
+  font-size: 17px !important;
+  box-shadow: none !important;
+}
+.login-form .form-group:first-of-type input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]) {
+  border-radius: 12px 12px 0 0 !important;
+}
+.login-form .form-group:last-of-type input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]) {
+  border-radius: 0 0 12px 12px !important;
+  border-top: none !important;
+}
+.login-form .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):focus {
+  position: relative; z-index: 1;
+  border-color: var(--gmp-primary) !important;
+  box-shadow: 0 0 0 4px rgba(0,113,227,.18) !important;
+}
+[data-theme="dark"] .login-form .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]) {
+  background: rgba(255,255,255,.06) !important;
+}
+.login-button { margin-top: 18px !important; }
+.login-footer { margin-top: 22px !important; padding-top: 0 !important; border-top: none !important; }
+/* Mensagens de erro/sessao ficam ACIMA do bloco, com respiro. */
+.login-form .error-message, .login-form .login-sessao-expirada { margin-bottom: 14px !important; }
+
+/* ── 1.2 (Launchpad em icones) SAIU daqui em 24/11/2026: o P.O. pediu a tela de
+   modulos refeita por completo. Ela mora agora em apple-launchpad.css. */
+
+/* ═════════════════════════ PARTE 2 — iOS (celular, ate 768px) ═══════════════ */
+@media (max-width: 768px) {
+
+  /* ── 2.1 Large Title ──────────────────────────────────────────────────────
+     O titulo da tela e GRANDE (34px, como no iOS), com o subtitulo em cinza
+     logo abaixo. As acoes nao ficam mais numa fileira de botoes no meio da
+     pagina: viram a barra de ferramentas do topo (ver 2.3). */
+  .page-header {
+    display: block !important;
+    border-bottom: none !important;
+    padding: 6px 0 0 !important;
+    margin: 0 0 14px !important;
+  }
+  .page-header > div:first-child { padding-right: 56px; } /* espaco para o "+" no canto */
+  .page-header h1 {
+    font-size: 34px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1.1 !important;
+    margin: 0 0 4px !important;
+  }
+  .page-header p { font-size: 15px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+
+  /* ── 2.2 Busca em pilula e filtros em linha ───────────────────────────────
+     A "caixa de filtros" (um cartao branco com dois campos empilhados) vira
+     o que o iOS usa: uma pilula de busca cinza e, abaixo, os filtros como
+     segmentos/pilulas. Nenhum cartao em volta. */
+  .filters, [class*='-filtros'] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+  .search-box, [class*='search-box'], [class*='busca-box'] {
+    background: rgba(118,118,128,.12) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    padding: 0 12px !important;
+    min-height: 40px;
+  }
+  [data-theme="dark"] .search-box, [data-theme="dark"] [class*='search-box'] { background: rgba(118,118,128,.24) !important; }
+  .search-box > svg { color: var(--gmp-gray-500) !important; }
+  .search-box input {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 9px 0 !important;
+    border-radius: 0 !important;
+  }
+  .search-box:focus-within { box-shadow: 0 0 0 3px rgba(0,113,227,.18) !important; }
+  .filter-select, select.filter-select {
+    background: rgba(118,118,128,.12) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
+    min-height: 40px;
+    font-weight: 500;
+  }
+
+  /* ── 2.3 O "+" vira acao da barra, no canto do titulo ─────────────────────
+     E o botao secundario ("Exportar") vira TEXTO azul, como no iOS. */
+  /* Medido: com `top` somando a barra de topo, as acoes caiam 68px abaixo do
+     cabecalho — em cima da pilula de busca — e, sem `left/width:auto`, uma regra
+     anterior as esticava na largura toda (x=-8, w=359). O `top` e relativo ao
+     proprio `.page-header`, que ja comeca abaixo da barra: 4px basta. */
+  .header-actions {
+    position: absolute !important;
+    top: 4px !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    display: flex !important;
+    flex-direction: row-reverse !important;
+    align-items: center !important;
+    gap: 6px !important;
+    z-index: 5;
+  }
+  .page-header { position: relative !important; }
+  .header-actions .btn-premium,
+  .header-actions .btn-primary {
+    width: 36px !important; height: 36px !important; min-height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    box-shadow: none !important;
+  }
+  .header-actions .btn-premium .btn-premium-text { display: none !important; }
+  .header-actions .btn-premium-icon { background: transparent !important; width: auto !important; height: auto !important; }
+  .header-actions .btn-secondary {
+    background: transparent !important;
+    color: var(--gmp-primary) !important;
+    padding: 6px 8px !important;
+    min-height: 36px !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+  }
+  .header-actions .btn-secondary svg { display: none; } /* "Exportar Excel" vira so a palavra */
+
+  /* ── 2.4 Lista agrupada (inset grouped) ───────────────────────────────────
+     Os cartoes soltos, cada um com sombra e canto, viram UM bloco branco
+     continuo com um fio entre as linhas e um chevron a direita — a lista de
+     Contatos/Ajustes do iPhone. Vale para as tres fontes de lista do sistema:
+     a de Clientes (.cliitem), o componente MobileList (.mcard) e a conversao
+     automatica de tabela (.cartao-auto). */
+  .clientes-mobile, .mlist,
+  table.tabela-cartoes-rica tbody, .grade-cartoes {
+    display: flex !important; flex-direction: column !important;
+    gap: 0 !important;
+    background: var(--gmp-surface) !important;
+    border: 1px solid var(--gmp-border) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .cliitem, .mcard, .cartao-auto, tr.cartao-auto {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid var(--gmp-border) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 12px 14px 12px 16px !important;
+    animation: none !important;
+  }
+  .cliitem:last-child, .mcard:last-child, .cartao-auto:last-child { border-bottom: none !important; }
+  /* O brilho de borda do vidro (app-glass) nao faz sentido numa linha de lista. */
+  .cliitem::after, .mcard::after, .cartao-auto::after { display: none !important; }
+  /* O toque inteiro da linha responde com o cinza de "pressionado" do iOS. */
+  .cliitem:active, .mcard:active, .cartao-auto:active { background: var(--gmp-surface-hover) !important; transform: none !important; }
+
+  /* Avatar menor e mais redondo; titulo 17px; subtitulo 13px — proporcoes de UITableViewCell. */
+  .cliitem__ava, .mcard__ava { width: 44px !important; height: 44px !important; border-radius: 12px !important; font-size: .85rem !important; box-shadow: none !important; }
+  .cliitem__name, .mcard__title { font-size: 17px !important; font-weight: 600 !important; letter-spacing: -0.01em; }
+  .cliitem__desc, .mcard__sub { font-size: 13px !important; color: var(--gmp-text-light) !important; }
+  .cliitem__meta, .mcard__meta { margin-top: 5px !important; }
+  .cliitem__seg, .mcard__chip { font-size: 11px !important; padding: 2px 8px !important; }
+  .cliitem__stat { font-size: 11px !important; padding: 2px 8px !important; }
+
+  /* Chevron a direita, como toda linha que abre algo no iOS. */
+  .cliitem__hit, .mcard__hit { position: relative; padding-right: 18px !important; }
+  .cliitem__hit::after, .mcard__hit::after {
+    content: ''; position: absolute; right: 2px; top: 50%;
+    width: 8px; height: 8px; margin-top: -5px;
+    border-right: 2px solid var(--gmp-gray-400); border-bottom: 2px solid var(--gmp-gray-400);
+    transform: rotate(-45deg);
+  }
+  /* As acoes de linha (editar/excluir) ficam como icones discretos, sem caixa. */
+  .cliitem__acts, .mcard__acts { gap: 2px !important; }
+  .cliitem__act, .mcard__act {
+    width: 34px !important; height: 34px !important;
+    background: transparent !important; border: none !important;
+    color: var(--gmp-primary) !important;
+  }
+  .cliitem__act.is-danger, .mcard__act.is-danger { color: var(--gmp-error-light) !important; }
+
+  /* Conversao automatica de tabela: a mesma linha agrupada. */
+  .cartao-auto > [data-papel="titulo"] { font-size: 17px !important; font-weight: 600 !important; margin-top: 2px !important; }
+  .cartao-auto > [data-papel="valor"]  { font-size: 17px !important; font-weight: 600 !important; margin-top: 4px !important; }
+  .cartao-auto > [data-papel="meta"]   { font-size: 13px !important; padding: 2px 0 !important; }
+  .cartao-auto > [data-papel="acoes"]  { border-top: none !important; margin-top: 8px !important; padding-top: 0 !important; }
+
+  /* Estado vazio: central, calmo. */
+  .cm-empty, .mlist-empty { padding: 56px 16px !important; }
+
+  /* ── 2.5 Barra de topo: titulo da secao centralizado como no iOS ──────────
+     O logo fica a esquerda em tamanho de favicon; o centro fica livre. */
+  .mobile-topbar { height: 52px !important; justify-content: flex-start !important; }
+  .mobile-topbar__logo { height: 24px !important; }
+  .layout .main-content { padding-top: calc(60px + env(safe-area-inset-top, 0px)) !important; }
+
+  /* ── 2.5b Cabecalho do Dashboard = Large Title ────────────────────────────
+     O cartao "Dashboard Executivo" com titulo em gradiente vira o mesmo Large
+     Title das outras telas: texto solido 30px, subtitulo cinza, sem caixa. */
+  .dashboard-header.premium-header {
+    display: block !important;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; padding: 6px 0 0 !important; margin: 0 0 14px !important; transform: none !important;
+  }
+  .dashboard-header.premium-header h1 {
+    font-size: 30px !important; font-weight: 700 !important; letter-spacing: -0.03em !important; line-height: 1.1 !important; margin: 0 0 4px !important;
+    background: none !important; -webkit-background-clip: initial !important; background-clip: initial !important;
+    color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; text-shadow: none !important;
+  }
+  .dashboard-header.premium-header > div > p { display: block !important; font-size: 15px !important; color: var(--gmp-text-light) !important; margin: 0 0 10px !important; }
+  .dashboard-header .header-actions { position: static !important; flex-direction: row !important; flex-wrap: wrap !important; width: 100% !important; }
+
+  /* ── 2.6 Dashboard = widgets ──────────────────────────────────────────────
+     O "Resumo Comercial" deixa de ser um cartao com itens dentro e vira uma
+     grade de WIDGETS 2x2, cada um um bloco branco com o numero grande. */
+  .summary-card, .premium-summary {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    padding: 0 !important; border-radius: 0 !important;
+  }
+  .summary-header { padding: 0 2px 10px !important; }
+  .summary-header h3 { font-size: 13px !important; font-weight: 600 !important; text-transform: uppercase; letter-spacing: .04em; color: var(--gmp-text-light) !important; }
+  .summary-header p { display: none !important; }
+  .summary-content, .premium-summary-content {
+    display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important;
+  }
+  .summary-item, .premium-summary-item {
+    display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 8px !important;
+    background: var(--gmp-surface) !important;
+    border: none !important; border-radius: 20px !important;
+    padding: 14px !important;
+    box-shadow: var(--elevation-2) !important;
+    min-width: 0;
+  }
+  .summary-icon { width: 32px !important; height: 32px !important; border-radius: 10px !important; font-size: 1rem !important; filter: saturate(.85); }
+  .summary-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .summary-label { order: 2; font-size: 12px !important; color: var(--gmp-text-light) !important; font-weight: 500; }
+  .summary-value { order: 1; font-size: 22px !important; font-weight: 700 !important; letter-spacing: -0.02em; color: var(--gmp-text) !important; }
+  .summary-change { order: 3; font-size: 11px !important; }
+  .chart-card, .premium-chart-card { border-radius: 20px !important; border: none !important; box-shadow: var(--elevation-2) !important; }
+
+  /* 2.7 (Launchpad no celular) e o selo ADMINISTRADOR sairam daqui em 24/11/2026 —
+     ver apple-launchpad.css. */
+}
+
+/* ═════════════════════════ PARTE 3 — macOS (computador, 769px+) ═════════════ */
+@media (min-width: 769px) {
+
+  /* 3.1 a 3.5 (source list, toolbar de vidro, busca/filtros, tabela Finder,
+     cabecalho do Dashboard e widgets) SAIRAM daqui em 24/11/2026: o P.O. viu o
+     resultado e reprovou ("olha o lixo que esta o nosso"). O computador inteiro
+     mora agora em apple-desktop.css (tela branca, pilula escura, heroi em
+     gradiente), importado depois desta folha. Aqui fica so o tamanho dos icones
+     da Launchpad, que foi aprovado. */
+
+  /* ── 3.6 Launchpad no computador: icones de 84px, 8 por linha ─────────────── */
+  .tipo-selecao .orion-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)) !important; gap: 30px 8px !important; }
+  .tipo-selecao .orion-tile__icon-wrap { width: 84px !important; height: 84px !important; border-radius: 24px !important; }
+  .tipo-selecao .orion-tile__icon { font-size: 2.3rem !important; }
+  .tipo-selecao .orion-tile h3 { font-size: 13px !important; }
+  .tipo-selecao__header-top { padding-bottom: 6px; }
+  .tipo-selecao__greeting { padding-top: 26px; }
+}
+
+/* ═════════════════════════ PARTE 4 — CARREGAMENTO ════════════════════════════
+   As telas de espera eram as mais "tunadas" de todas: um cartao com o passaro
+   escuro, barras de skeleton, brilhos (glow) e um splash com titulo em gradiente
+   e "100%". No padrao Apple a espera e MINIMA: o icone do app centrado, um
+   indicador de atividade fino e cinza, uma linha de texto. Nada mais.
+   (Nenhum componente muda — o que some e escondido pelo CSS.) */
+
+/* ── 4.1 ModuleLoading (troca de modulo e rotas preguicosas) ─────────────── */
+.module-loading, .module-loading__backdrop {
+  background: var(--gmp-bg) !important;
+  background-image: none !important;
+}
+.module-loading__glow, .module-loading__skeleton, .module-loading__skeleton-grid,
+.module-loading__skeleton-card, .module-loading__skeleton-bar,
+.module-loading__progress, .module-loading__progress-track, .module-loading__progress-fill {
+  display: none !important;
+}
+.module-loading__panel {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  padding: 0 !important;
+  max-width: 320px !important;
+  text-align: center;
+}
+/* O passaro escuro sai; no lugar, a marca nova em tamanho de icone. */
+.module-loading__logo { display: none !important; }
+.module-loading__brand { display: flex !important; flex-direction: column; align-items: center; gap: 14px; }
+/* (A marca no loading e o proprio <img class="module-loading__logo">, que agora
+   aponta para orion-mark.svg — ver Parte 5. Um pseudo-elemento com url() de
+   asset de public/ nao compila no CRA: css-loader tenta resolver como modulo.) */
+.module-loading__title {
+  font-size: 15px !important; font-weight: 600 !important; letter-spacing: -0.01em !important;
+  color: var(--gmp-text) !important; margin: 18px 0 0 !important;
+  background: none !important; -webkit-text-fill-color: var(--gmp-text) !important;
+}
+/* O catavento com a assinatura (24/11): o painel precisa de largura para a frase. */
+.module-loading__panel { max-width: 420px !important; }
+.module-loading__brand .catavento-lockup { margin: 0 auto; }
+.module-loading--compact .catavento { margin-right: 8px; }
+.module-loading__subtitle { font-size: 13px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+/* Indicador de atividade: anel fino, cinza, com um segmento azul. */
+.module-loading__spinner,
+.loading-spinner, .tipo-selecao-spinner, .button-spinner {
+  width: 22px !important; height: 22px !important;
+  border: 2px solid rgba(60,60,67,.18) !important;
+  border-top-color: var(--gmp-primary) !important;
+  border-right-color: rgba(60,60,67,.18) !important;
+  border-radius: 50% !important;
+  animation: apple-spin .8s linear infinite !important;
+  box-shadow: none !important;
+  margin: 10px auto 0;
+}
+.loading-spinner::before, .loading-spinner::after,
+.module-loading__spinner::before, .module-loading__spinner::after { display: none !important; }
+@keyframes apple-spin { to { transform: rotate(360deg); } }
+.loading { min-height: 50vh !important; gap: 12px; }
+.loading p, .tipo-selecao-loading p { font-size: 13px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+
+/* ── 4.2 SplashScreen (a abertura "CRM GMP INDUSTRIAIS 100%") ─────────────── */
+.splash-screen, .premium-splash {
+  background: var(--gmp-bg) !important;
+  background-image: none !important;
+}
+.splash-background-wrapper, .splash-background-overlay, .splash-glow-effects,
+.splash-logo-glow, .splash-progress-text { display: none !important; }
+.premium-splash-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  max-width: 320px !important;
+}
+.splash-logo img { width: 72px !important; height: 72px !important; object-fit: contain !important; border-radius: 18px; filter: none !important; }
+.splash-text-container h1, .splash-text-container h2 {
+  font-size: 17px !important; font-weight: 600 !important; letter-spacing: -0.01em !important;
+  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important;
+  background: none !important; text-shadow: none !important; margin: 14px 0 2px !important;
+  text-transform: none !important;
+}
+.splash-text-container p { font-size: 13px !important; color: var(--gmp-text-light) !important; letter-spacing: 0 !important; text-transform: none !important; }
+/* Barra de progresso: um fio de 3px, cinza com o azul avancando. Sem numero. */
+.splash-progress-info, .splash-progress-label { font-size: 12px !important; color: var(--gmp-text-light) !important; }
+.premium-progress-track, [class*='progress-track'] { height: 3px !important; border-radius: 3px !important; background: rgba(60,60,67,.14) !important; box-shadow: none !important; overflow: hidden; }
+.premium-progress-fill, [class*='progress-fill'] { height: 3px !important; border-radius: 3px !important; background: var(--gmp-primary) !important; background-image: none !important; box-shadow: none !important; }
+
+/* ── 4.3 Skeleton (listas e tabelas enquanto carregam) ───────────────────── */
+.skeleton-line, .skeleton-bar, .skeleton-avatar, .skeleton-avatar-small,
+.skeleton-table-cell, .skeleton-table-header-cell, .skeleton-chart-content {
+  background: var(--gmp-surface-hover) !important;
+  background-image: linear-gradient(90deg, var(--gmp-surface-hover) 25%, var(--gmp-gray-200) 50%, var(--gmp-surface-hover) 75%) !important;
+  border-radius: 6px !important;
+}
+.skeleton-card, .skeleton-table, .skeleton-list-item, .skeleton-chart {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+}
+
+/* ═════════════════════════ PARTE 5 — A MARCA EM TODO LUGAR ═══════════════════
+   O P.O. aprovou o icone novo (orion-mark.svg, animado) e pediu que ele seja a
+   marca em todas as telas. Os <img> de logo passaram a apontar para ele; aqui
+   cada lugar recebe o tamanho certo. O icone e QUADRADO: onde o espaco era largo
+   (sidebar, topo), a palavra "Orion" entra ao lado, em texto. */
+
+/* Sidebar (computador): icone 36px + wordmark. */
+.sidebar-logo { display: flex !important; align-items: center !important; gap: 10px !important; }
+.sidebar-logo .logo-image, .logo-image {
+  width: 36px !important; height: 36px !important;
+  border-radius: 10px !important; object-fit: cover !important; filter: none !important;
+}
+.sidebar-logo::after {
+  content: 'Orion';
+  font-weight: 600; font-size: 17px; letter-spacing: -0.01em;
+  color: var(--gmp-text);
+}
+.sidebar.closed .sidebar-logo::after { display: none; }
+.sidebar.closed .logo-image { width: 32px !important; height: 32px !important; }
+
+/* Barra de topo (celular): icone 28px + wordmark. */
+.mobile-topbar { gap: 8px; }
+.mobile-topbar__logo { width: 28px !important; height: 28px !important; border-radius: 8px !important; }
+.mobile-topbar::after { content: 'Orion'; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; color: var(--gmp-text); }
+
+/* Cabecalho do seletor de modulos: o icone no lugar do logo largo. */
+.tipo-selecao__gmp-logo, [data-theme="dark"] .tipo-selecao__gmp-logo {
+  width: 30px !important; height: 30px !important; border-radius: 9px !important;
+  object-fit: cover !important; filter: none !important;
+}
+
+/* Tela de erro. */
+.error-boundary__logo { width: 64px !important; height: 64px !important; border-radius: 16px !important; filter: none !important; }
+
+/* Loading: o <img> agora E a marca — volta a aparecer e o pseudo-elemento sai. */
+.module-loading__brand::before { display: none !important; }
+.module-loading__logo {
+  display: block !important;
+  width: 64px !important; height: 64px !important;
+  border-radius: 16px !important; object-fit: cover !important;
+  filter: none !important; opacity: 1 !important;
+  box-shadow: 0 10px 24px -10px rgba(0,0,0,.25);
+}
+
+/* ── Rotulo dos icones da Launchpad: medido BRANCO sobre fundo claro ──────────
+   O TipoSelecao.css declara `.tipo-selecao .orion-tile h3 { color: #fff
+   !important }` e chega por ultimo no pacote (vem no chunk da rota, carregado
+   depois do CSS principal). Empate de !important e especificidade se decide
+   pela ordem — e a ordem e dele. `html` na frente sobe um degrau e tira a
+   decisao da ordem de carga. */
+html .tipo-selecao .orion-tile .orion-tile__title,
+html .tipo-selecao .orion-tile .orion-tile__nome,
+html .tipo-selecao .orion-tile h3,
+html .tipo-selecao .orion-tile--compact h3 {
+  color: var(--gmp-text) !important;
+  -webkit-text-fill-color: var(--gmp-text) !important;
+  text-shadow: none !important;
+}
+html[data-theme="dark"] .tipo-selecao .orion-tile h3,
+html[data-theme="dark"] .tipo-selecao .orion-tile .orion-tile__title,
+html[data-theme="dark"] .tipo-selecao .orion-tile .orion-tile__nome {
+  color: #F5F5F7 !important;
+  -webkit-text-fill-color: #F5F5F7 !important;
+}

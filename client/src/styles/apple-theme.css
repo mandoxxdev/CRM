@@ -42,8 +42,14 @@
 
 /* ───────────────────────────── 1. TOKENS (claro) ───────────────────────────── */
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-               "Segoe UI", Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Inter PRIMEIRO (24/11/2026). A pilha "do sistema" cai no Segoe UI em todo
+     Windows, que e onde a empresa usa o sistema — e o P.O. viu "as fontes
+     zoadas": pesos irregulares, letras largas, nada da referencia. A Inter ja e
+     carregada no index.html, tem a mesma anatomia da SF e e a fonte dos
+     dashboards que ele mandou como exemplo. No iPhone/Mac ela tambem entra, para
+     o sistema ser o mesmo em todo lugar. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   /* Acao: azul Apple. A familia primaria inteira muda, porque muitos seletores
      leem --gmp-primary-500/600/700 direto. */

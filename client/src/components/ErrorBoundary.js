@@ -48,7 +48,7 @@ class ErrorBoundaryClass extends React.Component {
         return (
           <div className="error-boundary error-boundary--orion">
             <div className="error-boundary__panel">
-              <img src="/orion-logo.png" alt="Orion" className="error-boundary__logo" />
+              <img src="/orion-mark.svg" alt="Orion" className="error-boundary__logo" />
               <h1>Atualização disponível</h1>
               <p>
                 Uma nova versão do sistema foi publicada. Atualize a página para carregar os
@@ -76,7 +76,7 @@ class ErrorBoundaryClass extends React.Component {
       return (
         <div className="error-boundary error-boundary--orion">
           <div className="error-boundary__panel">
-            <img src="/orion-logo.png" alt="Orion" className="error-boundary__logo" />
+            <img src="/orion-mark.svg" alt="Orion" className="error-boundary__logo" />
             <h1>Algo deu errado</h1>
             <p>Ocorreu um erro inesperado nesta tela. Tente voltar à tela inicial ou atualizar a página.</p>
             {process.env.NODE_ENV === 'development' && (

@@ -30,6 +30,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { RouteLoading } from './LazyPage';
 import { prefetchRoute } from '../routes/lazyModules';
 import PreferenciasMenu from './PreferenciasMenu';
+import { VERSAO_SISTEMA } from '../constants/versao';
 import './Layout.css';
 import '../components/chat/Chat.css';
 
@@ -469,17 +470,19 @@ const Layout = () => {
       {/* Fundo animado do aplicativo. So existe no celular — quem decide e o CSS
           (.agfx vive dentro do media query), nao JavaScript lendo innerWidth. */}
       <FundoAppMobile />
-      <div className="orion-version-badge" aria-hidden="true">Orion-BETA-V0</div>
+      <div className="orion-version-badge" aria-hidden="true">Orion {VERSAO_SISTEMA}</div>
       {/* Barra de topo do celular: a marca (logo GMP) sempre visivel, como num app.
           No desktop a marca ja esta na sidebar, entao o CSS esconde esta. */}
       <header className="mobile-topbar">
-        <img src="/logo.png" alt="GMP INDUSTRIAIS" className="mobile-topbar__logo" />
+        <img src="/orion-mark.svg" alt="Orion" className="mobile-topbar__logo" />
       </header>
       {animatedBackgroundEnabled && <AnimatedBackground />}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <img src="/logo.png" alt="GMP INDUSTRIAIS" className="logo-image" />
+            <img src="/orion-mark.svg" alt="Orion" className="logo-image" />
+            {/* A palavra "Orion" e desenhada pelo CSS (::after); a versao fica ao lado dela. */}
+            <span className="sidebar-versao" title={`Versão ${VERSAO_SISTEMA}`}>{VERSAO_SISTEMA}</span>
           </div>
           <div className="sidebar-header-actions">
             <PreferenciasMenu key="preferencias-menu-fixed" />
@@ -588,12 +591,12 @@ const Layout = () => {
               quando o navegador nao oferece instalacao. */}
           <BotaoInstalarApp compacto={!sidebarOpen} />
           {(isSystemAdmin(user) || user?.pode_editar_conta !== 0) && (
-            <Link to="/minha-conta" className="account-button">
+            <Link to="/minha-conta" className="account-button" title="Minha Conta">
               <FiSettings />
               {sidebarOpen && <span>Minha Conta</span>}
             </Link>
           )}
-          <button className="logout-button" onClick={handleLogout}>
+          <button className="logout-button" onClick={handleLogout} title="Sair">
             <FiLogOut />
             {sidebarOpen && <span>Sair</span>}
           </button>

@@ -4,6 +4,8 @@ import {
   FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield, FiArchive, FiSliders, FiCheckSquare
 } from 'react-icons/fi';
 import AnimatedBackground from './AnimatedBackground';
+import CataventoGMP from './CataventoGMP';
+import { NOMES_MODULO as NOMES_SPLASH } from '../constants/modulosMeta';
 import './SplashScreen.css';
 
 // Configurações de design para cada módulo
@@ -139,7 +141,6 @@ const SplashScreen = ({
 
   // Obter configuração do módulo ou usar padrão
   const config = moduleConfigs[module] || moduleConfigs.sistema;
-  const IconComponent = config.icon;
 
   // Esconder sidebar quando splash estiver ativo
   useEffect(() => {
@@ -250,35 +251,18 @@ const SplashScreen = ({
       <div className="splash-content premium-splash-content">
         <div className="splash-logo-container">
           <div className="splash-logo premium-logo">
-            <div 
-              className="splash-logo-glow"
-              style={{ 
-                boxShadow: `0 0 40px ${config.accentColor}40, 0 0 80px ${config.accentColor}20` 
-              }}
-            ></div>
-            <img src="/logo.png" alt="GMP INDUSTRIAIS" />
-          </div>
-          <div 
-            className="splash-icon premium-icon-rotate"
-            style={{ color: config.accentColor }}
-          >
-            <IconComponent />
+            {/* O catavento da GMP (a animacao do site) no lugar do logo com o icone do
+                modulo girando por cima — "nada a ver esse simbolo de alvo" (P.O.,
+                24/11/2026). Da cinco voltas e assenta enquanto o modulo carrega. */}
+            <CataventoGMP size={128} modo="entrada" className="splash-catavento" title="GMP Industriais" legenda="GMP" legendaDestaque="Industriais" />
           </div>
         </div>
-        
+
         <div className="splash-text-container">
-          <h1 
-            className="splash-title premium-title"
-            style={{ 
-              background: `linear-gradient(135deg, ${config.accentColor}, ${config.accentColor}dd)`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}
-          >
-            {config.title}
-          </h1>
-          <p className="splash-subtitle premium-subtitle">{config.subtitle}</p>
+          {/* "Orion" + o nome do modulo, em vez de "CRM GMP INDUSTRIAIS" em caixa alta
+              com degrade: a mesma voz do resto do sistema. */}
+          <h1 className="splash-title premium-title">Orion</h1>
+          <p className="splash-subtitle premium-subtitle">{NOMES_SPLASH[module] || config.subtitle}</p>
         </div>
 
         <div className="splash-progress premium-progress">

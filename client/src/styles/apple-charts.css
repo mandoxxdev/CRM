@@ -1,0 +1,166 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPLE-CHARTS — graficos (Recharts) e MOVIMENTO, em todo lugar
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Pedido do P.O. (24/11/2026): "refaca os graficos tambem, e lembre das
+   animacoes da referencia, nao so da estetica". A referencia desenha dados com
+   UMA familia de cor (a da marca) mais neutros, barras finas e arredondadas,
+   grade quase invisivel, sem linha de eixo, e tudo ENTRA em cena: os blocos
+   sobem suavemente em sequencia, os numeros contam, as barras crescem.
+
+   Esta folha vale para computador E celular (os graficos sao os mesmos):
+   1. a paleta dos graficos em variaveis (--chart-*), lidas pelo Dashboard.js
+      nos `fill`/`stroke` — por isso o escuro troca a cor sozinho;
+   2. a "pele" do Recharts por CSS (grade, eixos, ticks, legenda, tooltip);
+   3. o movimento: entrada em cascata, troca de visao com fade, brilho lento no
+      cartao heroi, numeros tabulares para a contagem nao tremer;
+   4. tudo desligado com `prefers-reduced-motion`.
+   Entra em App.js depois de apple-structure.css e antes de apple-desktop.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Paleta dos graficos ───────────────────────────────────────────────── */
+:root {
+  --chart-1: #0A6CF0;          /* azul da marca */
+  --chart-2: #8EC1FF;          /* azul claro */
+  --chart-3: #0348B5;          /* azul profundo */
+  --chart-4: #B9C4D6;          /* neutro frio */
+  --chart-5: #34AADC;          /* ciano */
+  --chart-ink: #1D1D1F;        /* a linha "escura" (branca no escuro) */
+  --chart-grid: rgba(0, 0, 0, 0.07);
+  --chart-tick: #86868B;
+  --chart-cursor: rgba(0, 0, 0, 0.045);
+  --chart-gap: #FFFFFF;        /* o vao entre fatias da rosca = fundo do painel */
+}
+:root[data-theme="dark"] {
+  --chart-2: #5FA8FF;
+  --chart-4: #4A4A4F;
+  --chart-ink: #F5F5F7;
+  --chart-grid: rgba(255, 255, 255, 0.09);
+  --chart-tick: #98989D;
+  --chart-cursor: rgba(255, 255, 255, 0.06);
+  --chart-gap: #1C1C1E;
+}
+@media (min-width: 769px) { :root { --chart-gap: #F5F5F7; } :root[data-theme="dark"] { --chart-gap: #1C1C1E; } }
+
+/* ── 2. A pele do Recharts ────────────────────────────────────────────────── */
+/* Grade: so as horizontais, num fio. (Os componentes passam stroke/dasharray
+   como atributo; o CSS vence atributo de apresentacao.) */
+.recharts-cartesian-grid-vertical line { display: none; }
+.recharts-cartesian-grid-horizontal line { stroke: var(--chart-grid) !important; stroke-dasharray: 0 !important; stroke-opacity: 1 !important; }
+/* Eixos: sem a linha nem o tracinho de cada tick; o texto fica miudo e cinza. */
+.recharts-cartesian-axis-line, .recharts-cartesian-axis-tick-line { display: none; }
+.recharts-cartesian-axis-tick text, .recharts-cartesian-axis-tick-value,
+.recharts-polar-angle-axis-tick text, .recharts-polar-radius-axis-tick text {
+  fill: var(--chart-tick) !important; font-size: 11px !important; font-weight: 500;
+  font-family: var(--font-sans);
+}
+.recharts-label, .recharts-text { font-family: var(--font-sans); }
+/* Legenda: texto 12px cinza, bolinhas. */
+.recharts-default-legend { padding-top: 10px !important; }
+.recharts-legend-item { margin-right: 14px !important; }
+.recharts-legend-item-text { font-size: 12px !important; color: var(--gmp-text-light) !important; font-weight: 500; }
+/* Tooltip: folha branca, canto 12, sombra macia. */
+.recharts-tooltip-wrapper { outline: none; }
+.recharts-default-tooltip, .custom-tooltip {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--chart-grid) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.32) !important;
+  padding: 10px 12px !important;
+}
+.recharts-tooltip-label, .custom-tooltip .label, .custom-tooltip p:first-child { font-size: 12px !important; font-weight: 600 !important; color: var(--gmp-text) !important; margin: 0 0 4px !important; }
+.recharts-tooltip-item, .custom-tooltip p { font-size: 12px !important; font-weight: 500 !important; padding: 1px 0 !important; }
+/* A faixa de hover das barras e o cursor da linha: quase invisiveis. */
+.recharts-tooltip-cursor { fill: var(--chart-cursor) !important; stroke: var(--chart-grid) !important; }
+/* Fatias da rosca separadas por um vao da cor do painel, nao por branco duro. */
+.recharts-pie-sector path, .recharts-sector { stroke: var(--chart-gap) !important; stroke-width: 3px !important; }
+.recharts-pie-label-text { fill: var(--gmp-text-light) !important; font-size: 11px !important; font-weight: 500; }
+.recharts-pie-label-line { stroke: var(--chart-grid) !important; }
+/* Pontos da linha: miolo da cor, aro branco. */
+.recharts-line-dot, .recharts-dot { stroke: var(--gmp-surface); stroke-width: 2px; }
+.recharts-active-dot circle { stroke: var(--gmp-surface) !important; stroke-width: 3px !important; }
+/* O SVG nao corta a sombra nem o ponto na borda. */
+.recharts-surface { overflow: visible; }
+.recharts-responsive-container { min-width: 0; }
+
+/* ── 3. Movimento ─────────────────────────────────────────────────────────── */
+/* 3.1 Entrada em cascata. O Dashboard.css fixa `opacity: 1 !important` nos
+   [data-aos] (para os graficos nunca ficarem invisiveis se o AOS falhar); uma
+   declaracao !important vence keyframes — por isso a entrada anima `filter:
+   opacity()`, nao `opacity`. `backwards` aplica o estado inicial so antes da
+   animacao: no fim, nenhum filtro fica aplicado. */
+@keyframes ds-rise {
+  from { transform: translateY(16px); filter: opacity(0); }
+  60%  { filter: opacity(1); }
+  to   { transform: translateY(0); filter: opacity(1); }
+}
+/* A mesma entrada em `opacity` normal, para quem NAO tem o !important do AOS.
+   (Um `filter` que fica, mesmo opacity(1), vira bloco de contencao de
+   position:fixed — o painel de notificacoes do cabecalho caia no meio da tela.) */
+@keyframes ds-rise-o {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes ds-fade { from { filter: opacity(0); } to { filter: opacity(1); } }
+@keyframes ds-sheen {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-40px, 26px) scale(1.12); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes ds-count-in { from { transform: translateY(6px); filter: opacity(0); } to { transform: none; filter: opacity(1); } }
+
+.dashboard-header,
+.dashboard .premium-summary-item,
+.page-header,
+.summary-item { animation: ds-rise-o .7s cubic-bezier(.22, 1, .36, 1) backwards; }
+/* so o cartao de grafico carrega o [data-aos] com opacity !important */
+.dashboard .chart-card { animation: ds-rise .7s cubic-bezier(.22, 1, .36, 1) backwards; }
+.dashboard .premium-summary-item:nth-child(1) { animation-delay: .05s; }
+.dashboard .premium-summary-item:nth-child(4) { animation-delay: .12s; }
+.dashboard .premium-summary-item:nth-child(2) { animation-delay: .20s; }
+.dashboard .premium-summary-item:nth-child(3) { animation-delay: .26s; }
+.dashboard .chart-card:nth-child(1) { animation-delay: .22s; }
+.dashboard .chart-card:nth-child(2) { animation-delay: .30s; }
+.dashboard .chart-card:nth-child(3) { animation-delay: .38s; }
+.dashboard .chart-card:nth-child(4) { animation-delay: .46s; }
+.dashboard .chart-card:nth-child(n+5) { animation-delay: .5s; }
+/* (a tela de modulos tem a propria cascata em apple-launchpad.css) */
+
+/* 3.2 Troca de visao (Geral <-> Vendas): o React remonta o bloco pela `key`,
+   e o fade toca de novo a cada troca. */
+.dashboard-header + div { animation: ds-fade .45s ease-out backwards; }
+
+/* 3.2b Troca de TEMA: a varredura da referencia. O ThemeContext roda a troca
+   dentro de document.startViewTransition e grava --vt-x/--vt-y (o controle
+   tocado) e --vt-r (o raio que cobre a tela). A foto velha fica parada embaixo e
+   a nova entra por um circulo que cresce dali — sem o cross-fade padrao. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 2; animation: vt-varredura .85s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes vt-varredura {
+  from { clip-path: circle(0px at var(--vt-x, 100%) var(--vt-y, 0%)); }
+  to   { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 100%) var(--vt-y, 0%)); }
+}
+
+/* 3.3 O cartao heroi respira: o brilho do canto se move devagar. */
+@media (min-width: 769px) {
+  html .layout .premium-summary-item:nth-child(4)::after { animation: ds-sheen 9s ease-in-out infinite; }
+}
+
+/* 3.4 Numeros que contam nao podem tremer: algarismos de largura fixa. */
+.summary-value, .stat-value, .kpi-value, .cliitem__stat { font-variant-numeric: tabular-nums; }
+
+/* 3.5 Toques: a linha da barra lateral, os segmentos e os cartoes respondem
+   com transicao curta (a Apple usa 150-250ms). */
+.nav-item, .toggle-view-btn, .btn-filter, .notificacoes-bell, .chart-card, .orion-tile__icon-wrap {
+  transition: background-color .18s ease, color .18s ease, transform .22s cubic-bezier(.22, 1, .36, 1), box-shadow .22s ease, opacity .18s ease;
+}
+
+/* ── 4. Sem movimento para quem pediu ao sistema ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-header, .dashboard .premium-summary-item, .dashboard .chart-card, .page-header,
+  .summary-item, .dashboard-header + div,
+  html .layout .premium-summary-item:nth-child(4)::after,
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+  .recharts-wrapper * { transition: none !important; }
+}

@@ -1,0 +1,74 @@
+/* A manuscrita do site da GMP (a mesma de "a forca esta na gravidade"). Carregada
+   aqui tambem, nao so no index.html: quem ja tem o app aberto nao recarrega o
+   index, e sem a fonte o navegador caia numa cursiva do Windows ilegivel — foi
+   o que o P.O. viu ("use a mesma fonte do site, ficou ruim para ler"). */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
+
+/* O catavento da GMP (ver CataventoGMP.js). Curvas e tempos sao os do site
+   gmpindustriais.com: a entrada da cinco voltas desacelerando com uma curva que
+   "assenta" (cubic-bezier(.12,.75,.28,1)), e depois a volta lenta de 80s. */
+.catavento { display: inline-block; overflow: visible; vertical-align: middle; flex: 0 0 auto; }
+.catavento__rotor { transform-origin: 0 0; transform-box: view-box; }
+.catavento path { stroke: none; }
+.catavento__linha { fill: none; stroke-width: 2; stroke-linejoin: round; opacity: .95; }
+.catavento__cubo { fill: #fff; stroke: #C5CCD6; stroke-width: 2.2; }
+[data-theme="dark"] .catavento__cubo { fill: #F5F5F7; stroke: #3A3A3C; }
+
+@keyframes catavento-entrada { 0% { transform: rotate(0deg); } 100% { transform: rotate(1800deg); } }
+@keyframes catavento-giro    { 100% { transform: rotate(360deg); } }
+
+.catavento--entrada .catavento__rotor {
+  animation: catavento-entrada 2.4s cubic-bezier(.12, .75, .28, 1) .15s 1 both,
+             catavento-giro 80s linear 2.55s infinite;
+}
+.catavento--girando .catavento__rotor { animation: catavento-giro 2.4s linear infinite; }
+.catavento--parado  .catavento__rotor { animation: none; }
+
+/* A propria marca "chega": aparece crescendo, como no site. */
+.catavento--entrada { animation: catavento-chega .7s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes catavento-chega { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: none; } }
+
+/* ── Lockup: catavento + assinatura manuscrita "GMP Industriais" ─────────────
+   O mesmo estilo da frase do site ("a inteligencia esta no projeto, a forca
+   esta na gravidade"): Caveat 700, inclinada -2.5deg, REVELADA da esquerda
+   para a direita por clip-path (sigW do site: 1.5s, curva .6,.1,.3,1), e dois
+   tracos — um laranja grosso e um azul fino — que se desenham embaixo do
+   destaque depois (sigU: stroke-dashoffset 420 -> 0). O tamanho sai do
+   tamanho do catavento (--cv-size): serve a tela de modulos e o splash. */
+.catavento-lockup { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--cv-size, var(--cv-base, 96px)) * .06); }
+.catavento-lockup > .catavento { width: var(--cv-size, var(--cv-base, 96px)); height: var(--cv-size, var(--cv-base, 96px)); }
+/* Ajuste do P.O. (24/11): "a escrita mais demorada e um pouco menos estilizada".
+   Inclinacao de -1deg (era -2.5), tamanho .25 do catavento (era .3), as duas
+   palavras na cor do texto (o laranja ficou so no traco), um traco so, e a
+   revelacao em 2,6s (era 1,5s). */
+.catavento__assinatura {
+  position: relative; display: inline-block; white-space: nowrap;
+  /* se a Caveat ainda nao chegou, Inter (legivel) — nunca uma cursiva do sistema */
+  font-family: 'Caveat', 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 600; font-size: calc(var(--cv-size, var(--cv-base, 96px)) * .25); line-height: 1;
+  color: var(--gmp-text, #1D1D1F);
+  transform: rotate(-1deg); transform-origin: left bottom;
+  padding: 0 .3em .35em .1em;
+}
+.catavento__assinatura-texto { font-weight: 600; color: var(--gmp-text-light, #6E6E73); }
+.catavento__assinatura-destaque { position: relative; display: inline-block; font-weight: 700; color: var(--gmp-text, #1D1D1F); padding: 0 .1em .1em 0; }
+.catavento__assinatura-destaque svg { position: absolute; left: -.15em; right: -.3em; bottom: -.2em; width: calc(100% + .45em); height: .42em; overflow: visible; }
+.catavento__traco { fill: none; stroke-linecap: round; stroke-dasharray: 420; stroke-dashoffset: 0; }
+.catavento__traco--a { stroke: #F28C28; stroke-width: 3.4; opacity: .9; }
+.catavento__traco--b { display: none; }
+/* Na entrada: a frase comeca escondida e e revelada devagar enquanto o catavento
+   assenta; o traco se desenha em seguida. (Nos outros modos fica tudo visivel.) */
+.catavento-lockup--entrada .catavento__assinatura {
+  clip-path: inset(-20% 100% -40% 0);
+  animation: catavento-escreve 2.6s cubic-bezier(.5, .1, .35, 1) .7s forwards;
+}
+.catavento-lockup--entrada .catavento__traco { stroke-dashoffset: 420; animation: catavento-traco 1.2s cubic-bezier(.65, 0, .35, 1) forwards; }
+.catavento-lockup--entrada .catavento__traco--a { animation-delay: 3.1s; }
+@keyframes catavento-escreve { to { clip-path: inset(-20% -10% -40% 0); } }
+@keyframes catavento-traco { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .catavento, .catavento .catavento__rotor { animation: none !important; }
+  .catavento-lockup--entrada .catavento__assinatura { animation: none !important; clip-path: none !important; }
+  .catavento-lockup--entrada .catavento__traco { animation: none !important; stroke-dashoffset: 0 !important; }
+}

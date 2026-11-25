@@ -1,5 +1,6 @@
 import React from 'react';
 import { NOMES_MODULO } from '../constants/modulosMeta';
+import CataventoGMP from './CataventoGMP';
 import './ModuleLoading.css';
 
 // Etapa 111 (G17): o nome vem de NOMES_MODULO (constants/modulosMeta.js), o mesmo do acesso negado e do log.
@@ -16,7 +17,7 @@ const ModuleLoading = ({ module = 'sistema', compact = false, inline = false }) 
         role="status"
         aria-live="polite"
       >
-        <div className="module-loading__spinner" aria-hidden="true" />
+        <CataventoGMP size={22} modo="girando" className="module-loading__catavento" />
         <span>Carregando {label}...</span>
       </div>
     );
@@ -31,7 +32,10 @@ const ModuleLoading = ({ module = 'sistema', compact = false, inline = false }) 
 
       <div className="module-loading__panel">
         <div className="module-loading__brand">
-          <img src="/orion-logo.png" alt="Orion" className="module-loading__logo" />
+          {/* O catavento da GMP E o indicador de espera (24/11/2026): o mesmo da tela de
+              modulos — grande, da as voltas, assenta e escreve "GMP Industriais" ("fazer o
+              mesmo na tela de loading"). A marca Orion continua na barra lateral e no login. */}
+          <CataventoGMP size={120} modo="entrada" className="module-loading__catavento" title="Carregando" legenda="GMP" legendaDestaque="Industriais" />
         </div>
 
         <p className="module-loading__title">Preparando {label}</p>

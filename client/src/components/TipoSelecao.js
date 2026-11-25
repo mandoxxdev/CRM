@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useModulosTipoConfig } from '../hooks/useModulosTipoConfig';
-import { FiSettings, FiLock, FiSearch, FiPlay, FiX } from 'react-icons/fi';
+import { FiSettings, FiLock, FiSearch, FiPlay, FiX, FiArrowRight, FiChevronRight } from 'react-icons/fi';
+import CataventoGMP from './CataventoGMP';
+import { VERSAO_SISTEMA } from '../constants/versao';
 import { prefetchModule, prefetchModuleByRoute } from '../routes/lazyModules';
 import {
   fetchUserPermissions,
@@ -354,7 +356,53 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
               </span>
             )}
           </h3>
+          {/* A descricao sempre existiu em modulosMeta (a busca ja lia) e nao era mostrada. */}
+          {modulo.descricao && <p className="orion-tile__desc">{modulo.descricao}</p>}
         </div>
+      </button>
+    );
+  };
+
+  // "Continuar": o ultimo modulo usado vira o cartao heroi (24/11/2026). Mesmo clique,
+  // mesmo prefetch e mesma gravacao de recente do cartao comum — so a forma muda.
+  const renderHero = (modulo) => {
+    const Icon = modulo.icon;
+    return (
+      <button
+        type="button"
+        className="orion-hero"
+        style={{ '--tile-gradient': modulo.gradient }}
+        onClick={() => handleModuloClick(modulo)}
+        onMouseEnter={() => handleModuloHover(modulo)}
+        onFocus={() => handleModuloHover(modulo)}
+        aria-label={`Continuar em ${modulo.nome}`}
+      >
+        <span className="orion-hero__icone" aria-hidden="true"><Icon /></span>
+        <span className="orion-hero__texto">
+          <span className="orion-hero__eyebrow">Continuar em</span>
+          <span className="orion-hero__nome">{modulo.nome}</span>
+          {modulo.descricao && <span className="orion-hero__desc">{modulo.descricao}</span>}
+        </span>
+        <span className="orion-hero__abrir" aria-hidden="true">Abrir <FiArrowRight /></span>
+      </button>
+    );
+  };
+
+  const renderRecente = (modulo) => {
+    const Icon = modulo.icon;
+    return (
+      <button
+        key={modulo.id}
+        type="button"
+        className="orion-recente"
+        style={{ '--tile-gradient': modulo.gradient }}
+        onClick={() => handleModuloClick(modulo)}
+        onMouseEnter={() => handleModuloHover(modulo)}
+        onFocus={() => handleModuloHover(modulo)}
+      >
+        <span className="orion-recente__icone" aria-hidden="true"><Icon /></span>
+        <span className="orion-recente__nome">{modulo.nome}</span>
+        <FiChevronRight className="orion-recente__chevron" aria-hidden="true" />
       </button>
     );
   };
@@ -364,7 +412,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       <div className="tipo-selecao">
         <FloatingBallsBackground />
         <div className="tipo-selecao-loading">
-          <div className="tipo-selecao-spinner" />
+          <CataventoGMP size={44} modo="girando" title="Carregando" />
           <p>Carregando...</p>
         </div>
       </div>
@@ -372,6 +420,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   }
 
   const primeiroNome = getPrimeiroNome(user.nome);
+  // "Terca-feira, 24 de novembro" — no lugar de "O que vamos fazer hoje?".
+  const dataHoje = (() => {
+    const s = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  })();
+  const totalAcessiveis = modulosDisponiveis.filter((m) => m.disponivel).length;
 
   return (
     <div className="tipo-selecao">
@@ -380,42 +434,42 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         <header className="tipo-selecao__header">
           <div className="tipo-selecao__header-top">
             <div className="tipo-selecao__brand">
-              <img
-                src="/logo.png"
-                alt="GMP INDUSTRIAIS"
-                className="tipo-selecao__gmp-logo"
-              />
               <span className="tipo-selecao__brand-divider" aria-hidden="true" />
               <div className="tipo-selecao__orion-mark">
+                <img
+                  src="/orion-mark.svg"
+                  alt="Orion"
+                  className="tipo-selecao__gmp-logo"
+                />
                 <OrionConstellation />
-                <span className="tipo-selecao__wordmark">ORION</span>
+                <span className="tipo-selecao__wordmark">Orion</span>
+                <span className="tipo-selecao__versao" title={`Versão ${VERSAO_SISTEMA}`}>{VERSAO_SISTEMA}</span>
               </div>
               {isAdmin && (
                 <span className="tipo-selecao__admin-badge">Administrador</span>
               )}
             </div>
-            <img
-              src="/orion-bird-logo.png"
-              alt=""
-              className="tipo-selecao__bird-logo"
-              aria-hidden="true"
-            />
           </div>
 
           <div className="tipo-selecao__greeting">
-            <h1>
-              {getSaudacao()}
-              {primeiroNome ? `, ${primeiroNome}` : ''}
-            </h1>
-            <p>O que vamos fazer hoje?</p>
-            {(() => {
-              const nivel = nivelAcessoUsuario(user);
-              return (
-                <span className={`tipo-selecao__access-tier tier-${nivel.tier}`}>
-                  {nivel.label}
-                </span>
-              );
-            })()}
+            <div className="tipo-selecao__greeting-text">
+              <h1>
+                {getSaudacao()}
+                {primeiroNome ? `, ${primeiroNome}` : ''}
+              </h1>
+              <p>{dataHoje} · {totalAcessiveis} {totalAcessiveis === 1 ? 'módulo' : 'módulos'}</p>
+              {(() => {
+                const nivel = nivelAcessoUsuario(user);
+                return (
+                  <span className={`tipo-selecao__access-tier tier-${nivel.tier}`}>
+                    {nivel.label}
+                  </span>
+                );
+              })()}
+            </div>
+            {/* O catavento da GMP (a animacao do site): da cinco voltas e assenta,
+                escrevendo "GMP INDUSTRIAIS" letra a letra enquanto gira. */}
+            <CataventoGMP size={132} modo="entrada" className="tipo-selecao__catavento" title="GMP Industriais" legenda="GMP" legendaDestaque="Industriais" />
           </div>
 
           <div className="tipo-selecao__search-wrap">
@@ -443,16 +497,21 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
 
         {loading ? (
           <div className="tipo-selecao-loading">
-            <div className="tipo-selecao-spinner" />
+            <CataventoGMP size={44} modo="girando" title="Carregando" />
             <p>Carregando módulos...</p>
           </div>
         ) : (
           <div className="tipo-selecao__sections">
             {modulosRecentes.length > 0 && (
-              <section className="tipo-selecao__section">
-                <h2 className="tipo-selecao__section-title">Acessados recentemente</h2>
-                <div className="orion-scroll">
-                  {modulosRecentes.map(mod => renderModuloCard(mod, true))}
+              <section className="tipo-selecao__section tipo-selecao__section--recentes">
+                <h2 className="tipo-selecao__section-title">Continuar</h2>
+                <div className="orion-continuar">
+                  {renderHero(modulosRecentes[0])}
+                  {modulosRecentes.length > 1 && (
+                    <div className="orion-recentes">
+                      {modulosRecentes.slice(1).map(mod => renderRecente(mod))}
+                    </div>
+                  )}
                 </div>
               </section>
             )}

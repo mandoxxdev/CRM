@@ -21,6 +21,13 @@ import './styles/app-glass.css';
    app-glass pela mesma regra acima: empate de !important vai para quem vem por
    ultimo. E so CSS — nenhuma funcao muda. */
 import './styles/apple-theme.css';
+/* A COMPOSICAO das telas (iOS no celular, macOS no computador): Launchpad,
+   lista agrupada, large title, source list, toolbar. Depois do tema, pela
+   mesma regra de ordem. Tambem so CSS. */
+import './styles/apple-structure.css';
+import './styles/apple-charts.css';
+import './styles/apple-desktop.css';
+import './styles/apple-launchpad.css';
 import Pagina404 from './components/Pagina404';
 import {
   Login,
