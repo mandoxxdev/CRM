@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/systemPermissions';
 import { identificarAtalho } from '../utils/atalhosTeclado';
+import usePilulaDoMenu from '../hooks/usePilulaDoMenu';
+import { useMotorDeMovimento } from '../utils/motorDeMovimento';
 import api from '../services/api';
 import AvatarUsuario from './AvatarUsuario';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
@@ -94,6 +96,12 @@ const Layout = () => {
   );
   const [chatUnread, setChatUnread] = useState(0);
   const location = useLocation();
+  // Movimento da referencia (25/11/2026): os numeros de KPI contam (motor na area de
+  // conteudo) e a pilula do menu desliza ate o item ativo (gancho no <nav>).
+  const navRef = useRef(null);
+  const mainRef = useRef(null);
+  useMotorDeMovimento(mainRef);
+  usePilulaDoMenu(navRef, '.nav-item.active', [location.pathname, sidebarOpen, permissionsReady]);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
@@ -493,7 +501,7 @@ const Layout = () => {
             <PreferenciasMenu key="preferencias-menu-fixed" />
           </div>
         </div>
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" ref={navRef}>
           <button
             className="nav-item nav-item-button nav-item-module-selector"
             onClick={() => {
@@ -617,7 +625,7 @@ const Layout = () => {
           </button>
         </div>
       </div>
-      <div className="main-content">
+      <div className="main-content" ref={mainRef}>
         {/* Botão hambúrguer para mobile */}
         {!sidebarOpen && (
           <button 

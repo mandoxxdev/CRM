@@ -9,12 +9,8 @@ const MaquinasVendidas = () => {
   const [loading, setLoading] = useState(true);
   const [dados, setDados] = useState(null);
   const [error, setError] = useState(null);
-  const [animatedValues, setAnimatedValues] = useState({
-    maquinas: 0,
-    localizacoes: 0,
-    confianca: 0
-  });
-  const hasAnimated = useRef(false);
+  // (25/11/2026) O contador proprio dos tres numeros (animatedValues/animateValues, setInterval)
+  // saiu: o motor de movimento global conta os KPIs de todas as telas, e os dois brigavam.
   
   // Estados para mural de logos
   const [logos, setLogos] = useState([]);
@@ -68,51 +64,12 @@ const MaquinasVendidas = () => {
     try {
       const response = await api.get('/mapa/maquinas-vendidas');
       setDados(response.data);
-      
-      // Animar valores após carregar dados
-      if (!hasAnimated.current) {
-        animateValues(response.data);
-        hasAnimated.current = true;
-      }
     } catch (err) {
       console.error('Erro ao carregar máquinas vendidas:', err);
       setError('Erro ao carregar dados das máquinas vendidas');
     } finally {
       setLoading(false);
     }
-  };
-
-  const animateValues = (data) => {
-    const duration = 2000; // 2 segundos
-    const steps = 60;
-    const stepDuration = duration / steps;
-    
-    const targetMaquinas = data?.total_maquinas || 0;
-    const targetLocalizacoes = data?.total || 0;
-    const targetConfianca = data?.total || 0;
-    
-    let currentStep = 0;
-    
-    const interval = setInterval(() => {
-      currentStep++;
-      const progress = currentStep / steps;
-      const easeOut = 1 - Math.pow(1 - progress, 3); // Easing cubic
-      
-      setAnimatedValues({
-        maquinas: Math.floor(targetMaquinas * easeOut),
-        localizacoes: Math.floor(targetLocalizacoes * easeOut),
-        confianca: Math.floor(targetConfianca * easeOut)
-      });
-      
-      if (currentStep >= steps) {
-        clearInterval(interval);
-        setAnimatedValues({
-          maquinas: targetMaquinas,
-          localizacoes: targetLocalizacoes,
-          confianca: targetConfianca
-        });
-      }
-    }, stepDuration);
   };
 
   const formatCurrency = (value) => {
@@ -181,7 +138,7 @@ const MaquinasVendidas = () => {
             <div className="maquina-kpi-content">
             <div className="maquina-kpi-label">Máquinas Instaladas</div>
             <div className="maquina-kpi-value" data-value={dados?.total_maquinas || 0}>
-              {animatedValues.maquinas}
+              {dados?.total_maquinas || 0}
             </div>
             <div className="maquina-kpi-subtitle">Equipamentos GMP em operação</div>
           </div>
@@ -195,7 +152,7 @@ const MaquinasVendidas = () => {
             <div className="maquina-kpi-content">
             <div className="maquina-kpi-label">Localizações</div>
             <div className="maquina-kpi-value" data-value={dados?.total || 0}>
-              {animatedValues.localizacoes}
+              {dados?.total || 0}
             </div>
             <div className="maquina-kpi-subtitle">Cidades atendidas no Brasil</div>
           </div>
@@ -221,7 +178,7 @@ const MaquinasVendidas = () => {
             <div className="maquina-kpi-content">
             <div className="maquina-kpi-label">Confiança</div>
             <div className="maquina-kpi-value" data-value={dados?.total || 0}>
-              {animatedValues.confianca}+
+              {dados?.total || 0}+
             </div>
             <div className="maquina-kpi-subtitle">Clientes satisfeitos</div>
           </div>

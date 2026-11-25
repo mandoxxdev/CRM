@@ -155,6 +155,50 @@ classe" + seções por tela):
 > se a fila travar, é no painel de "Deployments" do Coolify que se vê — o repositório não tem
 > acesso a ele.
 
+### Quarta rodada (manhã de 25/11): o MOVIMENTO da referência em todas as telas
+
+O P.O. comparou de novo com o vídeo do TikTok ("Dashboard V14"): *"tem que ter mais
+animações, assim fica muito feio"*. O vídeo foi revisto quadro a quadro. O que ele faz a
+cada troca de página — e que só o Dashboard comercial e a tela de módulos faziam aqui:
+
+| O vídeo | Antes (nosso) | Agora |
+|---|---|---|
+| O título entra primeiro; cada bloco sobe **desfocado** e fica nítido, um atrás do outro | ~60 telas apareciam secas, de uma vez | Cascata genérica em toda tela de todo módulo (filhos da raiz da rota, ladrilhos de KPI, cartões em grade, listas, linhas de tabela uma a uma, modais) |
+| Os **números contam** de 0 até o valor | Só o Dashboard e o mapa de máquinas, com contadores próprios (e o do Dashboard mostrava "-1") | Um motor único conta os KPIs de todos os módulos (comercial, almoxarifado, frotas, fábrica, compras, financeiro, máquinas) |
+| A pílula da navegação **desliza** até o item ativo | Pílula estática | Pílula desliza na barra lateral do sistema e da Fábrica |
+| Varredura de tema rápida (~0,5s) | 0,85s | 0,55s, a partir do botão |
+| Barras dos gráficos crescem | Já era (Recharts) | Idem; nenhuma tela desliga |
+| Toque | — | Cartões levantam 2px ao passar o mouse; botões afundam ao clicar |
+
+**Onde mora:** `client/src/styles/apple-motion.css` (coreografia, carrega por último),
+`client/src/utils/motorDeMovimento.js` (contagem; `MutationObserver` na área de conteúdo,
+mexe só no `nodeValue` do nó de texto do React), `client/src/hooks/usePilulaDoMenu.js`
+(mede o item ativo e grava `--pilula-y/h/o` no `<nav>`). Ligados em `Layout.js` e
+`mes/MESLayout.js` por `ref`.
+
+**Regras do motor de contagem** (para quem for mexer): parte do valor na tela quando o React
+troca o número; não reconta quando um filtro remonta o cartão com o mesmo valor; reconta do
+zero quando a raiz da rota troca; ignora zero, datas, horas e qualquer coisa fora da lista de
+classes de KPI; relógio ancorado no **primeiro quadro** do `requestAnimationFrame` (o carimbo
+do quadro vem antes do `performance.now()` da tarefa longa do React — com t negativo o
+easing dava "-1" na tela). Teste: `client/src/utils/motorDeMovimento.test.js` (relógio de
+quadros controlado; controle positivo sabotando o easing derruba 3 dos 9).
+
+**O que custou bug nesta rodada:** o seletor principal da cascata tem 12 classes de
+especificidade e o *shorthand* `animation` zerava o `animation-delay` das regras
+`:nth-child` mais fracas (medido: 2º filho com 0s) — os atrasos e o quadro do celular vão por
+variável CSS (`--ds-k`, `--ds-i`, `--ds-entrada`). Na Fábrica o `offsetTop` do link ativo
+dava 0 (ele mora num `.mes-nav-item` posicionado) — a pílula mede por retângulos.
+
+**Descartado:** um componente `<Numero>` por tela (20 telas, buracos garantidos) e a
+varredura de tema em onda (`clip-path: path()` exige coordenadas absolutas; o círculo rápido
+fica igual ao vídeo).
+
+**Não verificado ao vivo:** o painel de revisão ficou "hidden" durante a conferência
+(`requestAnimationFrame` não roda), então a sequência da contagem foi provada pelo teste e a
+fiação (escritas no nó certo, sem negativo, texto final exato) pelo gravador de mutações no
+navegador. Conferir no olho em produção: Dashboard comercial, Almoxarifado, Frota, Fábrica.
+
 ## Por que isto não quebra nada
 
 É **só CSS**: um arquivo novo, `client/src/styles/apple-theme.css`, importado por último em

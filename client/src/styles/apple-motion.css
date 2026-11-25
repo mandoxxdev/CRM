@@ -1,0 +1,233 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   apple-motion.css — o MOVIMENTO da referencia (TikTok "Dashboard V14"), para
+   TODAS as telas (25/11/2026)
+   ═══════════════════════════════════════════════════════════════════════════
+   O P.O. comparou de novo com o video: "tem que ter mais animacoes, assim fica
+   muito feio". Revisto quadro a quadro, o video faz, a cada troca de pagina:
+     1. o conteudo antigo some de uma vez;
+     2. o titulo entra primeiro; depois cada bloco sobe DESFOCADO e fica nitido,
+        um atras do outro (cascata de ~60ms);
+     3. os numeros contam de 0 ate o valor (utils/motorDeMovimento.js);
+     4. as barras dos graficos crescem (Recharts ja faz; ninguem desliga);
+     5. a troca de tema e uma varredura RAPIDA (~0,5s) a partir do botao;
+     6. a pilula da navegacao desliza ate o item ativo (hooks/usePilulaDoMenu.js);
+     7. cartoes levantam ao passar o mouse e botoes afundam ao clicar.
+   Antes desta folha so o Dashboard comercial e a tela de modulos tinham cascata;
+   as outras ~60 telas apareciam secas.
+
+   Regras de seguranca (ja custaram bug):
+   - Toda animacao termina com transform/filter em `none` (fill-mode backwards):
+     um filter/transform que FICA vira bloco de contencao de position:fixed — o
+     painel de notificacoes caiu no meio da tela em 24/11 (apple-desktop 341).
+   - Nada aqui anima `.dashboard`, `.header-actions` nem `.nav-item` com transform
+     (eles tem `transform: none !important`; so a opacidade passa).
+   - Os cartoes de grafico, os itens do resumo do Dashboard e os ladrilhos do
+     Launchpad mantem a coreografia propria (apple-charts / apple-launchpad).
+   - prefers-reduced-motion desliga tudo.
+   Carrega por ultimo em App.js, depois de apple-telas.css. */
+
+@media (prefers-reduced-motion: no-preference) {
+
+  /* ── 1. Quadros ─────────────────────────────────────────────────────────── */
+  @keyframes ds-entra {
+    from { opacity: 0; transform: translateY(18px) scale(.985); filter: blur(10px); }
+    55%  { filter: blur(0); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+  /* celular: sem desfoque (GPU fraca), so sobe */
+  @keyframes ds-entra-leve {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes ds-entra-linha {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes ds-modal-fundo { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ds-modal-caixa {
+    from { opacity: 0; transform: translateY(16px) scale(.96); filter: blur(8px); }
+    60%  { filter: blur(0); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes ds-nav-entra { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ── 2. Cascata da pagina: os filhos diretos da raiz da rota ─────────────────
+     A raiz da rota e o filho de .main-content (ou .mes-main) que nao e nav,
+     overlay nem carregando — a mesma lista da regra de largura (apple-desktop 2b). */
+  html .layout .main-content
+    > *:not(.sidebar-overlay):not(.mobile-menu-toggle):not(.module-loading):not(nav):not([class*='chat']):not([class*='kanban']):not([class*='todolist']):not([class*='scanner'])
+    > *:not(svg):not(script):not(style):not(.chart-card):not(.premium-summary-item),
+  html .mes-main > * > *:not(svg):not(script):not(style) {
+    /* longhands: a regra tem 12 classes de especificidade e o shorthand zerava o
+       animation-delay das regras :nth-child abaixo (medido: filho 2 com 0s). O
+       atraso e o nome entram por variavel; o celular troca o nome (secao 10). */
+    animation-name: var(--ds-entrada, ds-entra);
+    animation-duration: var(--ds-duracao, .72s);
+    animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+    animation-fill-mode: backwards;
+    animation-delay: calc(var(--ds-k, 0) * .06s);
+  }
+  html .layout .main-content > * > *:nth-child(2), html .mes-main > * > *:nth-child(2) { --ds-k: 1; }
+  html .layout .main-content > * > *:nth-child(3), html .mes-main > * > *:nth-child(3) { --ds-k: 2; }
+  html .layout .main-content > * > *:nth-child(4), html .mes-main > * > *:nth-child(4) { --ds-k: 3; }
+  html .layout .main-content > * > *:nth-child(5), html .mes-main > * > *:nth-child(5) { --ds-k: 4; }
+  html .layout .main-content > * > *:nth-child(6), html .mes-main > * > *:nth-child(6) { --ds-k: 5; }
+  html .layout .main-content > * > *:nth-child(n+7), html .mes-main > * > *:nth-child(n+7) { --ds-k: 6; }
+
+  /* ── 3. Cascata dos ladrilhos: KPIs, cartoes e listas em grade ──────────────
+     Os filhos de um container de ladrilhos (…-kpis, …-grid, …-cards, …-stats,
+     …-list) entram um atras do outro, depois do bloco pai. */
+  html .layout .main-content [class$='-kpis'] > *,
+  html .layout .main-content [class*='-kpis '] > *,
+  html .layout .main-content [class$='-grid'] > *:not(.chart-card):not(.premium-summary-item),
+  html .layout .main-content [class*='-grid '] > *:not(.chart-card):not(.premium-summary-item),
+  html .layout .main-content [class$='-cards'] > *,
+  html .layout .main-content [class*='-cards '] > *,
+  html .layout .main-content [class$='-stats'] > *,
+  html .layout .main-content [class$='-list'] > *:not(tr),
+  html .layout .main-content [class$='-lista'] > *,
+  html .mes-main [class$='-kpis'] > *,
+  html .mes-main [class$='-grid-2'] > *,
+  html .mes-main [class$='-quick-links'] > *,
+  html .mes-main [class$='-cards'] > * {
+    animation-name: var(--ds-entrada, ds-entra);
+    animation-duration: .6s;
+    animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+    animation-fill-mode: backwards;
+    animation-delay: calc(.12s + var(--ds-i, 0) * .05s);
+  }
+  html .layout .main-content [class$='-kpis'] > :nth-child(1), html .mes-main [class$='-kpis'] > :nth-child(1) { --ds-i: 0; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(2), html .mes-main [class$='-kpis'] > :nth-child(2) { --ds-i: 1; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(3), html .mes-main [class$='-kpis'] > :nth-child(3) { --ds-i: 2; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(4), html .mes-main [class$='-kpis'] > :nth-child(4) { --ds-i: 3; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(5), html .mes-main [class$='-kpis'] > :nth-child(5) { --ds-i: 4; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(6), html .mes-main [class$='-kpis'] > :nth-child(6) { --ds-i: 5; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(7), html .mes-main [class$='-kpis'] > :nth-child(7) { --ds-i: 6; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(8), html .mes-main [class$='-kpis'] > :nth-child(8) { --ds-i: 7; }
+  html .layout .main-content [class$='-kpis'] > :nth-child(n+9), html .mes-main [class$='-kpis'] > :nth-child(n+9) { --ds-i: 8; }
+  /* a mesma escada para grades, cartoes, listas e atalhos (seletor generico por posicao) */
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(2),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(2) { --ds-i: 1; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(3),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(3) { --ds-i: 2; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(4),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(4) { --ds-i: 3; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(5),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(5) { --ds-i: 4; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(6),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(6) { --ds-i: 5; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(7),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(7) { --ds-i: 6; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(8),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(8) { --ds-i: 7; }
+  html .layout .main-content :is([class$='-grid'], [class*='-grid '], [class$='-cards'], [class*='-cards '], [class$='-stats'], [class$='-list'], [class$='-lista'], [class*='-kpis ']) > :nth-child(n+9),
+  html .mes-main :is([class$='-grid-2'], [class$='-quick-links'], [class$='-cards']) > :nth-child(n+9) { --ds-i: 8; }
+
+  /* ── 4. Linhas de tabela: aparecem uma a uma (as 12 primeiras; o resto junto) ── */
+  html .layout .main-content tbody > tr, html .mes-main tbody > tr {
+    animation: ds-entra-linha .5s cubic-bezier(.22, 1, .36, 1) backwards;
+    animation-delay: calc(.1s + var(--ds-l, 12) * .035s);
+  }
+  html .layout .main-content tbody > tr:nth-child(1),  html .mes-main tbody > tr:nth-child(1)  { --ds-l: 0; }
+  html .layout .main-content tbody > tr:nth-child(2),  html .mes-main tbody > tr:nth-child(2)  { --ds-l: 1; }
+  html .layout .main-content tbody > tr:nth-child(3),  html .mes-main tbody > tr:nth-child(3)  { --ds-l: 2; }
+  html .layout .main-content tbody > tr:nth-child(4),  html .mes-main tbody > tr:nth-child(4)  { --ds-l: 3; }
+  html .layout .main-content tbody > tr:nth-child(5),  html .mes-main tbody > tr:nth-child(5)  { --ds-l: 4; }
+  html .layout .main-content tbody > tr:nth-child(6),  html .mes-main tbody > tr:nth-child(6)  { --ds-l: 5; }
+  html .layout .main-content tbody > tr:nth-child(7),  html .mes-main tbody > tr:nth-child(7)  { --ds-l: 6; }
+  html .layout .main-content tbody > tr:nth-child(8),  html .mes-main tbody > tr:nth-child(8)  { --ds-l: 7; }
+  html .layout .main-content tbody > tr:nth-child(9),  html .mes-main tbody > tr:nth-child(9)  { --ds-l: 8; }
+  html .layout .main-content tbody > tr:nth-child(10), html .mes-main tbody > tr:nth-child(10) { --ds-l: 9; }
+  html .layout .main-content tbody > tr:nth-child(11), html .mes-main tbody > tr:nth-child(11) { --ds-l: 10; }
+  html .layout .main-content tbody > tr:nth-child(12), html .mes-main tbody > tr:nth-child(12) { --ds-l: 11; }
+
+  /* ── 5. Modais: fundo esmaece, caixa sobe desfocada e fica nitida ──────────── */
+  html [class*='modal-overlay'], html [class$='-overlay']:not(.sidebar-overlay) {
+    animation: ds-modal-fundo .25s ease-out backwards;
+  }
+  html [class*='modal-overlay'] > :first-child, html [class$='-overlay']:not(.sidebar-overlay) > :first-child {
+    animation-name: var(--ds-entrada-modal, ds-modal-caixa);
+    animation-duration: .42s;
+    animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+    animation-fill-mode: backwards;
+  }
+
+  /* ── 6. Troca de tema: a varredura da referencia e RAPIDA (~0,5s) ─────────── */
+  ::view-transition-new(root) { animation: vt-varredura .55s cubic-bezier(.65, 0, .35, 1) both; }
+
+  /* ── 7. Barra lateral: as linhas acendem em sequencia quando o modulo abre ──
+     (.nav-item tem transform:none !important — so a opacidade anima, de proposito) */
+  html .layout .sidebar .sidebar-nav .nav-item, html .mes-nav .mes-nav-link {
+    animation: ds-nav-entra .4s ease-out backwards;
+    animation-delay: calc(var(--ds-n, 10) * .03s);
+  }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(1),  html .mes-nav > :nth-child(1) .mes-nav-link, html .mes-nav > .mes-nav-link:nth-child(1) { --ds-n: 0; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(2),  html .mes-nav > :nth-child(2) .mes-nav-link  { --ds-n: 1; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(3),  html .mes-nav > :nth-child(3) .mes-nav-link  { --ds-n: 2; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(4),  html .mes-nav > :nth-child(4) .mes-nav-link  { --ds-n: 3; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(5),  html .mes-nav > :nth-child(5) .mes-nav-link  { --ds-n: 4; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(6),  html .mes-nav > :nth-child(6) .mes-nav-link  { --ds-n: 5; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(7),  html .mes-nav > :nth-child(7) .mes-nav-link  { --ds-n: 6; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(8),  html .mes-nav > :nth-child(8) .mes-nav-link  { --ds-n: 7; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(9),  html .mes-nav > :nth-child(9) .mes-nav-link  { --ds-n: 8; }
+  html .layout .sidebar .sidebar-nav .nav-item:nth-child(10), html .mes-nav > :nth-child(10) .mes-nav-link { --ds-n: 9; }
+
+  /* ── 8. A pilula do menu DESLIZA (desktop). O gancho usePilulaDoMenu grava
+     --pilula-y/--pilula-h/--pilula-o no <nav> e poe data-pilula; so entao o
+     item ativo perde o fundo proprio e a pilula do ::before assume. ──────────── */
+  @media (min-width: 769px) {
+    html .layout .sidebar .sidebar-nav, html .mes-nav { position: relative; }
+    html .layout .sidebar .sidebar-nav[data-pilula]::before, html .mes-nav[data-pilula]::before {
+      content: ''; position: absolute; left: 12px; right: 12px; z-index: 0; pointer-events: none;
+      top: var(--pilula-y, 0px); height: var(--pilula-h, 0px); opacity: var(--pilula-o, 0);
+      border-radius: 10px; background: var(--ds-ink, #1D1D1F);
+      transition: top .38s cubic-bezier(.22, 1, .36, 1), height .25s cubic-bezier(.22, 1, .36, 1), opacity .2s ease;
+    }
+    html .layout .sidebar .sidebar-nav[data-pilula] .nav-item, html .mes-nav[data-pilula] .mes-nav-item, html .mes-nav[data-pilula] .mes-nav-link { position: relative; z-index: 1; }
+    html .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active,
+    html .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active:hover,
+    html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active,
+    html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active:hover,
+    html .mes-nav[data-pilula] .mes-nav-link.active { background: transparent !important; }
+    html .layout .sidebar .sidebar-nav .nav-item, html .layout .sidebar .sidebar-nav .nav-item span, html .layout .sidebar .sidebar-nav .nav-item svg,
+    html .mes-nav .mes-nav-link, html .mes-nav .mes-nav-link span { transition: color .3s ease, background-color .18s ease; }
+  }
+
+  /* ── 9. Toque: cartoes levantam, botoes afundam ────────────────────────────── */
+  @media (hover: hover) and (min-width: 769px) {
+    html .layout .main-content [class$='-kpis'] > *, html .layout .main-content [class*='-kpis '] > *,
+    html .layout .main-content [class$='-cards'] > *, html .layout .main-content [class*='-cards '] > *,
+    html .layout .main-content [class$='-stats'] > *,
+    html .layout .main-content [class$='-grid'] > [class*='card'], html .layout .main-content [class*='-grid '] > [class*='card'],
+    html .layout .main-content .chart-card, html .layout .main-content .premium-summary-item,
+    html .mes-main [class$='-kpis'] > *, html .mes-main .producao-card, html .mes-main .producao-quick-link {
+      transition: transform .25s cubic-bezier(.22, 1, .36, 1), box-shadow .25s ease, background-color .2s ease, border-color .2s ease;
+    }
+    html .layout .main-content [class$='-kpis'] > *:hover, html .layout .main-content [class*='-kpis '] > *:hover,
+    html .layout .main-content [class$='-cards'] > *:hover, html .layout .main-content [class*='-cards '] > *:hover,
+    html .layout .main-content [class$='-stats'] > *:hover,
+    html .layout .main-content [class$='-grid'] > [class*='card']:hover, html .layout .main-content [class*='-grid '] > [class*='card']:hover,
+    html .layout .main-content .chart-card:hover,
+    html .mes-main [class$='-kpis'] > *:hover, html .mes-main .producao-card:hover, html .mes-main .producao-quick-link:hover {
+      transform: translateY(-2px);
+    }
+  }
+  html .layout .main-content button:not([class*='notific']):not(.nav-item):not([disabled]):active,
+  html .layout .main-content a[class*='btn']:active,
+  html .mes-main button:not([disabled]):active,
+  html .tipo-selecao button:not([disabled]):active, html .tipo-selecao .orion-tile:active {
+    transform: scale(.97) !important;
+    transition: transform .1s ease !important;
+  }
+
+  /* ── 10. Celular: a mesma cascata, sem desfoque ────────────────────────────── */
+  @media (max-width: 768px) {
+    /* as regras acima leem estas variaveis; aqui so se troca o quadro (herda para tudo) */
+    html { --ds-entrada: ds-entra-leve; --ds-duracao: .5s; --ds-entrada-modal: ds-entra-leve; }
+  }
+}
+
+/* Com "reduzir movimento" ligado no sistema, nada acima existe; a pilula fica estatica. */
+@media (prefers-reduced-motion: reduce) {
+  html .layout .sidebar .sidebar-nav[data-pilula]::before, html .mes-nav[data-pilula]::before { display: none; }
+}

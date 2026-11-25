@@ -29,6 +29,7 @@ import './styles/apple-charts.css';
 import './styles/apple-desktop.css';
 import './styles/apple-launchpad.css';
 import './styles/apple-telas.css';
+import './styles/apple-motion.css';
 import Pagina404 from './components/Pagina404';
 import {
   Login,

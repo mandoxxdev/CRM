@@ -61,10 +61,10 @@ const Dashboard = () => {
   const [dadosAvancados, setDadosAvancados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [clientLogos, setClientLogos] = useState([]);
-  const [animatedStats, setAnimatedStats] = useState({
-    totalClientes: 0,
-    totalProjetos: 0
-  });
+  // (25/11/2026) O contador proprio de "Clientes Ativos" (animatedStats/animateNumbers) saiu:
+  // o motor de movimento global (utils/motorDeMovimento.js) conta TODOS os KPIs do sistema, e
+  // os dois juntos brigavam pelo mesmo numero — e o antigo mostrava "-1" (Math.floor de um
+  // easing com tempo negativo: o carimbo do requestAnimationFrame vinha antes do startTime).
   const [viewMode, setViewMode] = useState('geral'); // 'geral' ou 'vendas'
   // Filtros do cabecalho. O botao existia desde sempre, mas nunca tinha sido ligado a
   // nada: nao havia estado, nem painel, nem parametro chegando na API.
@@ -268,13 +268,6 @@ const Dashboard = () => {
   }, [viewMode, loading]);
 
   useEffect(() => {
-    if (stats && stats.totalClientes !== undefined) {
-      return animateNumbers();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stats]);
-
-  useEffect(() => {
     // Animações de scroll - Otimizado para velocidade
     const observerOptions = {
       threshold: 0.01, // Ativar mais cedo
@@ -364,49 +357,6 @@ const Dashboard = () => {
       receita: safeStats.valorTotalPropostasAprovadas || 0 
     }
   ], [historico, safeStats]);
-
-  const animateNumbers = () => {
-    const duration = 2000;
-    // Removido limite de steps - usa requestAnimationFrame para máxima fluidez
-    const startTime = performance.now();
-
-    const currentStats = stats || {
-      totalClientes: 0,
-      totalProjetos: 0
-    };
-
-    const targets = {
-      totalClientes: currentStats.totalClientes || 0,
-      totalProjetos: currentStats.totalProjetos || 0
-    };
-
-    let animationFrameId = null;
-    
-    const animate = (currentTime) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // Easing function para animação suave
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-
-      setAnimatedStats({
-        totalClientes: Math.floor(targets.totalClientes * easeOut),
-        totalProjetos: Math.floor(targets.totalProjetos * easeOut)
-      });
-
-      if (progress < 1) {
-        animationFrameId = requestAnimationFrame(animate);
-      } else {
-        setAnimatedStats(targets);
-      }
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
-    
-    return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
-  };
-
 
   if (loading) {
     return (
@@ -699,7 +649,7 @@ const Dashboard = () => {
                 </div>
                 <div className="summary-info">
                   <span className="summary-label">Clientes Ativos</span>
-                  <span className="summary-value">{animatedStats.totalClientes}</span>
+                  <span className="summary-value">{safeStats.totalClientes || 0}</span>
                   <span className={`summary-change ${variacaoClientes.percentual >= 0 ? 'positive' : 'negative'}`}>
                     {variacaoClientes.percentual !== 0 && (
                       <>

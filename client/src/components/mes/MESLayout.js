@@ -1,10 +1,12 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import BarraInferiorMobile from '../BarraInferiorMobile';
 import ErrorBoundary from '../ErrorBoundary';
 import { RouteLoading } from '../LazyPage';
 import { useAuth } from '../../context/AuthContext';
 import CataventoGMP from '../CataventoGMP';
+import usePilulaDoMenu from '../../hooks/usePilulaDoMenu';
+import { useMotorDeMovimento } from '../../utils/motorDeMovimento';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureModule } from '../../utils/systemPermissions';
 import {
@@ -25,6 +27,11 @@ const MESLayout = () => {
   ));
   const { user } = useAuth();
   const canConfigureMes = canConfigureModule(getEffectiveUser(user), 'operacional');
+  // Movimento da referencia (25/11/2026), igual ao Layout: contagem dos KPIs e pilula que desliza.
+  const navRef = useRef(null);
+  const mainRef = useRef(null);
+  useMotorDeMovimento(mainRef);
+  usePilulaDoMenu(navRef, '.mes-nav-link.active', [location.pathname, sidebarOpen]);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiBarChart2, path: '/fabrica/dashboard' },
@@ -74,7 +81,7 @@ const MESLayout = () => {
           </button>
         </div>
 
-        <nav className="mes-nav">
+        <nav className="mes-nav" ref={navRef}>
           <div
             className="mes-nav-link mes-nav-module-selector"
             onClick={() => { window.location.href = '/'; }}
@@ -122,7 +129,7 @@ const MESLayout = () => {
         aoAbrirMenu={() => setSidebarOpen((v) => !v)}
       />
 
-      <main className="mes-main">
+      <main className="mes-main" ref={mainRef}>
         <ErrorBoundary>
           <Suspense fallback={<RouteLoading module="operacional" />}>
             <Outlet />
