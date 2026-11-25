@@ -1,0 +1,9 @@
+*Planejamento — valor unitário do item da proposta*
+_25/11/2026_
+
+*1. Digitar o valor do item da proposta no formato brasileiro*
+O campo de valor unitário não aceitava o ponto de milhar: ao digitar 23.550,00 ficava 23,55. Passa a funcionar como os outros campos de valor do sistema (os números entram pela direita, com ponto e vírgula automáticos), e 23.550,00 fica 23.550,00.
+Tempo estimado: *30min*
+
+*Total estimado: 30min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
