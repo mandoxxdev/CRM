@@ -18,6 +18,7 @@ import {
 } from '../../constants/propostaComercial';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { formatarMoedaBR, digitadoParaValor } from '../../utils/moeda';
+import { rotuloDaCotacao } from './valorDaProposta';
 import {
   IDIOMAS_PROPOSTA, MOEDAS_PROPOSTA, INCOTERMS, separarIncoterm, montarIncoterm, idiomaDoBanco, moedaDoBanco,
 } from './idiomaProposta';
@@ -59,6 +60,8 @@ const defaultForm = {
   // Proposta para fora do Brasil (RN-BI.01/08/09) — o servidor ja gravava as tres colunas; faltava a tela.
   idioma: 'pt-BR',
   moeda: 'BRL',
+  // Cotação (reais por 1 unidade da moeda) — só em USD/EUR; vazia, o servidor grava a PTAX do dia (25/11/2026).
+  taxa_cambio: '',
   incoterm: ''
 };
 
@@ -250,6 +253,7 @@ export default function PropostaForm() {
           data_fechamento: data.data_fechamento ? data.data_fechamento.split('T')[0] : '',
           idioma: idiomaDoBanco(data.idioma),
           moeda: moedaDoBanco(data.moeda),
+          taxa_cambio: data.taxa_cambio != null ? String(data.taxa_cambio).replace('.', ',') : '',
           incoterm: data.incoterm ?? ''
         });
         setStatusGravado(data.status ?? 'rascunho');
@@ -388,6 +392,24 @@ export default function PropostaForm() {
   const handleResponsavelChange = (responsavelId) => {
     setForm((f) => ({ ...f, responsavel_id: responsavelId }));
     if (!isEdit && form.cliente_id) gerarNumeroProposta(form.cliente_id, responsavelId);
+  };
+
+  // Moeda estrangeira: busca a cotação do dia (PTAX do Banco Central) e preenche o campo se ele estiver vazio — o vendedor pode trocar.
+  const [cotacaoSugerida, setCotacaoSugerida] = useState(null);
+  const trocarMoeda = async (moeda) => {
+    setForm((f) => ({ ...f, moeda, taxa_cambio: moeda === 'BRL' ? '' : f.taxa_cambio }));
+    setCotacaoSugerida(null);
+    if (moeda === 'BRL') return;
+    try {
+      const { data } = await api.get('/cambio', { params: { moeda } });
+      if (data && data.valor > 0) {
+        setCotacaoSugerida(data);
+        setForm((f) => (f.moeda === moeda && !String(f.taxa_cambio || '').trim()
+          ? { ...f, taxa_cambio: String(data.valor).replace('.', ',') } : f));
+      }
+    } catch (e) {
+      // Sem resposta do Banco Central: o campo fica para digitar; vazio, o servidor tenta de novo ao salvar.
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -701,10 +723,27 @@ export default function PropostaForm() {
             </div>
             <div className="proposta-form-field">
               <label htmlFor="proposta-moeda">Moeda</label>
-              <select id="proposta-moeda" value={form.moeda} onChange={(e) => setForm((f) => ({ ...f, moeda: e.target.value }))}>
+              <select id="proposta-moeda" value={form.moeda} onChange={(e) => trocarMoeda(e.target.value)}>
                 {MOEDAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+            {form.moeda !== 'BRL' && (
+              <div className="proposta-form-field">
+                <label htmlFor="proposta-taxa-cambio">Cotação (R$ por {form.moeda === 'EUR' ? '€' : 'US$'})</label>
+                <input
+                  id="proposta-taxa-cambio"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.taxa_cambio}
+                  onChange={(e) => setForm((f) => ({ ...f, taxa_cambio: e.target.value }))}
+                  placeholder="Ex.: 5,8573"
+                />
+                <small className="proposta-form-preco-tabela">
+                  {cotacaoSugerida ? `Banco Central (PTAX) de ${cotacaoSugerida.data.split('-').reverse().join('/')}: ${rotuloDaCotacao(form.moeda, cotacaoSugerida.valor)}. ` : ''}
+                  O painel converte o valor desta proposta para real por esta cotação.
+                </small>
+              </div>
+            )}
             <div className="proposta-form-field">
               <label htmlFor="proposta-incoterm">Incoterm</label>
               <select

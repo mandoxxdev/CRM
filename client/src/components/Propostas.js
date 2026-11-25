@@ -9,6 +9,7 @@ import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileTe
 import { format } from 'date-fns';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
+import { valorDaProposta } from './proposta/valorDaProposta';
 import './Propostas.css';
 import './Loading.css';
 
@@ -172,12 +173,6 @@ const Propostas = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroUsuario, search]);
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value || 0);
-  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -281,7 +276,7 @@ const Propostas = () => {
         'Número': proposta.numero_proposta || '',
         'Cliente': proposta.cliente_nome || '',
         'Título': proposta.titulo || '',
-        'Valor Total': proposta.valor_total ? `R$ ${parseFloat(proposta.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00',
+        'Valor Total': valorDaProposta(proposta).principal,
         'Status': proposta.status || '',
         'Validade': proposta.validade ? format(new Date(proposta.validade), 'dd/MM/yyyy') : '',
         'Criado em': proposta.created_at ? format(new Date(proposta.created_at), 'dd/MM/yyyy') : '',
@@ -406,7 +401,13 @@ const Propostas = () => {
                           <span className="cliente-fantasia"> ({proposta.cliente_nome_fantasia})</span>
                         )}
                       </td>
-                      <td>{formatCurrency(proposta.valor_total || 0)}</td>
+                      <td>
+                        {/* Na moeda da proposta, com o valor em reais embaixo (25/11/2026: a de dólar aparecia como R$). */}
+                        <div className="proposta-valor-principal">{valorDaProposta(proposta).principal}</div>
+                        {valorDaProposta(proposta).emReais && (
+                          <div className="text-muted proposta-valor-em-reais">{valorDaProposta(proposta).emReais}</div>
+                        )}
+                      </td>
                       <td>
                         {proposta.validade
                           ? format(new Date(proposta.validade), 'dd/MM/yyyy')
@@ -549,7 +550,7 @@ const Propostas = () => {
                 </div>
 
                 <div className="propitem__linha">
-                  <span className="propitem__valor">{formatCurrency(proposta.valor_total || 0)}</span>
+                  <span className="propitem__valor">{valorDaProposta(proposta).principal}</span>
                   <span
                     className="propitem__status"
                     style={{ background: getStatusColor(proposta.status || 'rascunho') }}
@@ -704,7 +705,7 @@ const Propostas = () => {
               <div className="assinatura-info">
                 <h3>Proposta: {propostaAssinatura.titulo}</h3>
                 <p><strong>Cliente:</strong> {propostaAssinatura.cliente_nome}</p>
-                <p><strong>Valor:</strong> {formatCurrency(propostaAssinatura.valor_total || 0)}</p>
+                <p><strong>Valor:</strong> {valorDaProposta(propostaAssinatura).principal}</p>
               </div>
 
               {carregandoAssinaturas ? (

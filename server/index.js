@@ -14,6 +14,7 @@ const { getClausulasProjetoConceitual } = require('./clausulasProjetoConceitual'
 // Proposta bilingue (specs/proposta-bilingue/README.md): memoria de traducao e o que o template usa.
 const traducoesSvc = require('./services/traducoes');
 const tradutorWeb = require('./services/tradutorWeb');
+const cambio = require('./services/cambio');
 const propostaBilingue = require('./propostaBilingue');
 
 // Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
@@ -82,6 +83,8 @@ function semearModelosClausulas() {
     // O Projeto Conceitual mudou de forma no mesmo dia em que nasceu (24/11/2026: passou a seguir a proposta de origem, 1 a 20).
     // Nenhuma tela edita modelo de contrato, entao o do banco e ressincronizado com o codigo quando diverge.
     sincronizarModeloClausulas('Projeto Conceitual', getClausulasProjetoConceitual());
+    // Propostas em USD/EUR de antes da cotação existir (25/11/2026): recebem a PTAX de hoje, uma vez, para o painel converter.
+    preencherCotacaoDasPropostasAntigas();
   }, 3000).unref?.();
 }
 
@@ -2774,6 +2777,7 @@ function executeMigrations(callback) {
         { nome: 'expira_em', tipo: 'DATETIME' },
         { nome: 'idioma', tipo: 'TEXT' },
         { nome: 'moeda', tipo: 'TEXT' },
+        { nome: 'taxa_cambio', tipo: 'REAL' }, // reais por 1 unidade da moeda (USD/EUR) — services/cambio.js, 25/11/2026
         { nome: 'incoterm', tipo: 'TEXT' },
         { nome: 'unidade_negocio', tipo: 'TEXT' },
         { nome: 'probabilidade', tipo: 'INTEGER DEFAULT 50' },
@@ -7630,6 +7634,48 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
   });
 }
 
+// Cotação da moeda da proposta (25/11/2026: "essa proposta eu coloquei em dólar e aqui está em real, e no dash subiu em real").
+// Em USD/EUR grava `taxa_cambio` (reais por 1 unidade): a digitada no cadastro, ou — sem ela — a PTAX do dia, só se a proposta ainda
+// não tem uma (uma proposta antiga não muda de valor sozinha). BRL limpa. Corpo sem `moeda` (PUT parcial): não mexe. Nunca falha o
+// salvamento: erro aqui só vai para o log.
+function gravarCambioDaProposta(id, corpo, done) {
+  const b = corpo || {};
+  if (b.moeda === undefined) return done();
+  const moeda = String(b.moeda || 'BRL').toUpperCase();
+  const fim = (err) => { if (err) console.error('[cambio] proposta', id, err.message); done(); };
+  if (!cambio.MOEDAS_ESTRANGEIRAS.includes(moeda)) return db.run('UPDATE propostas SET taxa_cambio = NULL WHERE id = ?', [id], fim);
+  const digitada = cambio.taxaValida(b.taxa_cambio);
+  if (digitada) return db.run('UPDATE propostas SET taxa_cambio = ? WHERE id = ?', [digitada, id], fim);
+  cambio.cotacaoDoDia(moeda).then((c) => {
+    if (!c) return fim(new Error(`sem cotacao ${moeda} do Banco Central`));
+    db.run('UPDATE propostas SET taxa_cambio = ? WHERE id = ? AND taxa_cambio IS NULL', [c.valor, id], fim);
+  }, fim);
+}
+
+// Propostas em USD/EUR gravadas antes de existir a cotação: a PTAX do dia, uma vez (só onde taxa_cambio é NULL). Sem rede, fica para
+// a próxima subida — enquanto isso o painel as soma por 1 (o de antes).
+function preencherCotacaoDasPropostasAntigas() {
+  db.all("SELECT DISTINCT UPPER(moeda) AS moeda FROM propostas WHERE UPPER(COALESCE(moeda, '')) IN ('USD', 'EUR') AND taxa_cambio IS NULL", [], (e, linhas) => {
+    if (e || !linhas || !linhas.length) return;
+    linhas.forEach(({ moeda }) => cambio.cotacaoDoDia(moeda).then((c) => {
+      if (!c) return console.warn(`[cambio] sem cotacao ${moeda} do Banco Central: as propostas antigas em ${moeda} seguem sem conversao`);
+      db.run("UPDATE propostas SET taxa_cambio = ? WHERE UPPER(moeda) = ? AND taxa_cambio IS NULL", [c.valor, moeda], function (e2) {
+        if (!e2 && this.changes) console.log(`[cambio] ${this.changes} proposta(s) em ${moeda} receberam a PTAX de ${c.data}: ${c.valor}`);
+      });
+    }));
+  });
+}
+
+// GET /api/cambio?moeda=USD — a cotação do dia para o cadastro da proposta preencher o campo (o vendedor pode trocar).
+app.get('/api/cambio', authenticateToken, exigirComercialNasPropostas, (req, res) => {
+  const moeda = String((req.query && req.query.moeda) || '').toUpperCase();
+  if (!cambio.MOEDAS_ESTRANGEIRAS.includes(moeda)) return res.status(400).json({ error: 'Moeda inválida. Use USD ou EUR.' });
+  cambio.cotacaoDoDia(moeda).then((c) => {
+    if (!c) return res.status(502).json({ error: 'O Banco Central não respondeu agora. Digite a cotação à mão.' });
+    res.json({ moeda, valor: c.valor, data: c.data, fonte: 'PTAX Banco Central (venda)' });
+  });
+});
+
 app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     const erroIdioma = propostaBilingue.erroIdiomaMoeda(req.body);
@@ -7844,7 +7890,9 @@ app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req,
           console.log('✅ Proposta salva com sucesso. ID:', propostaId, 'Número:', numeroFinal);
           // Etapa 160 (RN-160.07, C388; Fase 2 I2): a linha gravada (sem itens) — antes o corpo vinha depois do numero gerado e o
           // sobrescrevia: com o numero enviado ja existente, a resposta devolvia o repetido, nao o gravado
-          responderGravado(res, 'propostas', propostaId, 'a proposta', { id: propostaId, numero_proposta: numeroFinal });
+          gravarCambioDaProposta(propostaId, req.body, () => {
+            responderGravado(res, 'propostas', propostaId, 'a proposta', { id: propostaId, numero_proposta: numeroFinal });
+          });
         });
       }
     );
@@ -8285,6 +8333,8 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
             // Etapa 146 (Fase 2 I-2): o histórico de revisão só depois do UPDATE valer — antes ele era gravado antes do número e do UPDATE, e
             // toda recusa posterior deixava uma revisão que não aconteceu.
             registrarRevisao(() => {
+            // A cotação da moeda (25/11/2026) grava antes das respostas abaixo; nunca derruba o salvamento.
+            gravarCambioDaProposta(id, req.body, () => {
             // `itens` ausente (Etapa 138): os itens ficam como estão — nada a apagar, reinserir, religar nem auditar.
             if (!itensVieram) {
               return res.json({
@@ -8362,6 +8412,7 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
               });
             });
             }); // fim do materializarVariaveisManuais
+            }); // fim do gravarCambioDaProposta
             }); // fim do registrarRevisao
           }
         );
@@ -17365,7 +17416,7 @@ app.get('/api/dashboard', authenticateToken, exigirComercialNasPropostas, (req, 
               stats.propostasPorStatus = rows || [];
 
               // Valor total de propostas aprovadas
-              db.get(`SELECT SUM(valor_total) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}`, ['aprovada'], (err, row) => {
+              db.get(`SELECT SUM(${cambio.valorEmReaisSql()}) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}`, ['aprovada'], (err, row) => {
                 if (err) return res.status(500).json({ error: err.message });
                 stats.valorTotalPropostasAprovadas = row.total || 0;
 
@@ -17484,7 +17535,7 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
 
   // 3. Rank de clientes que mais compram
   db.all(`
-    SELECT c.razao_social, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
+    SELECT c.razao_social, COUNT(*) as total_compras, SUM(${cambio.valorEmReaisSql('p')}) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
     WHERE p.status = 'aprovada' AND ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
@@ -17514,7 +17565,7 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
   db.all(`
     SELECT c.id, c.razao_social, c.nome_fantasia,
            COUNT(*) as total_propostas,
-           SUM(COALESCE(p.valor_total, 0)) as valor_total
+           SUM(${cambio.valorEmReaisSql('p')}) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
     WHERE ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
@@ -17529,7 +17580,7 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
 
   // 5. Rank de região que mais compram
   db.all(`
-    SELECT c.estado as regiao, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
+    SELECT c.estado as regiao, COUNT(*) as total_compras, SUM(${cambio.valorEmReaisSql('p')}) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
     WHERE p.status = 'aprovada' AND c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
@@ -18241,7 +18292,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
         ELSE 'Outros'
       END as etapa,
       COUNT(*) as quantidade,
-      SUM(valor_total) as valor_total
+      SUM(${cambio.valorEmReaisSql()}) as valor_total
     FROM propostas
     WHERE ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY status
@@ -18269,7 +18320,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
   db.all(`
     SELECT 
       status,
-      SUM(valor_total) as valor_total
+      SUM(${cambio.valorEmReaisSql()}) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada', 'rejeitada')
       AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
@@ -18375,7 +18426,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
   // 6. Valor total do pipeline (todas as propostas não rejeitadas)
   db.get(`
     SELECT 
-      SUM(valor_total) as valor_total
+      SUM(${cambio.valorEmReaisSql()}) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada')
       AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
