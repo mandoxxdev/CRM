@@ -1,0 +1,87 @@
+*Andamento — almoxarifado e cadastro de material (semana de 23/11)*
+_25/11/2026_
+
+*Já feito nesta semana*
+
+1. Busca e lista de materiais com os fornecedores cadastrados — estimado 1h15 · realizado 30 min — *FEITO*
+2. Projeto na requisição — estimado 1h15 · realizado 30 min — *FEITO*
+3. Fila de separação agrupada por setor ou por projeto — estimado 1h30 · realizado 30 min — *FEITO*
+4. Histórico diz de quais prateleiras a peça saiu — estimado 1h · realizado 30 min — *FEITO*
+5. Estorno de ajuste de prateleira respeita a contagem mais recente — estimado 1h15 · realizado 45 min — *FEITO*
+6. Estorno da devolução para quarentena desfaz o bloqueio — estimado 1h15 · realizado 30 min — *FEITO*
+7. Estorno da devolução de uma requisição já excluída — estimado 1h · realizado 30 min — *FEITO*
+
+_Feito: estimado 8h30 · realizado 3h45_
+
+*Próximos desenvolvimentos*
+
+*8. Saída e perda com lote respeitam as peças bloqueadas do lote*
+Em Movimentações, a saída e a perda que indicam o lote passam a conferir as peças bloqueadas daquele lote, como a entrega já faz. Hoje elas podem levar a peça bloqueada, e o bloqueio passa a apontar para outro lote.
+Tempo estimado: *1h15*
+
+*9. Estorno da entrada de um lote com peças bloqueadas*
+O estorno da entrada de um lote que tem peças bloqueadas passa a ser recusado, pedindo para desbloquear antes. Hoje ele passa e o bloqueio fica apontando para um lote sem peças.
+Tempo estimado: *1h*
+
+*10. Transferência de peça com número de série*
+A transferência entre prateleiras de material com número de série passa a pedir quais séries estão mudando de lugar, e cada série fica registrada na prateleira nova. Hoje o saldo muda de prateleira e as séries continuam dizendo que estão na antiga.
+Tempo estimado: *1h30*
+
+*11. Saída de peça com número de série sai da prateleira da série*
+Na saída de peça com número de série sem escolher de onde sai, o saldo passa a ser baixado da prateleira em que cada série está. Hoje a série sai certa, mas o saldo pode ser baixado de outra prateleira, e a prateleira fica com peça que não existe.
+Tempo estimado: *1h30*
+
+*12. Entrega confere o lote das séries antes de começar*
+Na entrega de vários itens, a série de um lote bloqueado, reprovado ou vencido passa a ser recusada antes de qualquer item sair. Hoje os primeiros itens saem e a entrega para no meio.
+Tempo estimado: *1h15*
+
+*13. Dica da Fila não manda duas requisições ao mesmo lugar*
+A dica de onde pegar a peça na Fila de separação passa a dividir o saldo de cada prateleira entre as requisições, na ordem de urgência. Hoje duas requisições do mesmo material recebem a mesma prateleira e a segunda é recusada ao separar.
+Tempo estimado: *1h15*
+
+*14. Lista "Sai de" atualizada depois de uma recusa*
+Nas janelas de separação e de entrega, quando a confirmação é recusada porque outra pessoa separou da mesma prateleira, a lista de prateleiras e a sugestão se atualizam sozinhas, sem fechar e reabrir a janela.
+Tempo estimado: *45 min*
+
+*15. Entrega escolhendo só o lote respeita a separação de outra requisição*
+Na entrega em que se escolhe só o lote, sem a prateleira, a baixa passa a deixar de lado o que está separado ali para outra requisição. Hoje ela tira da prateleira de mais saldo do lote, e a outra requisição é recusada na entrega dela.
+Tempo estimado: *1h30*
+
+*16. "Sai de" com lote desconta o que está separado sem lote*
+Quando a entrega escolhe uma prateleira e um lote, o que outro item separou da mesma prateleira sem dizer o lote passa a ser descontado. Hoje não é, e a entrega do outro item é recusada depois.
+Tempo estimado: *1h15*
+
+*17. Janela de entrega limita a quantidade de outra prateleira*
+Na entrega escolhendo uma prateleira diferente da separação, a janela passa a mostrar e limitar o que pode sair dali, em vez de aceitar uma quantidade que é recusada ao confirmar.
+Tempo estimado: *45 min*
+
+*18. Entrega com o lote ainda em inspeção*
+Na entrega de material com lote, quando a parte que falta está num lote ainda em inspeção, a entrega passa a dizer isso e a sair só com o que pode sair. Hoje essa parte sai sem lote e deixa o saldo "sem lote" negativo no relatório Saldo por lote.
+Tempo estimado: *1h15*
+
+*19. Separar parte de uma prateleira e parte de outra — 1ª parte*
+A separação de um item passa a guardar cada prateleira de onde as peças foram pegas e quanto de cada uma, e o detalhe da requisição mostra as duas. Hoje o item guarda uma prateleira só, e a segunda parte vai para o automático.
+Tempo estimado: *1h30*
+
+*20. Separar parte de uma prateleira e parte de outra — 2ª parte*
+Na entrega, cada parte separada sai da prateleira de onde foi pega, sem precisar escolher de novo no "Sai de".
+Tempo estimado: *2h*
+
+*21. Entrada num lote vencido avisa*
+Em Movimentações, a entrada num lote que já existe e está vencido passa a avisar, mesmo sem digitar a validade. E a entrada num lote antigo com a validade em branco deixa de ser recusada com uma data vazia na mensagem.
+Tempo estimado: *1h*
+
+*22. Devolução depois de uma exclusão interrompida*
+Quando a exclusão de uma requisição é interrompida no meio por uma falha, a devolução da mesma entrega passa a contar o que a exclusão já devolveu, para a peça não entrar duas vezes no estoque.
+Tempo estimado: *1h15*
+
+_Próximos: estimado 19h_
+
+*Dependem de resposta*
+
+*23. Tirar o campo Aplicação* — 30 min
+*24. Número de série e número de controle (etiqueta) obrigatórios* — 1h30
+*25. Especificações Técnicas e Observações Gerais* — 1h
+
+*Total da semana: estimado 27h30 (8h30 feito · 19h a fazer)*
+_Dependem de resposta, fora do total: 3h_
