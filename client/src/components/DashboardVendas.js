@@ -9,19 +9,25 @@ import {
   ResponsiveContainer, Cell, LabelList
 } from 'recharts';
 import { formatarDataDoBanco } from '../utils/dataLocal'; // Etapa 165 (B1058): a validade no dia gravado (antes a vespera)
+import { paramsDoPeriodo } from './periodoDashboard';
 import './DashboardVendas.css';
 
-const DashboardVendas = () => {
+// `filtros`: o período do Dashboard (o ano corrente por padrão — 25/11/2026, "esses filtros devem ser todos anuais"). Antes esta aba
+// ignorava qualquer filtro e somava todas as propostas desde sempre. A previsão de fechamento continua sem período: são as propostas
+// abertas a fechar, e uma de 2026 ainda aberta tem de aparecer em 2027.
+const DashboardVendas = ({ filtros } = {}) => {
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
+  const chaveFiltros = JSON.stringify(paramsDoPeriodo(filtros));
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveFiltros]);
 
   const loadData = async () => {
     try {
-      const response = await api.get('/dashboard/vendas');
+      const response = await api.get('/dashboard/vendas', { params: paramsDoPeriodo(filtros) });
       setDados(response.data);
       
       // Calcular porcentagens do funil

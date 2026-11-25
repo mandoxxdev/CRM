@@ -17360,6 +17360,11 @@ app.get('/api/dashboard/historico', authenticateToken, exigirComercialNasPropost
   // Etapa 166 (RN-166.04, B1060): o mes (so a coluna `mes`) e a janela no calendario de Brasilia; os tres CASE abaixo comparam o mes
   // consigo mesmo (sempre verdadeiro — C417) e ficam como estao. Os `?`: [mod, mod, hoje].
   const modHistorico = diaLocal.modificadorDoFuso();
+  // Periodo do painel (25/11/2026: "esses filtros devem ser todos anuais, deve resetar em 2027"): com inicio/fim, os meses do periodo;
+  // sem, os ultimos 12 meses (o de antes). Mesma validacao estrita do filtroDashboardSql: so YYYY-MM-DD.
+  const soDataHistorico = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+  const historicoInicio = soDataHistorico(req.query && req.query.inicio);
+  const historicoFim = soDataHistorico(req.query && req.query.fim);
   db.all(`
     SELECT 
       strftime('%Y-%m', created_at, ?) as mes,
@@ -17373,10 +17378,11 @@ app.get('/api/dashboard/historico', authenticateToken, exigirComercialNasPropost
       UNION ALL
       SELECT created_at, id, 'proposta' as tipo, status FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}
     )
-    WHERE date(created_at, ?) >= date(?, '-12 months')
+    WHERE ${historicoInicio ? 'date(created_at, ?) >= ?' : "date(created_at, ?) >= date(?, '-12 months')"}
+      ${historicoFim ? 'AND date(created_at, ?) <= ?' : ''}
     GROUP BY mes
     ORDER BY mes
-  `, [modHistorico, modHistorico, diaLocal.hojeLocalISO()], (err, rows) => {
+  `, [modHistorico, modHistorico, historicoInicio || diaLocal.hojeLocalISO(), ...(historicoFim ? [modHistorico, historicoFim] : [])], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -18196,9 +18202,9 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       COUNT(*) as quantidade,
       SUM(valor_total) as valor_total
     FROM propostas
-    WHERE ${SQL_PROPOSTA_ATIVA}
+    WHERE ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY status
-    ORDER BY 
+    ORDER BY
       CASE status
         WHEN 'rascunho' THEN 1
         WHEN 'enviada' THEN 2
@@ -18225,7 +18231,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       SUM(valor_total) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada', 'rejeitada')
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY status
   `, [], (err, rows) => {
     if (!err) {
@@ -18247,7 +18253,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       AVG(julianday('now') - julianday(created_at)) as tempo_medio_dias
     FROM propostas
     WHERE status IN ('enviada', 'aprovada', 'rejeitada')
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY status
   `, [], (err, rows) => {
     if (!err) {
@@ -18317,7 +18323,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       ) as tempo_medio_dias
     FROM propostas
     WHERE status = 'aprovada'
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
   `, [], (err, row) => {
     if (!err && row) {
       dados.analisePipeline.tempoMedioFechamento = Math.round(row.tempo_medio_dias || 0);
@@ -18331,7 +18337,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       SUM(valor_total) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada')
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
   `, [], (err, row) => {
     if (!err && row) {
       dados.pipeline.valorTotal = row.valor_total || 0;

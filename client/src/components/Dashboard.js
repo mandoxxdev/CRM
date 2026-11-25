@@ -17,7 +17,8 @@ import {
 } from 'recharts';
 // Etapa 165 (RN-165.07, B1058): a data do lembrete no dia gravado e o mes do grafico de evolucao no mes certo (antes, lidos como meia-noite
 // UTC: a vespera — e o mes anterior)
-import { formatarDataDoBanco, lerDataDoBanco, hojeLocalISO } from '../utils/dataLocal';
+import { formatarDataDoBanco, lerDataDoBanco } from '../utils/dataLocal';
+import { periodoDoAno, ehPeriodoPadrao, rotuloDoPeriodo, paramsDoPeriodo, atalhosDoPeriodo } from './periodoDashboard';
 import './Dashboard.css';
 
 /** Etapa 165 (B1058): o rotulo curto do mes `AAAA-MM` do historico ("out."); ilegivel -> `null`. Antes `new Date('AAAA-MM-01')`: o mes anterior. */
@@ -26,34 +27,8 @@ export function rotuloDoMesDoHistorico(mes) {
   return d ? d.toLocaleString('pt-BR', { month: 'short' }) : null;
 }
 
-// Atalhos de periodo. Devolvem sempre o PAR completo (inicio e fim) para nao deixar um
-// intervalo pela metade quando o usuario pula de um atalho para outro.
-// Etapa 166 (RN-166.05, B1061): o dia LOCAL (antes `toISOString`, o dia UTC: das 21h a meia-noite o *Ate* saia amanha). O servidor
-// compara o filtro com o dia de Brasilia do `created_at` (`filtroDashboardSql`).
-const iso = (d) => hojeLocalISO(d);
-const ATALHOS_PERIODO = [
-  {
-    rotulo: 'Este mês',
-    intervalo: () => {
-      const h = new Date();
-      return { inicio: iso(new Date(h.getFullYear(), h.getMonth(), 1)), fim: iso(h) };
-    },
-  },
-  {
-    rotulo: 'Últimos 3 meses',
-    intervalo: () => {
-      const h = new Date();
-      return { inicio: iso(new Date(h.getFullYear(), h.getMonth() - 2, 1)), fim: iso(h) };
-    },
-  },
-  {
-    rotulo: 'Este ano',
-    intervalo: () => {
-      const h = new Date();
-      return { inicio: iso(new Date(h.getFullYear(), 0, 1)), fim: iso(h) };
-    },
-  },
-];
+// Periodo (25/11/2026: "esses filtros devem ser todos anuais, deve resetar em 2027"): o painel abre no ANO CORRENTE e os atalhos
+// (este mes, 3 meses, este ano, ano passado, todo o periodo) moram em periodoDashboard.js. Etapa 166 (RN-166.05): dia LOCAL.
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -69,9 +44,11 @@ const Dashboard = () => {
   // Filtros do cabecalho. O botao existia desde sempre, mas nunca tinha sido ligado a
   // nada: nao havia estado, nem painel, nem parametro chegando na API.
   const [filtrosAberto, setFiltrosAberto] = useState(false);
-  const [filtros, setFiltros] = useState({ inicio: '', fim: '', usuario: '' });
+  const [filtros, setFiltros] = useState(() => ({ ...periodoDoAno(), usuario: '' }));
   const [usuarios, setUsuarios] = useState([]);
-  const filtrosAtivos = [filtros.inicio, filtros.fim, filtros.usuario].filter(Boolean).length;
+  // O ano corrente e o padrao: so conta como filtro o que o usuario mudou.
+  const filtrosAtivos = (ehPeriodoPadrao(filtros) ? 0 : 1) + (filtros.usuario ? 1 : 0);
+  const rotuloPeriodo = rotuloDoPeriodo(filtros);
   const [modalGrafico, setModalGrafico] = useState({
     isOpen: false,
     titulo: '',
@@ -167,10 +144,7 @@ const Dashboard = () => {
     const loadData = async () => {
       // So vai o que estiver preenchido: campo vazio nao vira parametro, e o servidor
       // descarta qualquer valor fora do formato esperado.
-      const params = {};
-      if (filtros.inicio) params.inicio = filtros.inicio;
-      if (filtros.fim) params.fim = filtros.fim;
-      if (filtros.usuario) params.usuario = filtros.usuario;
+      const params = paramsDoPeriodo(filtros);
       try {
         const [dashboardRes, historicoRes, avancadoRes] = await Promise.all([
           api.get('/dashboard', { params }).catch(() => ({ 
@@ -182,7 +156,8 @@ const Dashboard = () => {
               valorTotalPropostasAprovadas: 0
             }
           })),
-          api.get('/dashboard/historico').catch(() => ({ data: [] })),
+          // Tendencias mensais: os meses do periodo (antes, sempre os ultimos 12 meses, fora do filtro).
+          api.get('/dashboard/historico', { params: { inicio: params.inicio, fim: params.fim } }).catch(() => ({ data: [] })),
           api.get('/dashboard/avancado', { params }).catch(() => ({ 
             data: {
               propostasPorEstado: [],
@@ -518,7 +493,7 @@ const Dashboard = () => {
       <div className="dashboard-header premium-header">
         <div>
           <h1>Dashboard Executivo</h1>
-          <p>Visão geral completa do CRM GMP INDUSTRIAIS</p>
+          <p>Visão geral completa do CRM GMP INDUSTRIAIS · <strong className="dashboard-periodo-atual">{rotuloPeriodo}</strong></p>
         </div>
         <div className="header-actions">
           {/* Toggle de Visualização */}
@@ -550,7 +525,7 @@ const Dashboard = () => {
             {filtrosAberto && (
               <div className="dashboard-filtros-painel">
                 <div className="dashboard-filtros-atalhos">
-                  {ATALHOS_PERIODO.map((a) => (
+                  {atalhosDoPeriodo().map((a) => (
                     <button key={a.rotulo} type="button" onClick={() => setFiltros((f) => ({ ...f, ...a.intervalo() }))}>
                       {a.rotulo}
                     </button>
@@ -574,15 +549,16 @@ const Dashboard = () => {
                   </select>
                 </label>
                 <p className="dashboard-filtros-nota">
-                  O período considera a data de <strong>criação</strong> da proposta.
+                  O período considera a data de <strong>criação</strong> da proposta. O painel abre sempre no ano corrente: virou o
+                  ano, ele recomeça sozinho.
                 </p>
                 <button
                   type="button"
                   className="dashboard-filtros-limpar"
-                  onClick={() => setFiltros({ inicio: '', fim: '', usuario: '' })}
+                  onClick={() => setFiltros({ ...periodoDoAno(), usuario: '' })}
                   disabled={!filtrosAtivos}
                 >
-                  Limpar filtros
+                  Voltar ao ano atual
                 </button>
               </div>
             )}
@@ -592,7 +568,7 @@ const Dashboard = () => {
 
       {/* Renderização Condicional */}
       {viewMode === 'vendas' ? (
-        <DashboardVendas key="vendas" />
+        <DashboardVendas key="vendas" filtros={filtros} rotuloPeriodo={rotuloPeriodo} />
       ) : viewMode === 'geral' ? (
         <div key="geral" style={{ width: '100%', minHeight: '100vh' }}>
           {/* Resumo Comercial Premium */}
