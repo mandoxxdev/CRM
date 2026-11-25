@@ -8,7 +8,12 @@ ESM; o Jest do react-scripts 5 não transforma `node_modules`). Quebram as suít
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Conferência automática das telas voltando a rodar inteira | 30min | 30min | 30min | — (configuração do Jest em `client/package.json`) | Ajuste pontual (mínimo 30 min) | — | — | — |
+| 1 | Conferência automática das telas voltando a rodar inteira | 30min | 30min | 30min | — (configuração do Jest em `client/package.json`) | Ajuste pontual (mínimo 30 min) | ~0,2 h (1 commit; o medidor dá ~10 min para commit isolado) | 15min | `fa1d7719` |
+
+## Fechamento (25/11/2026)
+
+Uma linha de configuração (`moduleNameMapper` em `client/package.json`): 9 suítes voltaram (104 testes), 251/251 e 3317 testes na rodada
+completa. Realizado pelo medidor: 15min (arredondado para cima); estimado 30min — o mínimo da régua.
 
 ## Medir no fechamento
 
