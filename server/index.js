@@ -3873,6 +3873,19 @@ app.get('/api/familias', authenticateToken, exigirComercialNasPropostas, (req, r
 // com ele, os vínculos em familia_variaveis e a ordem gravada na configuração
 // da proposta (que referencia a família pelo nome). Recriar a família traz de
 // volta a configuração que ela tinha.
+// Libera o nome preso a uma família APAGADA para RENOMEAR ou CLONAR (25/11/2026: "quando eu apago um item... não consigo cadastrar outras
+// coisas com o mesmo nome... uma hora ou outra vou ter que apagar algo"). A apagada continua guardada (id, vínculos, histórico) com o nome
+// marcado " [apagada #id]". O que liga à família pelo NOME (produtos.familia, o modelo por família) passa a casar com a família que
+// tomou o nome — é o que "o mesmo nome" quer dizer. O cadastro novo (criarOuReativarFamilia) continua REATIVANDO a apagada, com a
+// configuração antiga. callback(err, liberou).
+function liberarNomeDeFamiliaApagada(nome, idQueFica, callback) {
+  db.get('SELECT id FROM familias_produto WHERE nome = ? AND ativo = 0 AND id <> ?', [nome, idQueFica || 0], function(e, apagada) {
+    if (e || !apagada) return callback(e || null, false);
+    db.run("UPDATE familias_produto SET nome = nome || ' [apagada #' || id || ']', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND ativo = 0",
+      [apagada.id], function(e2) { callback(e2 || null, !e2 && this.changes > 0); });
+  });
+}
+
 function criarOuReativarFamilia(req, res) {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
@@ -4650,6 +4663,9 @@ app.put('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (re
   // O produto liga a familia pelo NOME (texto em produtos.familia). Renomear so a familia deixava os produtos presos ao nome antigo:
   // sumiam do catalogo da proposta ("Nenhum produto encontrado nesta familia"; Comercial, 24/11/2026). Le o nome antes para
   // levar os produtos junto depois de gravar.
+  // Nome de uma família apagada: liberado antes (25/11/2026) — antes, "Este nome pertence a uma família apagada" e o usuário travava.
+  liberarNomeDeFamiliaApagada(nome, id, function(errLib) {
+  if (errLib) return res.status(500).json({ error: errLib.message });
   db.get('SELECT nome FROM familias_produto WHERE id = ?', [id], function(errAntes, antes) {
   var nomeAntigo = (!errAntes && antes && antes.nome) ? String(antes.nome) : null;
   db.run(sql, params, function(err) {
@@ -4698,6 +4714,7 @@ app.put('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (re
     });
   });
   });
+  });
 });
 app.delete('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
@@ -4731,6 +4748,8 @@ app.delete('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, 
 // e escolha de interface, nao permissao - a rota continua alcancavel por quem chamar a API
 // direto. O front esconde para nao oferecer o que nao pode; o servidor e quem recusa.
 app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
+  // `clonar` roda de novo depois de liberar o nome de uma família apagada (abaixo).
+  const clonar = () => {
   if (!isAdminUser(req.user)) {
     return res.status(403).json({ error: 'Apenas administradores podem clonar famílias' });
   }
@@ -4745,11 +4764,12 @@ app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
     // Mesma comparacao do cadastro normal: exata, igual a do UNIQUE do banco.
     db.get('SELECT id, ativo FROM familias_produto WHERE nome = ?', [nome], function (errNome, existente) {
       if (errNome) return res.status(500).json({ error: errNome.message });
+      if (existente && existente.ativo === 1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      // Nome de uma família APAGADA: liberado e o clone segue (25/11/2026; antes, "Já existe uma família INATIVA com este nome").
       if (existente) {
-        return res.status(400).json({
-          error: existente.ativo === 1
-            ? 'Já existe uma família com este nome'
-            : 'Já existe uma família INATIVA com este nome. Reative-a ou escolha outro nome.'
+        return liberarNomeDeFamiliaApagada(nome, null, function(eLib) {
+          if (eLib) return res.status(500).json({ error: eLib.message });
+          clonar();
         });
       }
 
@@ -4829,6 +4849,8 @@ app.post('/api/familias/:id/clonar', authenticateToken, (req, res) => {
       });
     });
   });
+  };
+  clonar();
 });
 
 // Apaga o arquivo antigo de imagem de uma familia SOMENTE se ninguem mais apontar para ele.
@@ -15114,7 +15136,26 @@ app.post('/api/produtos', authenticateToken, exigirComercialNasPropostas, (req, 
       }
     );
   }
-  doInsert();
+  // Codigo de um produto APAGADO (25/11/2026: "quando eu apago um item ele parece ser um remove soft, dai nao consigo cadastrar outras
+  // coisas com o mesmo nome... uma hora ou outra vou ter que apagar algo"). Apagar produto e exclusao logica (ativo = 0) e
+  // produtos.codigo e UNIQUE: o codigo ficava preso para sempre. Agora cadastrar com esse codigo REAPROVEITA a linha apagada com os dados
+  // novos e a reativa. Descartado: trocar o codigo da linha apagada para libera-lo - as propostas ligam o item ao produto PELO CODIGO
+  // (proposta_itens.codigo_produto = produtos.codigo: foto, descricao) e perderiam o vinculo.
+  db.get('SELECT id, ativo FROM produtos WHERE codigo = ?', [codigo], function(errBusca, existente) {
+    if (errBusca) return res.status(500).json({ error: errBusca.message });
+    if (!existente) return doInsert();
+    if (Number(existente.ativo) === 1) return res.status(400).json({ error: 'Código do produto já cadastrado' });
+    db.run(
+      `UPDATE produtos SET nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?, icms = ?, ipi = ?, ncm = ?,
+         especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ? WHERE id = ?`,
+      insertValues.slice(1).concat([existente.id]),
+      function(errUp) {
+        if (errUp) return res.status(500).json({ error: errUp.message });
+        res.json({ id: existente.id, codigo: codigo, nome: toUpper(nome), classificacao_area: classificacao_area, reativado: true,
+          message: 'Produto criado (o código era de um produto apagado, que foi reaproveitado)' });
+      }
+    );
+  });
 });
 
 // POST clonar produto: cria um produto novo a partir de outro, com CODIGO NOVO.
