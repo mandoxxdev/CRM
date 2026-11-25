@@ -1,0 +1,21 @@
+*Planejamento — Movimento das telas (como no aplicativo de referência)*
+_25/11/2026_
+
+*1. Números dos painéis que contam até o valor*
+Os indicadores dos painéis (propostas aprovadas, clientes, itens em estoque, ordens em produção, veículos e os demais) passam a contar de zero até o valor quando a tela abre, em todos os módulos. Os dois contadores antigos, que só existiam no painel comercial e no mapa de máquinas e às vezes mostravam um número negativo de passagem, saem.
+Tempo estimado: *1h*
+
+*2. Entrada em cascata de todas as telas*
+Ao abrir qualquer tela, o título aparece primeiro e os blocos entram um atrás do outro, subindo desfocados até ficarem nítidos; os cartões de indicadores, as linhas das tabelas e as janelas também entram em sequência. Antes só o painel comercial e a tela de módulos tinham esse movimento.
+Tempo estimado: *1h*
+
+*3. Marcador do menu que desliza*
+O destaque escuro do item ativo do menu lateral passa a deslizar de um item para o outro ao trocar de tela, no sistema e na Fábrica, no tema claro e no escuro.
+Tempo estimado: *45min*
+
+*4. Troca de tema mais rápida e resposta ao toque*
+A varredura da troca entre tema claro e escuro fica mais curta; os cartões levantam de leve ao passar o mouse e os botões afundam ao clicar.
+Tempo estimado: *30min*
+
+*Total estimado: 3h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
