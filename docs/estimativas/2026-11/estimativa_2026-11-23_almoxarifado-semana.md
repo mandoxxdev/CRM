@@ -107,3 +107,11 @@ Medido com `node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-
 parado não conta). Os dois itens rodaram juntos: rateio pelo estimado (1h15 : 1h) → ~30 e ~24 min; arredondado para cima → **realizado 30 min +
 30 min = 1h** contra **2h15** estimadas. Motor/estorno com Fase 2 e Fase 5 completas coube abaixo da régua de motor (1h15 a 1h30) pela segunda
 etapa seguida. Conclusão: `conclusao_2026-11-24_estorno-da-devolucao-quarentena-e-requisicao-excluida.txt`.
+
+## Correção (25/11/2026): itens 23 e 25 respondidos e feitos na Etapa 263
+
+O André respondeu os itens 23 (Aplicação) e 25 (Especificações/Observações) no pedido de 25/11
+(`estimativa_2026-11-25_foto-fornecedor-e-campos-do-material.md`, item 2): **Aplicação, Especificações Técnicas e Descrição saem** do
+cadastro e da edição de material; **Observações Gerais e Descrição Técnica ficam**. Deixam de "depender de resposta" e foram **feitos na
+Etapa 263** (o texto já gravado aparece só para leitura e não se perde). O tempo é medido lá, no item 2 da estimativa de 25/11 — não aqui.
+O item 25 foi feito **em parte**: a metade "Observações" foi respondida como "fica", então não há o que fazer nela.
