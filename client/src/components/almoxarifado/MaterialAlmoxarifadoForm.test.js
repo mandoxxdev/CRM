@@ -1345,3 +1345,70 @@ describe('MaterialAlmoxarifadoForm — Etapa 178: Nº do CA e Validade do CA', (
     expect(api.put.mock.calls[0][1].ca_validade).toBeNull();
   });
 });
+
+/**
+ * Etapa 263 (RN-263.06 a 08) — Descrição, Aplicação e Especificações Técnicas saem do cadastro de material (pedido de 25/11/2026).
+ * As colunas ficam; o texto antigo aparece só para leitura e o POST/PUT não manda as três chaves (ausente, o servidor preserva —
+ * contrato provado em server/tests/api/materialCamposRetirados.api.test.js). Descrição Técnica e Observações Gerais ficam.
+ */
+describe('MaterialAlmoxarifadoForm — Etapa 263: campos retirados do cadastro', () => {
+  const MATERIAL_COM_TEXTO_ANTIGO = {
+    ...MATERIAL_DO_CLIENTE, id: 263, descricao: 'Descricao antiga do material', aplicacao: 'Linha de vapor',
+    especificacoes: '150 psi, inox 316', descricao_tecnica: 'DN 25', observacoes: 'Guardar seco',
+  };
+  const retirado = (campo) => container.querySelector(`[data-testid="material-retirado-${campo}"]`);
+  const textareas = () => [...container.querySelectorAll('textarea')].map((t) => t.value);
+
+  test('RN-263.06 cadastro novo: sem Descrição, Aplicação e Especificações Técnicas; Descrição Técnica e Observações ficam', async () => {
+    await renderizarNovo();
+    const labels = rotulos();
+    expect(labels).toContain('Descrição Técnica');
+    expect(labels).toContain('Observações Gerais');
+    expect(labels).not.toContain('Descrição');
+    expect(labels).not.toContain('Aplicação');
+    expect(labels).not.toContain('Especificações Técnicas');
+    expect(retirado('descricao')).toBeNull();
+    expect(retirado('aplicacao')).toBeNull();
+    expect(retirado('especificacoes')).toBeNull();
+  });
+
+  test('RN-263.08 o POST do cadastro novo não leva as três chaves', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalled();
+    const payload = api.post.mock.calls[0][1];
+    expect(payload).toHaveProperty('descricao_tecnica');
+    expect(payload).toHaveProperty('observacoes');
+    expect(payload).not.toHaveProperty('descricao');
+    expect(payload).not.toHaveProperty('aplicacao');
+    expect(payload).not.toHaveProperty('especificacoes');
+  });
+
+  test('RN-263.07/08 edição com texto antigo: mostra só para leitura e o PUT não manda as três (o servidor preserva)', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/263') return Promise.resolve({ data: MATERIAL_COM_TEXTO_ANTIGO });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao(263);
+    expect(retirado('descricao').textContent).toBe('Descrição (campo retirado — só leitura)Descricao antiga do material');
+    expect(retirado('aplicacao').textContent).toContain('Linha de vapor');
+    expect(retirado('aplicacao').textContent).toContain('Aplicação (campo retirado — só leitura)');
+    expect(retirado('especificacoes').textContent).toContain('150 psi, inox 316');
+    // nada disso é editável: nenhum textarea traz o texto antigo; os que ficaram trazem o deles
+    expect(textareas()).toEqual(expect.arrayContaining(['DN 25', 'Guardar seco']));
+    expect(textareas()).not.toContain('Descricao antiga do material');
+    expect(textareas()).not.toContain('Linha de vapor');
+    expect(textareas()).not.toContain('150 psi, inox 316');
+    await submeter();
+    expect(api.put).toHaveBeenCalled();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload).toHaveProperty('observacoes', 'Guardar seco');
+    expect(payload).not.toHaveProperty('descricao');
+    expect(payload).not.toHaveProperty('aplicacao');
+    expect(payload).not.toHaveProperty('especificacoes');
+  });
+});

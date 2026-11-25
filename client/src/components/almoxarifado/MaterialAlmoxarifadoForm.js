@@ -72,6 +72,28 @@ export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de 
 export const AVISO_FORM_CADASTRO_A_COMPLETAR = 'Cadastro a completar: este material foi criado pelo Almoxarifado (sobra ou remessa '
   + 'a terceiros) só com código, nome, unidade e família. Complete o cadastro e salve — ao salvar, o aviso sai.';
 
+// Etapa 263 (RN-263.06 a 08): Descrição, Aplicação e Especificações Técnicas saíram do cadastro (pedido de 25/11/2026). As colunas
+// ficam: o material que já tem texto mostra-o só para leitura, e o POST/PUT NÃO manda as três chaves — ausente, o servidor
+// preserva o gravado, e a conferência de edição concorrente não recusa um campo que a tela não mostra mais.
+export const CAMPOS_RETIRADOS = [
+  { campo: 'descricao', rotulo: 'Descrição' },
+  { campo: 'aplicacao', rotulo: 'Aplicação' },
+  { campo: 'especificacoes', rotulo: 'Especificações Técnicas' },
+];
+
+const TextoAntigoSoLeitura = ({ campo, rotulo, valor }) => {
+  if (!String(valor || '').trim()) return null;
+  return (
+    <div className="almox-field almox-form-full" data-testid={`material-retirado-${campo}`}>
+      <div className="almox-label">{rotulo} (campo retirado — só leitura)</div>
+      <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', padding: '8px 10px', borderRadius: 8,
+        background: 'var(--gmp-surface, #f6f6f6)', border: '1px dashed var(--gmp-border, rgba(0,0,0,0.15))' }}>
+        {valor}
+      </div>
+    </div>
+  );
+};
+
 const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   const somenteLeitura = !!rotas.somenteLeitura;
   const { user } = useAuth();
@@ -589,6 +611,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
         ca_validade: form.ca_validade || null,
       };
       delete payload.localizacao;
+      // Etapa 263 (RN-263.08): os campos retirados não viajam — ausentes, o servidor preserva o texto gravado.
+      CAMPOS_RETIRADOS.forEach(({ campo }) => { delete payload[campo]; });
       // Etapa 192: o Compras nao lanca saldo (o campo nem aparece) — sem a chave o servidor nao ve saldo inicial.
       if (!rotas.saldoInicial) delete payload.quantidade_atual;
       // Fase 5 (X6): quem nao tem o seletor (desde a 193, so a consulta, que nem salva) nao manda o dono — sem a chave o servidor
@@ -737,11 +761,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                   <input className="almox-input" value={form.nome} onChange={e => set('nome', e.target.value)}
                     placeholder="Nome completo do material" required />
                 </div>
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Descrição</label>
-                  <textarea className="almox-textarea" value={form.descricao} onChange={e => set('descricao', e.target.value)}
-                    placeholder="Descrição detalhada do material..." rows={3} />
-                </div>
+                <TextoAntigoSoLeitura campo="descricao" rotulo="Descrição" valor={form.descricao} />
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Descrição Técnica</label>
                   <textarea className="almox-textarea" value={form.descricao_tecnica} onChange={e => set('descricao_tecnica', e.target.value)}
@@ -967,16 +987,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                     no certificado. Só vale para material do tipo EPI.
                   </p>
                 </>)}
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Aplicação</label>
-                  <textarea className="almox-textarea" value={form.aplicacao} onChange={e => set('aplicacao', e.target.value)}
-                    placeholder="Onde e como o material é utilizado..." rows={2} />
-                </div>
-                <div className="almox-field almox-form-full">
-                  <label className="almox-label">Especificações Técnicas</label>
-                  <textarea className="almox-textarea" value={form.especificacoes} onChange={e => set('especificacoes', e.target.value)}
-                    placeholder="Dimensões, tensão, material, normas técnicas..." rows={3} />
-                </div>
+                <TextoAntigoSoLeitura campo="aplicacao" rotulo="Aplicação" valor={form.aplicacao} />
+                <TextoAntigoSoLeitura campo="especificacoes" rotulo="Especificações Técnicas" valor={form.especificacoes} />
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Observações Gerais</label>
                   <textarea className="almox-textarea" value={form.observacoes} onChange={e => set('observacoes', e.target.value)}
