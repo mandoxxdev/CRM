@@ -143,7 +143,9 @@ select option {
 /* ── 10. Cards genéricos ── */
 .card,
 .card-container,
-[class*="-card"]:not([class*="badge"]):not([class*="kpi"]):not([class*="btn"]):not([class*="status"]):not([class*="nav"]):not([class*="foto"]):not([class*="overlay"]):not([class*="img"]) {
+/* :not([class*="grupo-card"]) (25/11/2026): o cartao de grupo de Produtos e foto com texto branco por cima; esta regra (especificidade
+   0,9,0 + !important) pintava de branco o pe, o nome e o link dele — "Moinhos" branco no branco, a foto coberta. */
+[class*="-card"]:not([class*="badge"]):not([class*="kpi"]):not([class*="btn"]):not([class*="status"]):not([class*="nav"]):not([class*="foto"]):not([class*="overlay"]):not([class*="img"]):not([class*="grupo-card"]) {
   background: var(--gmp-surface) !important;
   border-color: var(--gmp-border) !important;
   color: var(--gmp-text) !important;
