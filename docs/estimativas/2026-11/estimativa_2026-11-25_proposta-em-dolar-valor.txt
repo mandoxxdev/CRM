@@ -1,0 +1,13 @@
+*Planejamento — proposta em dólar: valor e moeda*
+_25/11/2026_
+
+*1. O valor digitado no item não se perde mais ao reabrir a proposta*
+Ao abrir de novo uma proposta, o item do catálogo voltava sozinho ao preço de tabela e o valor digitado sumia; no Projeto Conceitual o quadro "Valor Total dos Serviços" saía US$ 0,00. O valor digitado passa a ser mantido.
+Tempo estimado: *45min*
+
+*2. Proposta em dólar ou euro mostrada na moeda dela no cadastro e no painel*
+No cadastro da proposta, o valor do item, o total e o desconto aparecem em US$ ou € (hoje aparecem em R$). No painel, as somas continuam em reais pela cotação de cada proposta, e passa a ficar claro quanto veio de propostas em outra moeda.
+Tempo estimado: *1h*
+
+*Total estimado: 1h45*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
