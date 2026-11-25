@@ -30,6 +30,8 @@ import './styles/apple-desktop.css';
 import './styles/apple-launchpad.css';
 import './styles/apple-telas.css';
 import './styles/apple-motion.css';
+// Celular: o repasse "clean" (25/11/2026) — por ultimo, so ate 768px.
+import './styles/apple-celular.css';
 import Pagina404 from './components/Pagina404';
 import {
   Login,

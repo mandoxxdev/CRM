@@ -1,0 +1,84 @@
+/* ============================================================================
+   APLICATIVO DO CELULAR — repasse "clean" (25/11/2026)
+   ----------------------------------------------------------------------------
+   Pedido: "tem que repassar o front end do app para celular, olha esse modelo que clean" (referência: app de café com cartões
+   arredondados e respiro, pílulas de categoria numa linha, barra inferior flutuante). A referência é de ESTILO, não de cor: a marca
+   GMP e o azul do sistema ficam. A estrutura (dock em pílula, gaveta, topo) já existia no app-glass.css; aqui só o acabamento.
+
+   Medido no celular (375px) antes do repasse, com o sistema rodando:
+   - Propostas: o botão "Nova" saía AZUL SOBRE AZUL (o fundo vinha do apple-theme e a cor do texto de uma regra de link, também azul) —
+     parecia um botão vazio. Os filtros quebravam em duas linhas (flex-wrap) e "Filtros" ficava solto.
+   - Início: os cartões dos módulos com 7 alturas diferentes (123 a 181px), o selo "ADM" pulando de linha e a engrenagem cheia em todos.
+   - Clientes: a lista era uma caixa só com divisórias; o topo com "+" e "Exportar Excel" apertados.
+
+   Só no celular (até 768px). Carregado por ÚLTIMO (App.js), para não depender da ordem dos outros.
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* ── Títulos de página: grandes, com respiro ─────────────────────────────── */
+  .page-header h1, .plm-topo h1, .plm-topo h2 { font-size: 28px !important; font-weight: 750 !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; }
+  .page-header p { font-size: 14px !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
+
+  /* ── Botão principal: texto BRANCO sobre o azul (era azul sobre azul) ─────── */
+  .btn-primary, .btn-premium, .plm-nova, .prm-novo, .plm-aplicar {
+    color: #fff !important; -webkit-text-fill-color: #fff !important;
+    border-radius: 980px !important; font-weight: 600 !important;
+  }
+  .btn-primary svg, .btn-premium svg, .plm-nova svg, .prm-novo svg, .plm-aplicar svg { color: #fff !important; stroke: #fff !important; }
+
+  /* ── Pílulas de filtro: UMA linha que rola de lado (como as categorias da referência) ─ */
+  .plm-chips, .prm-chips {
+    flex-wrap: nowrap !important; overflow-x: auto !important; overflow-y: hidden !important;
+    gap: 8px !important; padding-top: 2px !important; padding-bottom: 6px !important; /* o recuo lateral fica o original */
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .plm-chips::-webkit-scrollbar, .prm-chips::-webkit-scrollbar { display: none; }
+  .plm-chip, .prm-chip {
+    flex: 0 0 auto !important; white-space: nowrap !important;
+    min-height: 36px !important; padding: 0 16px !important; border-radius: 980px !important;
+    background: var(--ag-solido, #fff) !important; border: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.07)) !important;
+    color: var(--ag-texto, #1D1D1F) !important; font-size: 13.5px !important; font-weight: 600 !important; box-shadow: none !important;
+  }
+  .plm-chip.is-on, .prm-chip.is-on { color: #fff !important; -webkit-text-fill-color: #fff !important; border-color: transparent !important; }
+
+  /* ── Cartões das listas: cada item no SEU cartão, arredondado, com sombra leve ─ */
+  .plm-lista, .clientes-mobile { display: flex !important; flex-direction: column !important; gap: 12px !important;
+    background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+  .plm-card, .cliitem {
+    background: var(--ag-solido, #fff) !important; border: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.06)) !important;
+    border-radius: 22px !important; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 22px rgba(0,0,0,.06) !important;
+    margin: 0 !important; overflow: hidden;
+  }
+  .cliitem { padding: 14px 14px !important; }
+  .cliitem + .cliitem { border-top: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.06)) !important; }
+  .cliitem__ava { border-radius: 14px !important; }
+  .cliitem__name { font-size: 15.5px !important; font-weight: 700 !important; }
+  /* Editar e apagar: discretos (cinza), sem disputar com o nome. */
+  .cliitem__acts { gap: 2px !important; }
+  .clientes-mobile .cliitem .cliitem__act { width: 34px !important; height: 34px !important; border-radius: 12px !important; background: transparent !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
+  .clientes-mobile .cliitem .cliitem__act svg { width: 17px !important; height: 17px !important; color: var(--ag-texto-fraco, #6E6E73) !important; stroke: currentColor !important; }
+  .clientes-mobile .cliitem .cliitem__act.is-danger, .clientes-mobile .cliitem .cliitem__act.is-danger svg { color: #FF3B30 !important; }
+  .clientes-mobile .cliitem .cliitem__act.is-danger { opacity: .75; }
+
+  /* ── Topo de Clientes: "+" e "Exportar" sem apertar o título ─────────────── */
+  .clientes .page-header { flex-wrap: wrap !important; gap: 10px !important; align-items: center !important; }
+  .clientes .page-header .header-actions { display: flex !important; gap: 8px !important; margin-left: auto !important; }
+  .clientes .page-header .btn-secondary { min-height: 36px !important; padding: 0 14px !important; border-radius: 980px !important; font-size: 13px !important; }
+
+  /* ── Busca e selects: pílulas claras ─────────────────────────────────────── */
+  .plm-busca input, .search-box input, .filters .filter-select, .clientes .filter-select {
+    border-radius: 16px !important; min-height: 46px !important;
+  }
+
+  /* ── Início: cartões dos módulos do MESMO tamanho ─────────────────────────── */
+  .orion-grid { grid-auto-rows: 1fr !important; gap: 12px !important; }
+  .orion-tile { height: 100% !important; min-height: 158px !important; border-radius: 22px !important; padding: 16px !important; }
+  .orion-tile__info { display: block !important; }
+  .orion-tile__nome { display: inline !important; font-size: 15.5px !important; line-height: 1.25 !important; }
+  .orion-tile__tipo-pill { display: inline-block !important; margin-left: 6px !important; vertical-align: 2px !important; white-space: nowrap !important; }
+  .orion-tile__desc {
+    display: -webkit-box !important; -webkit-line-clamp: 2 !important; -webkit-box-orient: vertical !important; overflow: hidden !important;
+    margin-top: 6px !important; font-size: 12.5px !important; line-height: 1.35 !important;
+  }
+  /* A engrenagem (atalho de configuração) fica, mas sem pesar: menor e clara. */
+  .orion-tile__gear { opacity: .45 !important; transform: scale(.85); }
+}
