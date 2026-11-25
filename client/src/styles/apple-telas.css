@@ -78,12 +78,17 @@ html .layout .main-content :is(button, a)[class*='btn-']:is([class*='refresh'], 
 
 /* 4. Abas (ui-tab, filter-tipo-btn e afins): segmentado — transparente em
    repouso, pilula escura na ativa. */
-html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a) {
+/* o conjunto Lista/Calendario das Atividades (.visualizacao-toggle > .toggle-btn) e irmaos */
+html .layout .main-content :is(.visualizacao-toggle, .view-toggle, .toggle-group) {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px;
+  background: var(--ds-panel, #F5F5F7); border: none; box-shadow: none;
+}
+html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .toggle-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a) {
   background: transparent !important; background-image: none !important; color: var(--gmp-text-light) !important;
   border: none !important; border-radius: 980px !important; box-shadow: none !important;
   padding: 7px 14px !important; font-size: 13.5px !important; font-weight: 600 !important;
 }
-html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a):is(.active, .ativa, .ui-tab-ativa, [aria-selected='true']) {
+html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .toggle-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a):is(.active, .ativa, .ui-tab-ativa, [aria-selected='true']) {
   background: var(--ds-ink, var(--gmp-primary)) !important; color: var(--ds-ink-text, #fff) !important;
 }
 
