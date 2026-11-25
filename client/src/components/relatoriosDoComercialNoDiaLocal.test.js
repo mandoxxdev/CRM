@@ -103,12 +103,13 @@ test('[RN-166.05, B1061] os atalhos do painel as 22h30 do ultimo dia do mes: o A
   const botao = (rotulo) => [...container.querySelectorAll('.dashboard-filtros-atalhos button')].find((b) => b.textContent === rotulo);
   const ultimaChamada = (url) => { const c = api.get.mock.calls.filter(([u]) => u === url); return c.length ? (c[c.length - 1][1] || {}).params : null; };
   const campos = () => [...container.querySelectorAll('.dashboard-filtros-painel input[type="date"]')].map((i) => i.value);
-  for (const [rotulo, inicio] of [['Este mês', '2026-10-01'], ['Últimos 3 meses', '2026-08-01'], ['Este ano', '2026-01-01']]) {
+  // O atalho 'Este ano' virou 'Ano 2026' (painel anual, 764d3d5) e vai ate 31/12, nao ate hoje: o ano local e o que se confere nele.
+  for (const [rotulo, inicio, fim] of [['Este mês', '2026-10-01', '2026-10-31'], ['Últimos 3 meses', '2026-08-01', '2026-10-31'], ['Ano 2026', '2026-01-01', '2026-12-31']]) {
     await clicar(botao(rotulo));
     await esperar(() => { const p = ultimaChamada('/dashboard'); return p && p.inicio === inicio; });
-    expect(ultimaChamada('/dashboard')).toEqual({ inicio, fim: '2026-10-31' });
-    expect(ultimaChamada('/dashboard/avancado')).toEqual({ inicio, fim: '2026-10-31' });
-    expect(campos()).toEqual([inicio, '2026-10-31']);
+    expect(ultimaChamada('/dashboard')).toEqual({ inicio, fim });
+    expect(ultimaChamada('/dashboard/avancado')).toEqual({ inicio, fim });
+    expect(campos()).toEqual([inicio, fim]);
   }
 });
 
@@ -164,7 +165,10 @@ async function abrirFiltros() {
 test('[Fase 5 r3 C04] Este ano as 22h30 de 31/12: o ano local (o UTC ja e o seguinte)', async () => {
   relogio(2026, 11, 31, 22, 30);
   await abrirFiltros();
-  expect(await atalho('Este ano', '2026-01-01')).toEqual({ inicio: '2026-01-01', fim: '2026-12-31' });
+  // 'Ano 2026' (antes 'Este ano', 764d3d5): as 22h30 de 31/12 o UTC ja e 2027, o atalho tem de ser o do ano local.
+  // 'Ano 2026' tambem e o botao do ano ANTERIOR se o atalho usar o ano UTC (2027): o rotulo do ano corrente tem de ser o local.
+  expect([...container.querySelectorAll('.dashboard-filtros-atalhos button')].map((b) => b.textContent)).toEqual(['Este mês', 'Últimos 3 meses', 'Ano 2026', 'Ano 2025', 'Todo o período']);
+  expect(await atalho('Ano 2026', '2026-01-01')).toEqual({ inicio: '2026-01-01', fim: '2026-12-31' });
 });
 
 test('[Fase 5 r3 C12] Ultimos 3 meses em janeiro: vira o ano', async () => {
