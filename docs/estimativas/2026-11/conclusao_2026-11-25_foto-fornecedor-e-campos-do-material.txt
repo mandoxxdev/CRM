@@ -1,0 +1,7 @@
+*Concluído — foto do fornecedor e campos do cadastro de material*
+_25/11/2026_
+
+1. Foto do fornecedor — estimado 1h · realizado 30min
+2. Tirar Aplicação, Especificações Técnicas e Descrição do cadastro de material — estimado 1h · realizado 30min
+
+*Total: estimado 2h · realizado 1h*
