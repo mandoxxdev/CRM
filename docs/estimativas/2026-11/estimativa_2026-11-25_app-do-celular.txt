@@ -1,0 +1,9 @@
+*Planejamento — Aplicativo do celular mais limpo*
+_25/11/2026_
+
+*1. Visual do aplicativo no celular*
+O aplicativo no celular ganha um visual mais limpo, no estilo do modelo enviado: topo simples, cartões grandes e arredondados com mais respiro, filtros em pílulas, títulos maiores e a barra de navegação de baixo flutuando, arredondada. As cores e a marca da GMP continuam.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
