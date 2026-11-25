@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-24):** **Etapa 261 fechada** (**o histórico de Movimentações diz de quais prateleiras a peça
+> **Onde o desenvolvimento está (2026-11-24):** **Etapa 262 fechada** (**o estorno da entrada de uma devolução respeita a quarentena e a
+> requisição já excluída** — itens 6 e 7 da estimativa de 23/11 (**C239** e **C552** resolvidos). Decisões **B1617** e **B1618** (a **B1617** revê a
+> **B761**); limitação **D (262)**; verificação **F (262)**; sem consulta antes do deploy).
+> **Próxima:** os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
+> *(Antes, 2026-11-24:)* **Etapa 261 fechada** (**o histórico de Movimentações diz de quais prateleiras a peça
 > saiu e o estorno do Ajuste de prateleira respeita a contagem mais recente** — itens 4 e 5 da estimativa de 23/11 (**D (252)** 1 e **D (258)** 5
 > resolvidas). Decisões **B1614** a **B1616**; aviso novo **C554**; limitação **D (261)**; verificação **F (261)**; sem consulta antes do deploy).
 > **Próxima:** os itens 6 e 7 da estimativa de 23/11 (fim do plano da 261).
@@ -4892,7 +4896,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15654,6 +15658,27 @@ outro). Quando a posição padrão **subiu** no Ajuste (estava negativa), não a
 mostrar só quando foram duas prateleiras ou mais (esconderia a prateleira da saída automática de uma só); gravar a prateleira na própria linha
 do histórico (**B1581**: mudaria o estorno). **Reversível.** `caff2759`, `334752a7`, `87a7ef3f`.
 
+**B1617 (NOVA, da Etapa 262; decisão do agente; revê a B761) — a entrada de uma devolução para Quarentena só se estorna depois que o
+bloqueio dela sai.** Até a 261, **Estornar** a entrada deixava o bloqueio de pé sem as peças (10 com 2 bloqueados → 8 com 2 bloqueados, **C239**),
+e a **B761** deixava assim porque exigir o bloqueio estornado antes prenderia a quarentena já liberada. **Escolhido:** recusar enquanto o
+bloqueio da devolução ainda segura alguma peça — inteiro: *"… Estorne primeiro o bloqueio desta devolução e depois esta entrada."*; liberado
+em parte: *"… ainda há ⟨N⟩ ⟨un⟩ dela no bloqueio … Desbloqueie ⟨N⟩ ⟨un⟩ e depois estorne esta entrada."*; liberado todo (Desbloquear): a
+entrada estorna como antes, só o físico sai. O "segura" é contado no lote da devolução (pelo que os bloqueios e desbloqueios do lote somam) e,
+sem lote, pelo menor entre o bloqueado fora dos lotes e o que os bloqueios e desbloqueios sem lote somam — a peça reprovada na inspeção entra
+no bloqueado sem registro no histórico e não conta (revisão do plano: contá-la mandaria estornar o bloqueio da devolução e levaria o da
+reprovação). A conta vai **da devolução em diante** e um estorno ainda terminando conta do jeito que mais bloqueia (revisão final: uma liberação de
+reprovação feita antes zerava a conta e a entrada estornava com a quarentena de pé). **Preço:** com outro bloqueio sem lote feito depois e de
+pé (à mão, ou a quarentena de outra devolução), a quarentena já liberada é recusada pedindo o estorno do bloqueio (o sistema não sabe de quem é
+cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite — **D (262)** 1). **Descartado:** estornar as duas
+linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
+sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7474faa0`.
+
+**B1618 (NOVA, da Etapa 262; decisão do agente) — a entrada de uma devolução de requisição já excluída não se estorna.** A exclusão devolve
+ao estoque o resto da entrega descontando a devolução; estornar depois a entrada dela tirava as peças de novo (5 → 3, **C552**). **Escolhido:**
+recusar em todos os destinos, com o caminho do Ajuste, e **antes** das recusas da Sucata, da Quarentena e das séries (estornar a sucata ou o
+bloqueio não destravaria — mandar fazer isso seria mexer à toa). **Descartado:** creditar de volta na requisição (ela não existe mais); só
+avisar (o físico ficaria a menos). **Reversível.** `7474faa0`.
+
 **B1616 (NOVA, da Etapa 261; decisão do agente) — com material separado na caixa, a contagem da prateleira feita depois também trava o estorno
 do ajuste que baixou.** Caso medido: 4 separados na caixa de uma requisição, tirados de *A*; a contagem de *A* não os viu (Ajuste de *A* para
 0, com o aviso de caixa), depois outra contagem (Ajuste de *A* para 3). Até a 260, **Estornar** o Ajuste para 0 dava 7 (certo nesse caso). Pela
@@ -18301,7 +18326,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      resto que sobra ali é a falha **dupla**, o vínculo do estorno e a limpeza da linha falhando juntos: fica uma linha de
      estorno a mais no livro, com o estoque certo.) *(A falha dupla continua — virou a **C247**.)*
 
-239. **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
+239. **✅ RESOLVIDO NA ETAPA 262 (`7474faa0`; B1617) — a entrada da devolução para quarentena só estorna depois que o bloqueio dela sai (inteiro: *"… Estorne primeiro o bloqueio desta devolução e depois esta entrada."*; liberado em parte: *"… Desbloqueie ⟨N⟩ ⟨un⟩ e depois estorne esta entrada."*; liberado todo: estorna).** O texto original: **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
      certo, mas o disponível fica a menos pela quantidade da devolução; e, como a devolução desfeita já não conta (**B759**),
      devolver para a quarentena e estornar a entrada de novo acumula outro bloqueio a cada volta. **O que fazer:** ao desfazer
      uma devolução para quarentena, estorne também a linha *Bloqueio* com a mesma referência `DEV-⟨número⟩` (**B761**).
@@ -20024,7 +20049,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **O que fazer:** estornar também o bloqueio da devolução. Conserto: a 2ª parte nunca desconta de um lote mais do que o saldo dele (o que
      sobra volta para o desconto do material, junto com o *"Sem lote"* — nunca some).
      *(**O conserto entrou na Etapa 217** (**B1435**): a entrega e a aprovação nunca descontam de um lote mais do que ele tem livre; o
-     número por lote na consulta continua o do livro.)*
+     número por lote na consulta continua o do livro.)* *(O caso (a) **não acontece mais desde a Etapa 262** — o estorno da entrada com o
+     bloqueio do lote de pé é recusado, **C239**; o (b) continua.)*
 
 510. **(NOVA, da Etapa 210) O que entra sem passar por uma tela não sobe para maiúsculo.** Planilha importada, integração e o que outro
      sistema mandar gravam como vieram. **Nenhum erro:** as buscas acham nas duas caixas (B1433). **O que fazer:** nada; se incomodar, subir
@@ -20273,7 +20299,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (no galpão: *A* 2, *B* 5). Na ordem inversa (a Saída antes) fica certo. **O que fazer:** estornar na ordem inversa (o mais recente
      primeiro) ou, depois, acertar com uma Transferência de 3 de *A* para *B*. Sem o ceder, a padrão ficava −3 no meio e travava a entrega
      (**B1605**).
-552. **NOVO (da Etapa 259, revisão do plano; anterior) — estornar pelo livro a entrada de uma Devolução depois de excluir a requisição tira
+552. **✅ RESOLVIDO NA ETAPA 262 (`7474faa0`; B1618) — o estorno da entrada de uma devolução de requisição excluída é recusado com *"… que foi excluída — … Se a devolução foi registrada errada, acerte o estoque com um Ajuste."*.** O texto original: **NOVO (da Etapa 259, revisão do plano; anterior) — estornar pelo livro a entrada de uma Devolução depois de excluir a requisição tira
      as peças duas vezes.** Medido: entrega de 6 (*A* 3, *B* 3); **Devolução** de 2 citando a saída, em *P*; **Excluir** a requisição (devolve
      os 4 que faltavam; físico 8); **Estornar** a entrada da devolução → *P* 0, físico **6**. A exclusão já tinha descontado a devolução; o
      estorno dela diz que as 2 peças não voltaram — mas a requisição que as levou não existe mais. **O que fazer:** não estornar a entrada de
@@ -21647,6 +21673,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(262) O estorno da entrada da devolução, o que ficou de fora.** (1) Com outro bloqueio sem lote de pé no mesmo material **feito depois
+  desta devolução** — um bloqueio feito à mão, ou a quarentena de **outra** devolução —, a quarentena desta já liberada é recusada pedindo o
+  estorno do bloqueio dela, que, se feito, solta o bloqueio do outro (medido na revisão final: duas quarentenas, *A* liberada e *B* de pé —
+  estornar o bloqueio de *A* deixa 6 sem bloqueio com a quarentena de *B* ainda registrada). O sistema não sabe de quem é cada peça bloqueada
+  fora dos lotes; o estorno do bloqueio já era assim (**B1617**). **O que fazer:** nesse caso, não estornar o bloqueio — acertar com um Ajuste. (2) Com o bloqueio liberado em parte e o
+  material sem livre para baixar, a recusa seguinte é a do saldo (*"saldo disponível insuficiente"*) até desbloquear o resto. (3) A devolução de
+  requisição excluída que foi registrada errada só se acerta com um Ajuste (**B1618**). (4) Os estornos já feitos (o bloqueio de pé da **C239**,
+  o físico a menos da **C552**) não mudam — a consulta para achá-los não foi escrita: os casos medidos pedem um estorno depois de uma exclusão
+  ou de uma quarentena, raros. (5) Nenhum clique foi dado (**F (262)**). (6) **Desbloquear** a quarentena, estornar a entrada da
+  devolução e **depois** estornar o Desbloquear volta a bloquear 2 peças que não estão mais no estoque (o estorno do Desbloquear confere só o
+  disponível; medido na revisão final: 8 com 2 bloqueados) — não estornar o Desbloquear de uma quarentena cuja entrada já foi estornada.
 - **(261) O "Saiu de" do histórico e o estorno do Ajuste de prateleira, o que ficou de fora.** (1) O Ajuste de **outra** prateleira pode
   subir a linha da prateleira deste quando ela estava negativa sem lote (material com saldo em lote e sem lote misturados) — o estorno do
   Ajuste de prateleira não vê isso e ainda pode inventar peças: *A* 5, Entrada de 10 em *B* no lote L1, Ajuste de *A* para 3, Saída de 5 sem
@@ -23315,6 +23352,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(262) Nenhum clique foi dado.** As recusas foram provadas pela rota real do **Estornar** (`POST /movimentacoes/:id/cancelar`), com a
+devolução, o Desbloquear, a exclusão da requisição e os estornos reais; as corridas com o estorno parado no meio. Vale 5 minutos: o roteiro da
+seção da Etapa 262 no guia.
 
 **(261) Nenhum clique foi dado.** O *"Saiu de"* foi provado pela rota real (`GET /movimentacoes`, com Saídas, Ajustes e estornos
 reais) e pela tabela da tela com o JSON do contrato (mock só na fronteira HTTP); o estorno pela rota e pelo serviço. Vale 5 minutos: o roteiro da
@@ -44811,12 +44852,65 @@ Ajuste de *A* → *"Não é possível estornar: há uma conferência de inventá
 - Com material na caixa de separação, o aviso do ajuste manda estornar o que baixou, e com outra contagem da prateleira depois isso é
   recusado: o caminho é um Ajuste novo (**C554**, **B1616**).
 
+## Etapa 262 — O estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída (2026-11-24)
+
+Dois pedidos da semana, no mesmo botão. **(1)** A devolução para **Quarentena** entra no estoque e fica bloqueada para inspeção. Quem estornava
+só a entrada dela (o **Estornar** da linha *ENTRADA_DEVOLUCAO*) tirava as peças do estoque e deixava o bloqueio de pé: o material ficava com 2
+bloqueados que não existiam, e o disponível a menos. **(2)** Depois de **excluir** uma requisição entregue, a exclusão devolve ao estoque o que
+ainda estava fora, já descontando as devoluções feitas; estornar depois a entrada de uma dessas devoluções tirava as peças de novo (5 → 3).
+Agora os dois estornos são recusados, com o caminho certo na mensagem. Decisões do agente: **B1617** (revê a **B761**) e **B1618**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Devolução de 2 para Quarentena (10, 2 bloqueados) → **Estornar** a entrada → 8 com **2 bloqueados** | Recusado; estornado o bloqueio da devolução, a entrada estorna (8, 0) |
+| Quarentena liberada pela metade (Desbloquear 1) → **Estornar** a entrada → 8 com **1 bloqueado** | Recusado, pedindo para desbloquear 1; desbloqueado, estorna (8, 0) |
+| Quarentena liberada toda (Desbloquear 2) → **Estornar** a entrada → 8, 0 | Igual |
+| Entrega 2, Devolução 2, **Excluir** a requisição (5) → **Estornar** a entrada da devolução → **3** | Recusado; fica 5 |
+| O mesmo com a devolução para Sucata: estornar a sucata e depois a entrada → 3 | A entrada recusa (antes e depois de estornar a sucata) |
+
+### As regras, com o cenário exato
+
+Preparação: administrador; um material sem lote e sem número de série com 10 em estoque.
+
+**1. A quarentena de pé (RN-262.02, B1617).** **Movimentações → Nova** → Saída de 2. **Devoluções** → devolva 2 citando essa saída, destino
+**Quarentena** (10, 2 bloqueados). Em **Movimentações**, na linha *ENTRADA_DEVOLUCAO* (referência *DEV-⟨número⟩*), **Estornar** → *"Não é
+possível estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a quarentena, e o bloqueio dela continua de pé — estornar só a
+entrada deixaria bloqueadas peças que não estão mais no estoque. Estorne primeiro o bloqueio desta devolução e depois esta entrada."* Estorne a
+linha *BLOQUEIO* com a mesma referência (10, 0) e depois a entrada → 8, 0.
+
+**2. A quarentena liberada pela metade.** Repita a devolução; **Inspeções → Desbloquear Material** 1; **Estornar** a entrada → *"Não é
+possível estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a quarentena, e ainda há 1 PC dela no bloqueio — estornar só a
+entrada deixaria bloqueadas peças que não estão mais no estoque. Desbloqueie 1 PC e depois estorne esta entrada."* Desbloqueie mais 1 → a
+entrada estorna. Com a quarentena liberada toda antes, a entrada estorna direto.
+
+**3. A requisição excluída (RN-262.01, B1618).** Outro material com 5: requisição de 2 aprovada, separada e entregue; **Devoluções** → 2
+citando a entrega (Estoque); **Excluir** a requisição (5). **Estornar** a entrada da devolução → *"Não é possível estornar: esta entrada é da
+devolução DEV-⟨número⟩, de uma entrega da requisição ⟨número⟩, que foi excluída — a exclusão já devolveu ao estoque o resto da entrega contando
+com esta devolução, e estornar a entrada tiraria estas peças de novo. Se a devolução foi registrada errada, acerte o estoque com um Ajuste."*
+O material continua com 5. Com destino Quarentena ou Sucata, a mesma mensagem — antes da da quarentena ou da sucata.
+
+**4. No mesmo instante.** Se alguém excluir a requisição, ou estornar o Desbloquear, enquanto o estorno da entrada está em andamento, o estorno
+confere de novo antes de mexer no estoque e recusa com a mesma mensagem. Se o estorno do bloqueio da devolução ainda estiver terminando:
+*"Não é possível estornar agora: o estorno do bloqueio da devolução DEV-⟨número⟩ está em andamento — tente de novo em instantes."*
+
+### O que esta etapa NÃO cobre
+
+- Com outro bloqueio feito à mão sem lote no mesmo material, a quarentena já liberada também pede o estorno do bloqueio (**D (262)** 1, **B1617**).
+- A devolução de requisição excluída registrada errada só se acerta com Ajuste; os estornos já feitos não mudam (**D (262)**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 262 entregue (2026-11-24):** **o estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída** (itens 6
+  e 7 da estimativa de 23/11; **C239** e **C552** resolvidos). Commits `96778e36` (plano), `7474faa0` (motor, testes e a Fase 2), Fase 5
+  `d84c9f1e` e o fechamento. **O que é seu:** as **B1617** (revê a **B761**) e **B1618** (reversíveis); a limitação **(262)** em D e a verificação
+  **(262)** em F. Sem consulta antes do deploy. **Próxima:** os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
 
 - **Etapa 261 entregue (2026-11-24):** **o histórico de Movimentações diz de quais prateleiras a Saída e o Ajuste tiraram as peças, e o
   estorno do Ajuste de prateleira respeita a contagem mais recente** (itens 4 e 5 da estimativa de 23/11; **D (252)** 1 e **D (258)** 5

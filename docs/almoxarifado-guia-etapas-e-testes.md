@@ -5,14 +5,18 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-24 (Etapa 261 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-24 (Etapa 262 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 261 fechada — 2026-11-24.** **O histórico de Movimentações diz de quais prateleiras a peça
+> **O desenvolvimento parou aqui: Etapa 262 fechada — 2026-11-24.** **O estorno da entrada de uma devolução respeita a quarentena e a
+> requisição já excluída** (itens 6 e 7 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção
+> da 262). **Onde parou, exatamente:** a **262 está fechada**; a próxima são os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
+>
+> *(Antes:)* **Etapa 261 fechada — 2026-11-24.** **O histórico de Movimentações diz de quais prateleiras a peça
 > saiu, e o estorno do Ajuste de prateleira respeita a contagem mais recente** (itens 4 e 5 da estimativa de 23/11). **Sem consulta antes do
 > deploy.** **Nenhum clique foi dado** (roteiro na seção da 261). **Onde parou, exatamente:** a **261 está fechada**; a próxima são os itens 6
 > e 7 da estimativa de 23/11 (fim do plano da 261).
@@ -7453,6 +7457,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 262 — O estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída (ENTREGUE — 2026-11-24)
+
+**Em uma frase:** o **Estornar** da entrada de uma devolução (tipo *ENTRADA_DEVOLUCAO*) passa a ser recusado em dois casos em que ele deixava o estoque errado — a
+devolução foi para a **Quarentena** e o bloqueio dela ainda está de pé, ou a devolução é de uma entrega de uma **requisição que já foi
+excluída**.
+
+| Antes | Agora |
+|---|---|
+| Devolução de 2 para Quarentena (10, 2 bloqueados) → **Estornar** a entrada → 8 com **2 bloqueados** sem peça | Recusado: *"… Estorne primeiro o bloqueio desta devolução e depois esta entrada."*; estornado o bloqueio, a entrada estorna (8, 0) |
+| A mesma, com **Desbloquear** de 1 antes → a entrada estornava e ficava 1 bloqueado sem peça | Recusado: *"… ainda há 1 PC dela no bloqueio … Desbloqueie 1 PC e depois estorne esta entrada."* |
+| A mesma, com **Desbloquear** de 2 antes (quarentena liberada) → estorna (8, 0) | Igual |
+| Entrega 2, Devolução 2, **Excluir** a requisição (5) → **Estornar** a entrada → **3** | Recusado (*"… que foi excluída — … acerte o estoque com um Ajuste."*); fica 5 |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **administrador**. Escolha um material sem lote e sem série com 10 em estoque.
+2. **Movimentações → Nova**: Saída de 2. Em **Devoluções**, devolva 2 citando essa saída, destino **Quarentena** → **Confira** no material: 10,
+   2 bloqueados.
+3. Em **Movimentações**, na linha do tipo *ENTRADA_DEVOLUCAO* (referência *DEV-⟨número⟩*; a tela mostra o tipo com esse nome), clique **Estornar** → **Confira:** *"Não é possível
+   estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a quarentena, e o bloqueio dela continua de pé — estornar só a entrada
+   deixaria bloqueadas peças que não estão mais no estoque. Estorne primeiro o bloqueio desta devolução e depois esta entrada."*
+4. **Inspeções → Desbloquear Material**: 1 → volte e **Estornar** a entrada → **Confira:** *"… e ainda há 1 PC dela no bloqueio — … Desbloqueie
+   1 PC e depois estorne esta entrada."*
+5. Desbloqueie mais 1 → **Estornar** a entrada → **Confira:** passa; 8 em estoque, 0 bloqueado.
+6. Outro material com 5: crie uma requisição de 2, aprove, separe e entregue. Em **Devoluções**, devolva 2 citando a entrega (Estoque).
+   **Excluir** a requisição → **Confira:** 5.
+7. **Estornar** a entrada da devolução → **Confira:** *"Não é possível estornar: esta entrada é da devolução DEV-⟨número⟩, de uma entrega da
+   requisição ⟨número⟩, que foi excluída — a exclusão já devolveu ao estoque o resto da entrega contando com esta devolução, e estornar a
+   entrada tiraria estas peças de novo. Se a devolução foi registrada errada, acerte o estoque com um Ajuste."* e o material continua com 5.
+
+**O que esta etapa NÃO cobre:** com outro bloqueio feito à mão (sem lote) no mesmo material, a quarentena já liberada também pede o estorno do
+bloqueio; a devolução registrada errada de requisição excluída só se acerta com Ajuste; os estornos já feitos antes desta etapa não mudam.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam, escrito para você conferir
+à mão.
 
 ## Etapa 261 — O histórico diz de quais prateleiras a peça saiu, e o estorno do Ajuste de prateleira respeita a contagem mais recente (ENTREGUE — 2026-11-24)
 

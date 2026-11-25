@@ -381,7 +381,8 @@ devolução parecia morta (físico 7 para 5). E o item "Fora" da 116 (C236) est�
   `daDevolucao`) — `0b2d72f5` (B764). A identidade "a primeira" sozinha era contornável com a entrada digitada antes da devolução.
 - [x] **(Fase 5) A entrega de requisição excluída não é devolvível e sai da lista** (validação, `INSERT` condicional e
   `listarSaidasElegiveis`) — `0b2d72f5` (C244, B767; anterior à 117: 5 → 7).
-- [ ] **Fora:** QUARENTENA — estornar só a entrada deixa o `BLOQUEIO` da devolução de pé (**C239**, **B761**); a lista de
+- [x] ~~**Fora:** QUARENTENA — estornar só a entrada deixa o `BLOQUEIO` da devolução de pé (**C239**, **B761**)~~ — **resolvido na Etapa 262**
+  (`7474faa0`, **B1617**: o estorno da entrada recusa enquanto o bloqueio segura peça). Continua fora: a lista de
   devoluções não marca a desfeita (**D (117)**); RETRABALHO não tem entrada para estornar (**D (117)**); **B755** (P.O.).
 
 Continua 🟢. Testes: `devolucaoViva.api.test.js` (27), `devolucaoVivaIntegracao.api.test.js` (3), `devolucaoVivaFase5.api.test.js` (10).
@@ -494,8 +495,8 @@ Plano: `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-
   (Etapa 97) — `e10f8c04`.
 - [x] **Liberar a peça da quarentena diz o lote** (Inspeções → Desbloquear, campo Lote) e o descarte dela fica no lote — `cc4da040`,
   `b073fb93`, `4bdf0a09`.
-- [ ] **Fora:** estornar só a `ENTRADA_DEVOLUCAO` da Quarentena continua deixando o `BLOQUEIO` de pé (C239, anterior) — e agora o lote do
-  bloqueio pode ficar maior que o saldo do lote (C504). Destinos `ESTOQUE`, `SUCATA`, `RETRABALHO`: nada muda.
+- [x] ~~**Fora:** estornar só a `ENTRADA_DEVOLUCAO` da Quarentena continua deixando o `BLOQUEIO` de pé (C239, anterior) — e agora o lote do
+  bloqueio pode ficar maior que o saldo do lote (C504).~~ — **resolvido na Etapa 262** (`7474faa0`; a parte (a) da C504 não acontece mais). Destinos `ESTOQUE`, `SUCATA`, `RETRABALHO`: nada muda.
 
 Continua 🟢. Testes: `bloqueioSabeOLote.api.test.js` (RN-209.01 a .03, .07, .09).
 
@@ -537,3 +538,23 @@ Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa253-busca-de-entrega
 - [ ] **Fora: a tela não foi clicada no navegador** — só Jest (letra F (253) das novidades).
 
 Continua 🟢. Testes: `devolucaoBuscaEntrega.api.test.js` (9), `DevolucoesAlmoxarifado.test.js` (+7, 31 no total).
+
+## Etapa 262 — o estorno da entrada da devolução: quarentena e requisição excluída (2026-11-24)
+
+Plano: `docs/superpowers/plans/2026-11-24-almoxarifado-etapa262-estorno-da-devolucao-quarentena-e-requisicao-excluida.md` (itens 6 e 7 da
+estimativa de 23/11; C239, C552).
+
+- [x] **RN-262.01 (C552, B1618):** o estorno da `ENTRADA_DEVOLUCAO` de uma devolução que cita a saída de uma requisição **excluída**
+  (`ativo = 0`) é recusado, em todos os destinos, antes das guardas de série e da Sucata — `7474faa0`.
+- [x] **RN-262.02 (C239, B1617, revê a B761):** a da Quarentena recusa enquanto a perna `BLOQUEIO` (a primeira com a referência, id maior que
+  a entrada) alcança alguma quantidade — inteira, liberada em parte (*"Desbloqueie ⟨N⟩"*), ou com o estorno dela em andamento; liberada toda,
+  passa — `7474faa0`. Sem lote, a régua não conta a reprovação da inspeção (Fase 2, achado 2).
+- [x] **RN-262.04:** as duas de novo dentro da seção da trava do material (a exclusão e o estorno do Desbloquear no meio) — `7474faa0`.
+- [x] **Fase 5** — `d84c9f1e`: a conta do bloqueio vai da perna em diante (uma liberação de NC anterior zerava a régua) e o claim provisório de outro estorno conta do jeito que mais bloqueia; ver o plano.
+- [ ] **Fora:** o bloqueio feito à mão sem lote se confunde com o da devolução (B1617, D (262) 1); os estornos já feitos não mudam (D (262) 4).
+
+**Esta spec dizia (seções da 117 e da 209) que estornar só a entrada da Quarentena "deixa o `BLOQUEIO` de pé" como comportamento aceito
+(B761) — deixou de valer na 262.** A B761 está revista pela B1617.
+
+Continua 🟢. Testes: `estornoEntradaDevolucaoQuarentenaExcluida.api.test.js` (18: 16 no `7474faa0` + 2 da Fase 5); `devolucaoViva` [R6] e `bloqueioSabeOLote`
+[RN-217.05] passaram a provar a recusa.
