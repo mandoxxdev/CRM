@@ -1,0 +1,9 @@
+*Planejamento — proposta em dólar ou euro convertida a partir do real*
+_25/11/2026_
+
+*1. Valores digitados em reais, convertidos para dólar ou euro na proposta*
+Os valores da proposta passam a ser sempre digitados em reais, como no catálogo. Quando a proposta é em dólar ou euro, o documento converte cada valor pela cotação da proposta (R$ 128.990,00 com cotação 5,8573 sai US$ 22.022,08), em vez de mostrar o número em reais com o símbolo do dólar. O cadastro mostra o valor convertido ao lado, a lista de propostas mostra a moeda da proposta com o valor em reais embaixo, e o painel soma em reais sem converter de novo. Sem cotação, o documento sai em reais.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
