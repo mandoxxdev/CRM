@@ -39,7 +39,10 @@
     "react-scripts": "5.0.1"
   },
   "jest": {
-    "globalSetup": "<rootDir>/jest.globalSetup.js"
+    "globalSetup": "<rootDir>/jest.globalSetup.js",
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/node/axios.cjs"
+    }
   },
   "eslintConfig": {
     "extends": [
