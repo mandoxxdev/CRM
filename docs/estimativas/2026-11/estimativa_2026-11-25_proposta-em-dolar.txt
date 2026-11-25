@@ -1,0 +1,9 @@
+*Planejamento — Proposta em dólar ou euro*
+_25/11/2026_
+
+*1. Valor na moeda da proposta e conversão para real no painel*
+A proposta feita em dólar ou euro passa a aparecer na lista com a moeda certa (US$, €), com o valor em reais logo abaixo. Cada proposta guarda a cotação usada, preenchida sozinha com a cotação oficial do Banco Central do dia e que pode ser corrigida no cadastro. O painel soma tudo em reais pela cotação de cada proposta.
+Tempo estimado: *2h*
+
+*Total estimado: 2h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
