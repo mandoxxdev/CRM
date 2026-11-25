@@ -1,0 +1,13 @@
+*Planejamento — foto do fornecedor e campos do cadastro de material*
+_25/11/2026_
+
+*1. Foto do fornecedor*
+O cadastro e a edição de fornecedor no Compras ganham o campo de foto (ou logo), como já existe no cadastro de material: escolher a imagem, ver a prévia, trocar ou tirar. A foto aparece também na ficha do fornecedor.
+Tempo estimado: *1h*
+
+*2. Tirar Aplicação, Especificações Técnicas e Descrição do cadastro de material*
+Os campos Aplicação, Especificações Técnicas e Descrição saem do cadastro e da edição de material. O que já estava preenchido nesses campos continua guardado e aparece só para leitura no material que já tinha texto, para nada se perder. A Descrição Técnica continua.
+Tempo estimado: *1h*
+
+*Total estimado: 2h*
+_Pedido com prioridade: feito antes dos próximos itens da semana._
