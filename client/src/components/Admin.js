@@ -11,11 +11,19 @@ import './Admin.css';
 
 const PAINEL_ID = 'ui-tabpanel-admin';
 
-const Admin = () => {
-  const [activeTab, setActiveTab] = useState('usuarios');
+// `abaInicial` (24/11/2026): o menu do modulo aponta para /admin/usuarios e
+// /admin/permissoes, mas so existia a rota index — os dois links caiam na pagina
+// 404. Agora cada rota abre o Admin na aba certa, e trocar de rota com o Admin ja
+// montado troca a aba (o efeito abaixo).
+const Admin = ({ abaInicial = 'usuarios' }) => {
+  const [activeTab, setActiveTab] = useState(abaInicial);
   const [contentReady, setContentReady] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  useEffect(() => {
+    setActiveTab(abaInicial);
+  }, [abaInicial]);
 
   useEffect(() => {
     if (user && !isSystemAdmin(user)) {

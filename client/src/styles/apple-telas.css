@@ -9,6 +9,84 @@
    da tela chega no chunk da rota, depois desta folha.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Regras gerais por PADRAO DE CLASSE (24/11/2026) ──────────────────────────
+   Saidas da auditoria automatica tela a tela (public/_rev/audit.js, nao
+   versionado): cada tela antiga repete os mesmos tres vicios com nomes
+   proprios — titulo em tamanho/gradiente proprio, icone num quadrado em
+   degrade, botao com classe propria em degrade e sombra. As regras abaixo
+   atacam o PADRAO, nao a tela, e a lista de classes cresce a cada modulo
+   auditado. */
+
+/* 1. Todo titulo de tela (h1 dentro do conteudo) tem UM tamanho e UMA cor.
+   Medido: Relatorios 42px em degrade, Custos de Viagens 40px em degrade,
+   Ordens de Servico 32px, Lista de Precos 26px. Ficam de fora as telas de
+   espera e de erro, que tem o proprio desenho. */
+html .layout .main-content h1:not(.splash-title):not(.module-loading__title):not(.error-boundary h1) {
+  font-size: 30px !important; font-weight: 600 !important; letter-spacing: -0.025em !important; line-height: 1.1 !important;
+  background: none !important; background-image: none !important;
+  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; text-shadow: none !important;
+}
+@media (max-width: 768px) {
+  html .layout .main-content h1:not(.splash-title):not(.module-loading__title) { font-size: 28px !important; }
+}
+/* Numeros e subtitulos em texto-degrade (kpi-value, h2/h3 de secao) voltam a ser texto. */
+html .layout .main-content .kpi-value, html .layout .main-content .stat-value, html .layout .main-content .metric-value,
+html .layout .main-content .section-header h2, html .layout .main-content .section-header h3,
+html .layout .main-content .resumo-valor, html .layout .main-content .insight-valor {
+  background: none !important; background-image: none !important;
+  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important; text-shadow: none !important;
+}
+html .layout .main-content .section-header { border-bottom: none !important; background: transparent !important; padding-left: 0 !important; padding-right: 0 !important; }
+html .layout .main-content .section-header h2 { font-size: 20px !important; font-weight: 600 !important; letter-spacing: -0.02em !important; }
+
+/* 1b. O "fio azul" de 3px no topo dos cartoes de grafico/KPI (um ::before em
+   degrade, em Relatorios.css e irmaos) sai de todos. */
+html .layout .main-content :is(.chart-card, .chart-container, .kpi-card, .stat-card, .resumo-card, .insight-card, .metric-card, .card-premium, .grafico-card)::before { display: none !important; }
+html .layout .main-content :is(.chart-card, .chart-container, .kpi-card, .stat-card, .resumo-card, .insight-card, .metric-card, .grafico-card) {
+  border-top: 1px solid var(--ds-hair, rgba(0,0,0,.07)) !important;
+}
+
+/* 2. Icone num quadrado em degrade -> ladrilho suave: fundo cinza-claro, glifo
+   na cor da marca, canto 12. (Lista das classes vistas; cresce com a auditoria.) */
+html .layout .main-content .stat-icon, html .layout .main-content .kpi-icon, html .layout .main-content .resumo-icon,
+html .layout .main-content .insight-icon, html .layout .main-content .metric-icon, html .layout .main-content .card-icon,
+html .layout .main-content .stats-icon, html .layout .main-content .indicador-icon, html .layout .main-content .info-card-icon {
+  background: var(--ds-panel, var(--gmp-surface-hover, #F2F2F7)) !important; background-image: none !important;
+  color: var(--gmp-primary) !important; border-radius: 12px !important; box-shadow: none !important; border: none !important;
+}
+html .layout .main-content .stat-icon svg, html .layout .main-content .kpi-icon svg, html .layout .main-content .resumo-icon svg,
+html .layout .main-content .insight-icon svg, html .layout .main-content .metric-icon svg, html .layout .main-content .card-icon svg { color: inherit !important; }
+
+/* 3. Botao com classe propria: sem degrade, sem sombra, sem pulo, em pilula.
+   Os que PEDEM acao (novo/nova/salvar/buscar/premium/primary) ficam na pilula
+   escura; os demais na pilula cinza-clara. Botoes de icone (btn-icon*) e os
+   da barra lateral ficam de fora. */
+html .layout .main-content button[class*='btn-']:not([class*='btn-icon']):not(.btn-filter):not(.toggle-view-btn):not(.notificacoes-bell):not(.btn-close):not([class*='fechar']):not([class*='close']),
+html .layout .main-content a[class*='btn-']:not([class*='btn-icon']) {
+  background-image: none !important; box-shadow: none !important; transform: none !important;
+  border-radius: 980px !important; border-color: transparent !important;
+  font-weight: 600 !important; letter-spacing: -0.005em;
+}
+html .layout .main-content button[class*='btn-']:not([class*='btn-icon']):hover { transform: none !important; box-shadow: none !important; }
+html .layout .main-content :is(button, a)[class*='btn-']:is([class*='premium'], [class*='primary'], [class*='primario'], [class*='-nov'], [class*='salvar'], [class*='buscar'], [class*='confirmar'], [class*='gerar'], [class*='enviar']):not([class*='btn-icon']):not([class*='secondary']):not([class*='cancel']) {
+  background: var(--ds-ink, var(--gmp-primary)) !important; color: var(--ds-ink-text, #fff) !important;
+}
+html .layout .main-content :is(button, a)[class*='btn-']:is([class*='premium'], [class*='primary'], [class*='primario'], [class*='-nov'], [class*='salvar'], [class*='buscar'], [class*='confirmar'], [class*='gerar'], [class*='enviar']):not([class*='btn-icon']):not([class*='secondary']):not([class*='cancel']) * { color: inherit !important; }
+html .layout .main-content :is(button, a)[class*='btn-']:is([class*='refresh'], [class*='atualizar'], [class*='voltar'], [class*='cancel'], [class*='secondary'], [class*='limpar'], [class*='exportar'], [class*='filtro']):not([class*='btn-icon']) {
+  background: var(--ds-panel, var(--gmp-surface-hover, #F2F2F7)) !important; color: var(--gmp-text) !important;
+}
+
+/* 4. Abas (ui-tab, filter-tipo-btn e afins): segmentado — transparente em
+   repouso, pilula escura na ativa. */
+html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a) {
+  background: transparent !important; background-image: none !important; color: var(--gmp-text-light) !important;
+  border: none !important; border-radius: 980px !important; box-shadow: none !important;
+  padding: 7px 14px !important; font-size: 13.5px !important; font-weight: 600 !important;
+}
+html .layout .main-content :is(.ui-tab, .filter-tipo-btn, .tab-btn, .aba, [class*='-tab']:not([class*='table'])):is(button, a):is(.active, .ativa, .ui-tab-ativa, [aria-selected='true']) {
+  background: var(--ds-ink, var(--gmp-primary)) !important; color: var(--ds-ink-text, #fff) !important;
+}
+
 /* ── Barra lateral com vida (24/11/2026) ──────────────────────────────────────
    "Achei ela sem vida": os icones do menu viram LADRILHOS coloridos (como os
    Ajustes do iPhone), cada um numa cor da paleta do sistema, e a marca da GMP
@@ -34,27 +112,139 @@ html .layout .sidebar .sidebar-nav a.nav-item:nth-of-type(8n+8) { --nav-cor: #FF
 /* o "Selecionar Modulo" (button) fica com o icone simples, sem ladrilho */
 html .layout .sidebar .nav-item-module-selector svg { width: 15px !important; height: 15px !important; min-width: 15px !important; padding: 0; background: none; color: inherit !important; }
 
-html .layout .sidebar .sidebar-marca {
+html .layout .sidebar .sidebar-marca, html .mes-sidebar .sidebar-marca {
   order: 2; display: flex; align-items: center; gap: 10px;
   margin: 6px 12px 4px; padding: 10px 12px; border-radius: 14px;
   background: var(--ds-panel, var(--gmp-surface-hover, #F2F2F7));
 }
-html .layout .sidebar .sidebar-marca .catavento { filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); }
+html .layout .sidebar .sidebar-marca .catavento, html .mes-sidebar .sidebar-marca .catavento { filter: drop-shadow(0 4px 8px rgba(0,0,0,.12)); }
 /* "Aqui nao deveria ficar estilizado, deveria ficar mais serio" (P.O.): na barra
    a marca vai em Inter, como o logo da empresa — GMP em negrito e INDUSTRIAIS
    em caixa alta espacada embaixo. A manuscrita fica so na tela de modulos e no
    splash. */
-html .layout .sidebar .sidebar-marca__texto {
+html .layout .sidebar .sidebar-marca__texto, html .mes-sidebar .sidebar-marca__texto {
   display: flex; flex-direction: column; gap: 3px;
   font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   font-size: 9px; font-weight: 700; line-height: 1; letter-spacing: .28em; text-transform: uppercase;
   color: var(--gmp-text-light); white-space: nowrap;
 }
-html .layout .sidebar .sidebar-marca__texto b { font-size: 17px; font-weight: 800; letter-spacing: .02em; color: var(--gmp-text); }
+html .layout .sidebar .sidebar-marca__texto b, html .mes-sidebar .sidebar-marca__texto b { font-size: 17px; font-weight: 800; letter-spacing: .02em; color: var(--gmp-text); }
 html .layout .sidebar .sidebar-footer { order: 3; }
 /* celular: a barra de topo ganha o catavento a direita */
 html .layout .mobile-topbar .mobile-topbar__catavento { order: 3; margin-left: auto; }
 html .layout .mobile-topbar::after { order: 2; }
+
+/* ── Fabrica (MES): a mesma barra lateral dos outros modulos (24/11/2026) ─────
+   O modulo Operacional tem um shell proprio (MESLayout: .mes-sidebar navy em
+   degrade, .mes-nav-link, .mes-main) fora do .layout, entao nenhuma regra do
+   computador o alcancava: titulo 26px, botao azul, seletor de modulo em
+   degrade. Aqui ele recebe a mesma linguagem: barra branca com fio, lockup,
+   ladrilhos coloridos, pilula escura no ativo e a marca GMP no rodape. */
+html .mes-layout { background: var(--gmp-bg) !important; }
+html .mes-sidebar {
+  width: 236px !important; background: var(--gmp-bg) !important; background-image: none !important;
+  color: var(--gmp-text) !important; border-right: 1px solid var(--ds-hair, rgba(0,0,0,.07)); box-shadow: none !important;
+  display: flex; flex-direction: column;
+}
+html .mes-sidebar.closed { width: 72px !important; }
+html .mes-sidebar-header { padding: 16px 12px 10px 20px !important; border-bottom: none !important; min-height: 0 !important; }
+html .mes-logo { color: var(--gmp-text) !important; font-size: 15px !important; font-weight: 700 !important; letter-spacing: -0.02em; gap: 8px !important; }
+html .mes-logo svg { width: 28px; height: 28px; padding: 6px; border-radius: 8px; background: var(--ds-ink, #1D1D1F); color: var(--ds-ink-text, #fff); box-sizing: border-box; }
+html .mes-sidebar-toggle { background: transparent !important; color: var(--ds-muted, #86868B) !important; border-radius: 8px !important; }
+html .mes-sidebar-toggle:hover { background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text) !important; }
+html .mes-nav { padding: 0 0 10px !important; flex: 1 1 auto; }
+html .mes-nav-link {
+  margin: 1px 12px; padding: 0 12px !important; min-height: 34px; border-radius: 10px !important;
+  color: var(--gmp-text) !important; font-size: 13.5px; font-weight: 500; gap: 10px !important;
+  border-left: none !important; transition: background-color .18s ease, color .18s ease;
+}
+html .mes-nav-link:hover { background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text) !important; }
+html .mes-nav-link.active { background: var(--ds-ink, #1D1D1F) !important; color: var(--ds-ink-text, #fff) !important; font-weight: 600; border-left: none !important; }
+html .mes-nav-link svg { width: 26px; height: 26px; min-width: 26px !important; padding: 5px; box-sizing: border-box; border-radius: 7px; color: #fff !important; background: var(--nav-cor, #8E8E93); font-size: 16px !important; }
+html .mes-nav-item:nth-of-type(8n+1) .mes-nav-link { --nav-cor: #0A84FF; }
+html .mes-nav-item:nth-of-type(8n+2) .mes-nav-link { --nav-cor: #34C759; }
+html .mes-nav-item:nth-of-type(8n+3) .mes-nav-link { --nav-cor: #FF9500; }
+html .mes-nav-item:nth-of-type(8n+4) .mes-nav-link { --nav-cor: #AF52DE; }
+html .mes-nav-item:nth-of-type(8n+5) .mes-nav-link { --nav-cor: #32ADE6; }
+html .mes-nav-item:nth-of-type(8n+6) .mes-nav-link { --nav-cor: #FF3B30; }
+html .mes-nav-item:nth-of-type(8n+7) .mes-nav-link { --nav-cor: #5856D6; }
+html .mes-nav-item:nth-of-type(8n+8) .mes-nav-link { --nav-cor: #FF2D55; }
+html .mes-nav-divider { margin: 8px 16px !important; border-top: 1px solid var(--ds-hair, rgba(0,0,0,.07)); background: none !important; }
+html .mes-nav-link.mes-nav-module-selector, html .mes-nav-link.mes-nav-module-selector:hover {
+  margin: 4px 16px 14px !important; min-height: 32px; width: auto;
+  background: var(--ds-panel, #F5F5F7) !important; background-image: none !important; color: var(--gmp-text-light) !important;
+  border: none !important; border-radius: 9px !important; box-shadow: none !important; transform: none !important;
+  font-size: 12.5px !important; font-weight: 600 !important;
+}
+html .mes-nav-link.mes-nav-module-selector svg { width: 15px; height: 15px; min-width: 15px !important; padding: 0; background: none; color: inherit !important; }
+html .mes-marca { margin: 6px 12px 14px !important; }
+html .mes-sidebar.closed .mes-marca { justify-content: center; padding: 10px 6px; }
+html .mes-main { background: var(--gmp-bg) !important; }
+/* o conteudo do MES segue a mesma caixa das outras telas */
+html .mes-main > * { box-sizing: border-box; max-width: 1600px; margin: 0 auto; padding: 28px 40px 64px; }
+@media (max-width: 1100px) { html .mes-main > * { padding: 22px 24px 48px; } }
+html .mes-main h1 {
+  font-size: 30px !important; font-weight: 600 !important; letter-spacing: -0.025em !important; line-height: 1.1 !important;
+  background: none !important; color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important;
+}
+html .mes-main .producao-header { border-bottom: none !important; margin-bottom: 24px !important; }
+html .mes-main button.producao-btn, html .mes-main .producao-btn {
+  background-image: none !important; box-shadow: none !important; border-radius: 980px !important; font-weight: 600 !important; transform: none !important;
+}
+html .mes-main .producao-btn.producao-btn-primary, html .mes-main .producao-btn[class*='primary'] { background: var(--ds-ink, #1D1D1F) !important; color: var(--ds-ink-text, #fff) !important; border: none !important; }
+html .mes-main .producao-badge { border-radius: 980px !important; font-weight: 600 !important; }
+@media (max-width: 768px) {
+  html .mes-sidebar { width: 86vw !important; }
+}
+
+/* ── Clientes: o logo ao lado do nome na tabela (24/11/2026) ─────────────────── */
+html .layout .cli-td-nome { display: inline-flex; align-items: center; gap: 10px; }
+html .layout .cli-logo-mini {
+  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px; object-fit: contain;
+  background: #fff; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)); padding: 3px; box-sizing: border-box;
+}
+html .layout .cli-logo-ini {
+  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ds-panel, #F5F5F7); color: var(--gmp-text-light); font-size: 13px; font-weight: 700;
+}
+
+/* ── Acesso negado (24/11/2026) ──────────────────────────────────────────────
+   Era um cartao com borda vermelha de 2px, cabecalho em degrade vermelho e
+   faixa de aviso com barra lateral. Vira a folha do sistema: icone num circulo
+   vermelho suave, titulo 22px, texto 15px, aviso em painel cinza com o escudo,
+   botao em pilula escura. */
+html .acesso-negado-container { background: var(--gmp-bg) !important; min-height: 100vh !important; padding: 40px 24px !important; }
+html .acesso-negado-alert {
+  max-width: 520px !important; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)) !important; border-radius: 24px !important;
+  box-shadow: 0 30px 60px -36px rgba(0,0,0,.25) !important; background: var(--gmp-surface) !important; overflow: hidden;
+  animation: ds-rise-o .6s cubic-bezier(.22,1,.36,1) backwards;
+}
+html .acesso-negado-header {
+  flex-direction: column !important; align-items: center !important; gap: 14px !important;
+  padding: 36px 28px 8px !important; background: transparent !important; background-image: none !important; color: var(--gmp-text) !important;
+}
+html .acesso-negado-icon {
+  width: 64px !important; height: 64px !important; border-radius: 50% !important; font-size: 28px !important;
+  background: var(--gmp-error-50, rgba(255,59,48,.12)) !important; color: var(--gmp-error, #FF3B30) !important;
+}
+html .acesso-negado-header h2 { font-size: 22px !important; font-weight: 600 !important; letter-spacing: -0.02em !important; color: var(--gmp-text) !important; }
+html .acesso-negado-content { padding: 8px 28px 4px !important; text-align: center; }
+html .acesso-negado-mensagem-principal { font-size: 15px !important; color: var(--gmp-text) !important; margin: 0 0 16px !important; }
+html .acesso-negado-mensagem-principal strong { color: var(--gmp-text) !important; font-weight: 600 !important; }
+html .acesso-negado-aviso {
+  align-items: center !important; gap: 10px !important; padding: 12px 14px !important; margin: 0 0 14px !important;
+  background: var(--ds-panel, #F5F5F7) !important; border: none !important; border-left: none !important; border-radius: 14px !important; text-align: left;
+}
+html .acesso-negado-aviso .aviso-icon { color: var(--gmp-text-light) !important; flex: 0 0 auto; }
+html .acesso-negado-aviso p, html .acesso-negado-aviso strong { font-size: 13px !important; color: var(--gmp-text-light) !important; font-weight: 500 !important; }
+html .acesso-negado-detalhes { font-size: 13.5px !important; color: var(--gmp-text-light) !important; }
+html .acesso-negado-actions { padding: 16px 28px 30px !important; }
+html .acesso-negado-actions .btn-voltar {
+  background: var(--ds-ink, var(--gmp-primary)) !important; background-image: none !important; color: var(--ds-ink-text, #fff) !important;
+  border: none !important; border-radius: 980px !important; box-shadow: none !important; transform: none !important;
+  min-height: 40px; padding: 0 22px !important; font-size: 14px !important; font-weight: 600 !important;
+}
 
 /* ── Produtos > grupos (24/11/2026) ───────────────────────────────────────────
    "As fotos deram a carregar e a pagina esta pessima, cada imagem parece ter
@@ -84,12 +274,30 @@ html .grupo-card:hover {
 }
 html[data-theme="dark"] .grupo-card { border-color: rgba(255,255,255,.08) !important; }
 html[data-theme="dark"] .grupo-card:hover { border-color: rgba(255,255,255,.16) !important; }
+/* Segunda passada (P.O.: "ficou muito sem vida agora"): a FOTO vira o cartao
+   inteiro (4:3) e o texto sobe para cima dela, sobre um escurecimento no pe —
+   como os cartoes da App Store. O lapis vira um circulo branco sempre visivel
+   (estava branco sobre branco: a cor do icone vinha do CSS antigo). */
+html .grupo-card { display: block !important; aspect-ratio: 4 / 3; background: var(--ds-panel, #F5F5F7) !important; }
 html .grupo-card-header {
-  aspect-ratio: 16 / 10 !important;
+  position: absolute !important; inset: 0 !important;
+  aspect-ratio: auto !important; width: 100% !important; height: 100% !important;
   min-height: 0 !important; max-height: none !important;
   background: var(--ds-panel, #F5F5F7) !important;
   border-radius: 0 !important;
 }
+html .grupo-card-body {
+  position: absolute !important; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 44px 18px 18px !important;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.72) 100%) !important;
+  color: #fff !important;
+}
+html .grupo-card .grupo-card-numero { background: rgba(255,255,255,.22) !important; color: #fff !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+html .grupo-card .grupo-card-nome { color: #fff !important; -webkit-text-fill-color: #fff !important; font-size: 18px !important; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+html .grupo-card .grupo-card-cta-label { color: rgba(255,255,255,.9) !important; }
+html .grupo-card .grupo-card-placeholder { color: rgba(0,0,0,.25) !important; font-size: 0; }
+html .grupo-card .btn-icon-grupo, html .grupo-card .btn-icon-grupo svg { color: #1D1D1F !important; }
+html .grupo-card .btn-icon-grupo { opacity: 1 !important; background: rgba(255,255,255,.92) !important; width: 32px !important; height: 32px !important; }
 html .grupo-card-foto-img {
   object-fit: cover !important;
   object-position: center !important;
@@ -142,3 +350,37 @@ html .btn-novo-grupo {
   html .btn-novo-grupo { background: var(--ds-ink, #1D1D1F) !important; color: var(--ds-ink-text, #fff) !important; }
   html .btn-novo-grupo:hover { opacity: .84; }
 }
+
+/* ── Pagina 404 (24/11/2026: "tem que fazer uma page 404 tambem") ─────────────
+   Ela vive fora do .layout. Sai o fundo com duas manchas azuis, o "404" em
+   degrade e o botao em degrade; entra a folha do sistema: tela branca, numero
+   grande em texto, o catavento no lugar do zero (ver Pagina404.js), endereco
+   num painel cinza e botoes em pilula (escura a principal). */
+html .p404 { background: var(--gmp-bg) !important; background-image: none !important; }
+html .p404-cartao {
+  max-width: 480px !important; padding: 40px 32px 32px !important; border-radius: 24px !important;
+  background: var(--gmp-surface) !important; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)) !important;
+  box-shadow: 0 30px 60px -36px rgba(0,0,0,.25) !important;
+  animation: ds-rise-o .6s cubic-bezier(.22,1,.36,1) backwards;
+}
+html .p404-numero {
+  gap: 10px !important; font-size: 72px !important; font-weight: 600 !important; letter-spacing: -0.04em !important;
+  background: none !important; -webkit-text-fill-color: var(--gmp-text) !important; color: var(--gmp-text) !important;
+  font-family: 'Inter', -apple-system, sans-serif; margin-bottom: 14px !important;
+}
+html .p404-numero .catavento { filter: drop-shadow(0 10px 18px rgba(0,0,0,.14)); }
+html .p404-cartao h1 { font-size: 22px !important; font-weight: 600 !important; letter-spacing: -0.02em !important; }
+html .p404-cartao p { font-size: 15px !important; color: var(--gmp-text-light) !important; }
+html .p404-endereco { background: var(--ds-panel, #F5F5F7) !important; border: none !important; border-radius: 14px !important; }
+html .p404-endereco span { font-size: 10.5px !important; letter-spacing: .08em !important; }
+html .p404-endereco code { font-size: 13px !important; }
+html .p404-btn {
+  min-height: 40px !important; padding: 0 20px !important; border-radius: 980px !important;
+  background: var(--ds-panel, #F5F5F7) !important; border: none !important; color: var(--gmp-text) !important;
+  font-size: 14px !important; font-weight: 600 !important; box-shadow: none !important;
+}
+html .p404-btn:hover { background: var(--ds-panel-hover, #EBEBEF) !important; }
+html .p404-btn-primario { background: var(--ds-ink, var(--gmp-primary)) !important; color: var(--ds-ink-text, #fff) !important; }
+html .p404-btn-primario:hover { background: var(--ds-ink, var(--gmp-primary)) !important; opacity: .86; }
+html[data-theme="dark"] .p404-cartao { background: #1C1C1E !important; border-color: rgba(255,255,255,.08) !important; }
+html[data-theme="dark"] .p404-btn { background: #2C2C2E !important; color: #F5F5F7 !important; }

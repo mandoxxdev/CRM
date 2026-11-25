@@ -14611,6 +14611,39 @@ app.delete('/api/aprovacoes/:id', authenticateToken, exigirComercialNasPropostas
 
 // Servir fotos de famílias
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir, { setHeaders: cabecalhosUploadSeguro }));
+// Miniatura sob demanda (24/11/2026): as fotos dos grupos de produtos sao originais de
+// camera (varios MB cada) e a tela de Produtos "demorava para carregar". Com `?w=800`
+// a foto e redimensionada UMA vez (sharp, que ja e dependencia do servidor), guardada
+// em _thumbs/ como webp, e nas proximas vezes sai do disco; sem `?w` cai no static
+// abaixo e vem o original. Nome de arquivo fora de [A-Za-z0-9._-] ou inexistente:
+// segue para o static, que responde como sempre respondeu.
+app.get('/api/uploads/grupos-produtos/:arquivo', (req, res, next) => {
+  const pedida = parseInt(req.query.w, 10);
+  if (!(pedida > 0)) return next();
+  const nome = path.basename(String(req.params.arquivo || ''));
+  if (!/^[\w.-]+$/.test(nome) || nome.startsWith('.')) return next();
+  const original = path.join(uploadsGruposDir, nome);
+  if (!fs.existsSync(original)) return next();
+  const w = Math.min(1600, Math.max(160, Math.round(pedida / 80) * 80));
+  const pastaThumbs = path.join(uploadsGruposDir, '_thumbs');
+  const destino = path.join(pastaThumbs, `w${w}_${nome.replace(/\.[^.]+$/, '')}.webp`);
+  const enviar = () => {
+    cabecalhosUploadSeguro(res);
+    // a miniatura e derivada de um arquivo com nome unico: pode ficar um dia no navegador
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.type('image/webp');
+    res.sendFile(destino);
+  };
+  if (fs.existsSync(destino)) return enviar();
+  let sharp;
+  try { sharp = require('sharp'); } catch (e) { return next(); }
+  fs.mkdir(pastaThumbs, { recursive: true }, (erroPasta) => {
+    if (erroPasta) return next();
+    sharp(original).rotate().resize({ width: w, withoutEnlargement: true }).webp({ quality: 82 }).toFile(destino)
+      .then(enviar)
+      .catch(() => next());
+  });
+});
 app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir, { setHeaders: cabecalhosUploadSeguro }));
 app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir, { setHeaders: cabecalhosUploadSeguro }));
 app.use('/api/uploads/fornecedores', express.static(uploadsFornecedoresDir, { setHeaders: cabecalhosUploadSeguro }));

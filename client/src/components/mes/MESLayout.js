@@ -4,6 +4,7 @@ import BarraInferiorMobile from '../BarraInferiorMobile';
 import ErrorBoundary from '../ErrorBoundary';
 import { RouteLoading } from '../LazyPage';
 import { useAuth } from '../../context/AuthContext';
+import CataventoGMP from '../CataventoGMP';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureModule } from '../../utils/systemPermissions';
 import {
@@ -105,6 +106,14 @@ const MESLayout = () => {
             );
           })}
         </nav>
+        {/* A marca da GMP no rodape, como na barra lateral dos outros modulos (24/11/2026:
+            "GMP Industriais e o catavento em todos os dashboards"). */}
+        <div className="sidebar-marca mes-marca" aria-label="GMP Industriais">
+          <CataventoGMP size={44} modo="entrada" title="GMP Industriais" />
+          {sidebarOpen && (
+            <span className="sidebar-marca__texto" aria-hidden="true"><b>GMP</b> Industriais</span>
+          )}
+        </div>
       </aside>
 
       <BarraInferiorMobile

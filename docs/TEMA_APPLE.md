@@ -120,6 +120,33 @@ curtos, todos atendidos no mesmo turno (commits `702faf39`, `a1796257`, `8ce98b1
 | Botão "Fundo Animado" sem serventia | Saiu do menu de Preferências (o fundo animado não é mais desenhado em tela nenhuma). |
 | Abertura escura com o pássaro ("essa tela deveria sumir") | `OrionIntro` nunca mais é mostrada; o tour de boas-vindas passa a disparar na montagem. |
 
+### Varredura de TODOS os módulos (madrugada de 25/11)
+
+O P.O. insistiu: "tem que repassar o front de TODOS os módulos". Em vez de olhar tela por
+tela no escuro, uma **auditoria automática** (`client/public/_rev/audit.js`, não versionado:
+mede em cada rota gradientes, botões fora da pílula, cores antigas, cabeçalhos com borda,
+sombras pesadas, fontes fora da Inter e o x da raiz) rodou em ~45 rotas de Comercial,
+Compras, Financeiro, Fábrica, Frota, Almoxarifado, Engenharia, Admin e Configurações.
+O que ela achou e o que entrou (`apple-telas.css`, seção "Regras gerais por padrão de
+classe" + seções por tela):
+
+| Achado | Correção |
+|---|---|
+| Títulos com tamanho e cor próprios (Relatórios 42px em degradê, Custos 40px, OS 32px, Lista de Preços 26px) | **Todo h1 do conteúdo** tem 30px/600 em texto sólido (28px no celular) |
+| Ícones em quadrados com degradê (`stat-icon`, `kpi-icon`, `resumo-icon`, `insight-icon`…) | Ladrilho cinza-claro com glifo azul |
+| Botões com classe própria em degradê e sombra (`btn-nova-solicitacao-premium`, `btn-refresh`, `btn-buscar-cnpj`, `csc-btn--primary`…) | Regra por padrão `[class*='btn-']`: pílula; escura se o nome diz ação (novo/nova/salvar/buscar/premium/primary…), cinza-clara se diz voltar/cancelar/atualizar/exportar |
+| Abas quadradas (`ui-tab`, `filter-tipo-btn`) | Segmentado: transparente, ativa em pílula escura |
+| Fio azul de 3px no topo dos cartões de gráfico/KPI | Sai de todos |
+| **Fábrica (MES)** tinha um shell próprio fora do `.layout` (barra navy em degradê, 26px, botão azul) | Recebe a mesma barra branca com ladrilhos, pílula escura, lockup e a marca GMP no rodapé; conteúdo na mesma caixa |
+| **Admin → Usuários / Permissões caíam na página 404** (o menu apontava para rotas que não existiam) | Rotas `usuarios`, `permissoes`, `logs` abrem o Admin na aba certa (`abaInicial`) |
+| **Compras abria em branco** (sem rota index) | `ComprasInicio`: início do módulo com números (pedidos em aberto, cotações, fornecedores, materiais) e atalhos para as áreas, via o genérico `InicioModulo` (serve a outros módulos sem dashboard) |
+| Rosca "Propostas por Status" mostrava "0: 46 (46%)" (o dado tem `status`, não `name`) | `nameKey`, total no centro, legenda com os nomes dos status, eixo do gráfico de projetos humanizado; a etiqueta "Clique para ver detalhes" saiu |
+| Mapa de Máquinas Vendidas com "API KEY REQUIRED" nos tiles (o Carto passou a exigir chave) | Tiles do OpenStreetMap nos dois temas (também no Mapa de Clientes) |
+| Produtos: fotos de câmera de vários MB, "demorando para carregar"; cartões "sem vida" | Miniatura `?w=800` gerada no servidor com `sharp` e guardada em `_thumbs/` (webp, cache de um dia); `loading="lazy"`; cartão vira a foto inteira (4:3) com o nome sobre um escurecimento no pé |
+| Clientes: logo do cliente | Aparece ao lado da razão social na tabela (ou a inicial) |
+| Acesso negado | Folha branca com ícone em círculo vermelho suave, aviso em painel, botão em pílula |
+| Página 404 | Tela branca, "4 [catavento] 4", endereço em painel, botões em pílula |
+
 > **Deploy:** cada push gera um deploy automático no Coolify. Os três últimos commits da noite
 > levaram mais de 25 minutos para aparecer no servidor (o `index.html` ainda era o das 22:28);
 > se a fila travar, é no painel de "Deployments" do Coolify que se vê — o repositório não tem

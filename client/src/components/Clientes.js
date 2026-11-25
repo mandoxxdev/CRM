@@ -159,7 +159,26 @@ const Clientes = () => {
               ) : (
                 clientes.map(cliente => (
                   <tr key={cliente.id}>
-                    <td>{cliente.razao_social}</td>
+                    <td>
+                      {/* O logo do cliente ao lado do nome (24/11/2026, pedido do P.O.);
+                          sem logo, a inicial — a mesma regra dos cartoes do celular. */}
+                      <span className="cli-td-nome">
+                        {cliente.logo_url ? (
+                          <img
+                            className="cli-logo-mini"
+                            src={String(cliente.logo_url).startsWith('http') ? cliente.logo_url : `${api.defaults.baseURL}/uploads/logos/${cliente.logo_url}`}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <span className="cli-logo-ini" aria-hidden="true">
+                            {String(cliente.nome_fantasia || cliente.razao_social || '?').trim().charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span>{cliente.razao_social}</span>
+                      </span>
+                    </td>
                     <td>{cliente.nome_fantasia || '-'}</td>
                     <td>{cliente.cnpj || '-'}</td>
                     <td>

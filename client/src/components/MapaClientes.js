@@ -93,7 +93,7 @@ const MapaClientes = ({ localizacoes, formatCurrency }) => {
           
           // Adicionar tile layer com tema escuro se necessário
           const tileUrl = isDarkMode 
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
             : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
           
           const tileLayer = L.tileLayer(tileUrl, {
@@ -196,7 +196,7 @@ const MapaClientes = ({ localizacoes, formatCurrency }) => {
           
           // Adicionar novo tile layer com tema correto
           const tileUrl = isDarkMode 
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
             : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
           
           try {

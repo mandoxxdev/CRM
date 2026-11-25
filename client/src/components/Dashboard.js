@@ -338,6 +338,21 @@ const Dashboard = () => {
   }), []);
   // Movimento dos graficos: as series crescem em 900ms, uma depois da outra.
   const CHART_MOTION = useMemo(() => ({ animationDuration: 900, animationEasing: 'ease-out' }), []);
+  // Rotulos legiveis (24/11/2026). A rosca de status mostrava "0: 46 (46%)": o dado tem
+  // `status`, nao `name`, e o Recharts caia no indice. O P.O. perguntou "o que esse grafico
+  // indica?" — com razao.
+  const STATUS_PROPOSTA_LABEL = useMemo(() => ({
+    rascunho: 'Rascunho', em_revisao: 'Em revisão', aprovada_internamente: 'Aprovada internamente',
+    enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', aprovada: 'Aprovada',
+    rejeitada: 'Rejeitada', cancelada: 'Cancelada', expirada: 'Expirada',
+  }), []);
+  const humanizar = useCallback((s) => {
+    if (s === null || s === undefined) return '';
+    const chave = String(s);
+    if (STATUS_PROPOSTA_LABEL[chave]) return STATUS_PROPOSTA_LABEL[chave];
+    const texto = chave.replace(/_/g, ' ').trim();
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }, [STATUS_PROPOSTA_LABEL]);
 
   const formatCurrency = useCallback((value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -851,15 +866,14 @@ const Dashboard = () => {
                 <Pie
                   data={safeStats.propostasPorStatus}
                   cx="50%"
-                  cy="50%"
+                  cy="46%"
                   labelLine={false}
-                  label={({ name, percent, value }) => 
-                    `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
-                  }
-                  outerRadius={isMobile ? 72 : 100}
-                  innerRadius={isMobile ? 44 : 62}
+                  label={false}
+                  outerRadius={isMobile ? 72 : 96}
+                  innerRadius={isMobile ? 46 : 64}
                   fill="#8884d8"
                   dataKey="total"
+                  nameKey="status"
                   paddingAngle={3}
                   cornerRadius={6}
                   {...CHART_MOTION}
@@ -873,7 +887,17 @@ const Dashboard = () => {
                     />
                   ))}
                 </Pie>
+                {/* Rosca com o TOTAL no centro e a legenda com os NOMES dos status embaixo; os
+                    rotulos soltos em volta ("0: 46 (46%)", o indice no lugar do nome) sairam. */}
+                <text x="50%" y="43%" textAnchor="middle" dominantBaseline="middle" className="chart-donut-total">
+                  {safeStats.propostasPorStatus.reduce((s, i) => s + (i.total || i.count || 0), 0)}
+                </text>
+                <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" className="chart-donut-legenda">
+                  propostas
+                </text>
+                <Legend verticalAlign="bottom" iconType="circle" formatter={(v) => humanizar(v)} />
                 <Tooltip
+                  formatter={(value, name) => [value, humanizar(name)]}
                   contentStyle={{
                     backgroundColor: 'var(--gmp-surface, #ffffff)',
                     border: '1px solid var(--chart-grid, #e2e8f0)',
@@ -926,6 +950,7 @@ const Dashboard = () => {
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: isMobile ? 10 : 11 }}
+                  tickFormatter={humanizar}
                   angle={isMobile ? -45 : 0}
                   textAnchor={isMobile ? 'end' : 'middle'}
                   height={isMobile ? 60 : 36}

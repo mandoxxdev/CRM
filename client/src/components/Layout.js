@@ -269,6 +269,8 @@ const Layout = () => {
 
   // Menu do módulo de Compras
   const comprasMenuItems = [
+    // 24/11/2026: o modulo ganhou uma tela de inicio (rota index); antes abria em branco.
+    { path: '/compras', icon: FiHome, label: 'Início' },
     { path: '/compras/solicitacoes', icon: FiCheckCircle, label: 'Solicitações de Compra' },
     { path: '/compras/fornecedores', icon: FiTruck, label: 'Fornecedores' },
     { path: '/compras/fornecedores-homologados', icon: FiPackage, label: 'Fornecedores homologados' },
@@ -513,8 +515,9 @@ const Layout = () => {
             let isActive = false;
             
             // Se for o Dashboard, só ativo quando está exatamente em /comercial
-            if (item.path === '/comercial') {
-              isActive = location.pathname === '/comercial';
+            if (item.path === '/comercial' || item.path === '/compras') {
+              // raiz do modulo: so ativa na propria raiz, senao ficaria acesa em todas as abas
+              isActive = location.pathname === item.path;
             } else if (item.path === '/chat') {
               isActive = location.pathname === '/chat';
             } else {

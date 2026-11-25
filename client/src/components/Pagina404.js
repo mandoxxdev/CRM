@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiArrowLeft, FiHome, FiCompass } from 'react-icons/fi';
+import { FiArrowLeft, FiHome } from 'react-icons/fi';
+import CataventoGMP from './CataventoGMP';
 import './Pagina404.css';
 
 /**
@@ -34,7 +35,8 @@ const Pagina404 = () => {
       <div className="p404-cartao">
         <div className="p404-numero" aria-hidden="true">
           <span>4</span>
-          <FiCompass className="p404-bussola" />
+          {/* O catavento da GMP no lugar do zero (24/11/2026), girando devagar. */}
+          <CataventoGMP size={64} modo="girando" className="p404-catavento" />
           <span>4</span>
         </div>
 

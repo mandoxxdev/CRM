@@ -34,6 +34,7 @@ import {
   Login,
   Dashboard,
   OrionIntro,
+  ComprasInicio,
   Onboarding,
   Clientes,
   ClienteForm,
@@ -371,6 +372,9 @@ export function AppRoutes() {
           </PrivateRoute>
         }
       >
+        {/* 24/11/2026: /compras abria em branco (sem index, o `*` rendia o generico sem aba).
+            Agora abre no Inicio do modulo: numeros e atalhos para as areas. */}
+        <Route index element={<ComprasInicio />} />
         <Route path="solicitacoes" element={
           <ComprasSolicitacoesCompra />
         } />
@@ -626,6 +630,10 @@ export function AppRoutes() {
         }
       >
         <Route index element={<Admin />} />
+        {/* 24/11/2026: o menu aponta para estes dois caminhos e eles caiam na 404. */}
+        <Route path="usuarios" element={<Admin abaInicial="usuarios" />} />
+        <Route path="permissoes" element={<Admin abaInicial="permissoes" />} />
+        <Route path="logs" element={<Admin abaInicial="logs" />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="admin" />} />

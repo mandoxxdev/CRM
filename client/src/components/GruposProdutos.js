@@ -30,7 +30,10 @@ const GruposProdutos = () => {
     if (!foto) return null;
     if (foto.startsWith('data:')) return foto;
     const base = api.defaults.baseURL || '/api';
-    return base.replace(/\/api\/?$/, '') + '/api/uploads/grupos-produtos/' + foto;
+    // `?w=800`: miniatura gerada no servidor (24/11/2026). As fotos sao originais de
+    // camera, com varios MB cada, e a tela demorava para carregar; o cartao mostra
+    // ~300px de largura, entao 800px cobre ate tela retina.
+    return base.replace(/\/api\/?$/, '') + '/api/uploads/grupos-produtos/' + foto + '?w=800';
   };
 
   if (loading) {
@@ -99,7 +102,7 @@ const GruposProdutos = () => {
                 <div className="grupo-card-header">
                   <div className="grupo-card-foto-wrap">
                     {fotoUrl ? (
-                      <img src={fotoUrl} alt={g.nome} className="grupo-card-foto-img" />
+                      <img src={fotoUrl} alt={g.nome} className="grupo-card-foto-img" loading="lazy" decoding="async" />
                     ) : (
                       <div className="grupo-card-placeholder">
                         <FiPackage size={56} />

@@ -32,6 +32,8 @@ const shell = (factory, module = 'sistema') => lazyShell(factory, module);
 export const Login = shell(() => import('../components/Login'));
 export const Dashboard = page(() => import('../components/Dashboard'));
 export const OrionIntro = shell(() => import('../components/OrionIntro'));
+// Inicio do Compras (24/11/2026): a rota index do modulo, que antes caia em branco.
+export const ComprasInicio = shell(() => import('../components/compras/ComprasInicio'));
 export const Onboarding = shell(() => import('../components/Onboarding'));
 export const Clientes = page(() => import('../components/Clientes'));
 export const ClienteForm = page(() => import('../components/ClienteForm'));

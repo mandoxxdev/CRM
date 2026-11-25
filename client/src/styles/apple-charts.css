@@ -81,6 +81,12 @@
 .recharts-active-dot circle { stroke: var(--gmp-surface) !important; stroke-width: 3px !important; }
 /* O SVG nao corta a sombra nem o ponto na borda. */
 .recharts-surface { overflow: visible; }
+/* A etiqueta azul "Clique para ver detalhes" que aparecia sobre o titulo de cada
+   grafico clicavel (Dashboard.css e Relatorios.css) sai: o cartao ja sobe no hover. */
+.chart-clickable::after { display: none !important; }
+/* Rosca com o total no centro (Dashboard.js). */
+.chart-donut-total { fill: var(--gmp-text); font-size: 30px; font-weight: 600; letter-spacing: -0.03em; font-family: var(--font-sans); }
+.chart-donut-legenda { fill: var(--chart-tick); font-size: 12px; font-weight: 500; font-family: var(--font-sans); }
 .recharts-responsive-container { min-width: 0; }
 
 /* ── 3. Movimento ─────────────────────────────────────────────────────────── */

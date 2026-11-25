@@ -1,0 +1,60 @@
+/* Tela de inicio de modulo (ver InicioModulo.js). So tokens do tema; nada de cor fixa
+   alem da cor do atalho, que o modulo escolhe. */
+.inicio-modulo__kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;
+  margin: 0 0 36px;
+}
+.inicio-modulo__kpi {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 16px 18px; border-radius: 20px;
+  background: var(--ds-panel, var(--gmp-surface-hover, #F5F5F7));
+  animation: ds-rise-o .6s cubic-bezier(.22, 1, .36, 1) backwards;
+}
+.inicio-modulo__kpi:nth-child(2) { animation-delay: .06s; }
+.inicio-modulo__kpi:nth-child(3) { animation-delay: .12s; }
+.inicio-modulo__kpi:nth-child(4) { animation-delay: .18s; }
+.inicio-modulo__kpi-label { font-size: 13px; font-weight: 500; color: var(--gmp-text-light); }
+.inicio-modulo__kpi-valor { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; color: var(--gmp-text); font-variant-numeric: tabular-nums; }
+.inicio-modulo__kpi-detalhe { font-size: 12px; color: var(--gmp-text-light); }
+
+.inicio-modulo__secao {
+  font-size: 13px !important; font-weight: 600 !important; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--gmp-text-light) !important; margin: 0 0 14px !important;
+}
+.inicio-modulo__atalhos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.inicio-modulo__atalho {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 14px 14px 16px; border-radius: 18px;
+  background: var(--gmp-surface); border: 1px solid var(--ds-hair, rgba(0, 0, 0, .07));
+  color: var(--gmp-text) !important; text-decoration: none !important;
+  transition: transform .22s cubic-bezier(.22, 1, .36, 1), box-shadow .22s ease, border-color .22s ease;
+  animation: ds-rise-o .6s cubic-bezier(.22, 1, .36, 1) backwards;
+}
+.inicio-modulo__atalho:nth-child(2) { animation-delay: .05s; }
+.inicio-modulo__atalho:nth-child(3) { animation-delay: .10s; }
+.inicio-modulo__atalho:nth-child(4) { animation-delay: .15s; }
+.inicio-modulo__atalho:nth-child(5) { animation-delay: .20s; }
+.inicio-modulo__atalho:nth-child(n+6) { animation-delay: .25s; }
+.inicio-modulo__atalho:hover { transform: translateY(-2px); box-shadow: 0 20px 36px -26px rgba(0, 0, 0, .35); border-color: rgba(0, 0, 0, .12); text-decoration: none !important; }
+[data-theme="dark"] .inicio-modulo__atalho { background: #1C1C1E; border-color: rgba(255, 255, 255, .08); }
+[data-theme="dark"] .inicio-modulo__atalho:hover { border-color: rgba(255, 255, 255, .16); }
+.inicio-modulo__atalho-icone {
+  width: 44px; height: 44px; flex: 0 0 auto; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff;
+  background: var(--atalho-cor, #0A84FF); box-shadow: 0 8px 16px -10px rgba(0, 0, 0, .4);
+}
+.inicio-modulo__atalho-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.inicio-modulo__atalho-nome { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.inicio-modulo__atalho-desc { font-size: 13px; color: var(--gmp-text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inicio-modulo__atalho-chevron { color: var(--gmp-gray-400, #AEAEB2); flex: 0 0 auto; transition: transform .18s ease; }
+.inicio-modulo__atalho:hover .inicio-modulo__atalho-chevron { transform: translateX(2px); }
+
+@media (max-width: 768px) {
+  .inicio-modulo__kpis { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+  .inicio-modulo__kpi { padding: 14px; border-radius: 16px; }
+  .inicio-modulo__kpi-valor { font-size: 24px; }
+  .inicio-modulo__atalhos { grid-template-columns: 1fr; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .inicio-modulo__kpi, .inicio-modulo__atalho { animation: none; }
+}
