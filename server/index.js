@@ -9288,7 +9288,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
            p.created_at, p.updated_at, p.anexo_cotacao, p.revisao, p.cliente_email,
            p.cliente_contato, p.margem_desconto, p.cliente_telefone, p.template_id,
            p.pdf_gerado_at, p.template_versao, p.expira_em, p.tipo_proposta, p.enviada_em,
-           p.oportunidade_id, p.idioma, p.unidade_negocio, p.incoterm, p.moeda,
+           p.oportunidade_id, p.idioma, p.unidade_negocio, p.incoterm, p.moeda, p.taxa_cambio,
            p.snapshot_checksum, p.data_fechamento, p.inativada_por, p.probabilidade,
            p.inativada_em, p.ativo, p.pdf_proposta_cliente, p.pdf_proposta_nome,
            c.razao_social, c.nome_fantasia, c.cnpj, c.logo_url as cliente_logo_url,
@@ -9437,7 +9437,10 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
           templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
           // Proposta bilingue: a moeda e o incoterm valem sempre (RN-BI.08/09); as duas colunas so com ?bilingue=1 — o preview do
           // EDITOR continua so em PT (Fase 2, C1-C3: traducao dentro do documento editavel corrompia o salvamento).
+          // Valores em reais convertidos pela cotação da proposta; sem cotação, o documento sai em reais (25/11/2026). Proposta em
+          // real: a configuração fica como antes (RN-BI.01, o documento pt-BR byte a byte igual).
           templateConfig.moeda = proposta.moeda;
+          if (cambio.ehMoedaEstrangeira(proposta.moeda)) Object.assign(templateConfig, cambio.moedaDoDocumento(proposta));
           templateConfig.incoterm = proposta.incoterm;
           templateConfig.idioma = (req.query.bilingue === '1' || req.query.bilingue === 'true')
             ? propostaBilingue.idiomaDaProposta(proposta.idioma)
@@ -9877,7 +9880,10 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
     // Proposta bilingue: o PDF de proposta en/es sai em duas colunas (RN-BI.02), com a memoria de traducao; moeda e incoterm
     // valem em qualquer idioma (RN-BI.08/09). Falha ao ler a memoria: o PDF sai com os pendentes marcados (RN-BI.04).
     templateConfig = templateConfig || {};
+    // Valores em reais convertidos pela cotação da proposta; sem cotação, o documento sai em reais (25/11/2026). Proposta em
+    // real: a configuração fica como antes (RN-BI.01).
     templateConfig.moeda = proposta.moeda;
+    if (cambio.ehMoedaEstrangeira(proposta.moeda)) Object.assign(templateConfig, cambio.moedaDoDocumento(proposta));
     templateConfig.incoterm = proposta.incoterm;
     templateConfig.idioma = propostaBilingue.idiomaDaProposta(proposta.idioma);
     if (propostaBilingue.ehBilingue(templateConfig.idioma)) {
@@ -17415,11 +17421,11 @@ app.get('/api/dashboard', authenticateToken, exigirComercialNasPropostas, (req, 
               if (err) return res.status(500).json({ error: err.message });
               stats.propostasPorStatus = rows || [];
 
-              // Valor total de propostas aprovadas (em reais, pela cotação de cada proposta) — e, desde 25/11/2026, quanto do período
-              // veio em dólar/euro: o painel soma tudo em R$ e o usuário via "aparecendo em real" sem saber que a proposta em US$
-              // estava ali dentro (ou, sem cotação gravada, contada 1 para 1). Uma consulta só, por status e moeda.
+              // Valor total de propostas aprovadas (em reais: o valor é digitado em reais em qualquer moeda) — e, desde 25/11/2026,
+              // quanto do período é de propostas em dólar/euro: em reais e na moeda do documento (÷ a cotação de cada uma), e quantas
+              // não têm cotação (o documento delas sai em reais). Uma consulta só, por status e moeda.
               db.all(`SELECT status, UPPER(COALESCE(NULLIF(TRIM(moeda), ''), 'BRL')) AS moeda, COUNT(*) AS n,
-                        SUM(COALESCE(valor_total, 0)) AS valor, SUM(${cambio.valorEmReaisSql()}) AS em_reais,
+                        SUM(${cambio.valorNaMoedaSql()}) AS valor, SUM(${cambio.valorEmReaisSql()}) AS em_reais,
                         SUM(CASE WHEN taxa_cambio IS NULL OR taxa_cambio <= 0 THEN 1 ELSE 0 END) AS sem_cotacao
                       FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)} GROUP BY status, 2`, [], (err, porMoeda) => {
                 if (err) return res.status(500).json({ error: err.message });

@@ -126,29 +126,50 @@ test('MO-03 trocar para BRL limpa a cotacao', async () => {
   assert.strictEqual(await taxa(id), null);
 });
 
-test('MO-04 o painel soma em reais pela cotacao de cada proposta', async () => {
+// 25/11/2026 ("coloquei 128 mil reais e na proposta aparece US$ 128.990,00"): o valor gravado e em REAIS em qualquer moeda; a moeda
+// e a do documento. O painel soma o gravado — multiplicar pela cotacao (a regra da manha) converteria duas vezes.
+test('MO-04 o painel soma o valor gravado (reais), sem multiplicar pela cotacao', async () => {
   await run("UPDATE propostas SET status = 'aprovada'");
   const r = await req('GET', '/dashboard', token);
-  // 1000 x 5,5 + 1000 x 6 + 1000 (BRL) + 1000 (a do MO-03, agora BRL) = 13500 (antes: 4000)
-  assert.strictEqual(r.json.valorTotalPropostasAprovadas, 13500, JSON.stringify(r.json.valorTotalPropostasAprovadas));
+  // 4 propostas de R$ 1000 (duas em dolar, uma em real, a do MO-03 agora em real) = 4000 (a regra da manha dava 13500)
+  assert.strictEqual(r.json.valorTotalPropostasAprovadas, 4000, JSON.stringify(r.json.valorTotalPropostasAprovadas));
   const v = await req('GET', '/dashboard/vendas', token);
-  assert.strictEqual(v.json.pipeline.valorPorEtapa.Aprovadas, 13500);
+  assert.strictEqual(v.json.pipeline.valorPorEtapa.Aprovadas, 4000);
 });
 
 // 25/11/2026 ("la no painel ... fica aparecendo em real"): o painel diz quanto do periodo veio em dolar/euro e por quanto entrou,
 // e conta a proposta sem cotacao (que entra 1 para 1).
-test('MO-05 o painel informa as propostas em outra moeda (valor, em reais, sem cotacao)', async () => {
+test('MO-05 o painel informa as propostas em outra moeda (em reais, na moeda do documento, sem cotacao)', async () => {
   const semCotacao = await nova({ moeda: 'USD', taxa_cambio: '5' });
   await run("UPDATE propostas SET taxa_cambio = NULL, status = 'enviada' WHERE id = ?", [semCotacao]);
   const r = await req('GET', '/dashboard', token);
   const usd = (r.json.propostasEmOutraMoeda || []).find((o) => o.moeda === 'USD');
   assert.ok(usd, JSON.stringify(r.json.propostasEmOutraMoeda));
-  // pDigitada (1000 x 5,5) + pDoDia (1000 x 6) aprovadas + a sem cotacao (1000 x 1)
-  assert.deepStrictEqual({ propostas: usd.propostas, valor: usd.valor, em_reais: usd.em_reais, sem_cotacao: usd.sem_cotacao, aprovadas_valor: usd.aprovadas_valor },
-    { propostas: 3, valor: 3000, em_reais: 12500, sem_cotacao: 1, aprovadas_valor: 2000 });
+  // em reais: 3 x 1000; no documento: 1000 / 5,5 + 1000 / 6 + 1000 (sem cotacao: sai em reais)
+  const arred = (x) => Math.round(x * 100) / 100;
+  assert.deepStrictEqual({ propostas: usd.propostas, valor: arred(usd.valor), em_reais: usd.em_reais, sem_cotacao: usd.sem_cotacao, aprovadas_valor: arred(usd.aprovadas_valor) },
+    { propostas: 3, valor: arred(1000 / 5.5 + 1000 / 6 + 1000), em_reais: 3000, sem_cotacao: 1, aprovadas_valor: arred(1000 / 5.5 + 1000 / 6) });
   assert.ok(!(r.json.propostasEmOutraMoeda || []).some((o) => o.moeda === 'BRL'), 'o real nao e "outra moeda"');
   // o total aprovado nao mudou: a sem cotacao esta enviada
-  assert.strictEqual(r.json.valorTotalPropostasAprovadas, 13500);
+  assert.strictEqual(r.json.valorTotalPropostasAprovadas, 4000);
+});
+
+test('MO-06 o documento converte o valor em reais pela cotacao; sem cotacao, sai em reais', async () => {
+  const doc = async (taxaCambio) => {
+    const id = await nova({ moeda: 'USD', taxa_cambio: taxaCambio, status: 'enviada', valor_total: 128990,
+      itens: [{ descricao: 'Projeto Conceitual', quantidade: 1, unidade: 'UN', valor_unitario: 128990, valor_total: 128990 }] });
+    if (taxaCambio === null) await run('UPDATE propostas SET taxa_cambio = NULL WHERE id = ?', [id]);
+    const r = await fetch(`http://127.0.0.1:${porta}/api/propostas/${id}/premium`, { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(120000) });
+    const h = (await r.text()).replace(/ |&nbsp;/g, ' ');
+    assert.strictEqual(r.status, 200, h.slice(0, 300));
+    return h;
+  };
+  const com = await doc('5,8573');
+  assert.ok(com.includes('US$ 22.022,09'), 'R$ 128.990 / 5,8573 deveria sair US$ 22.022,09; saiu: ' + JSON.stringify((com.match(/(US\$|R\$|128\.990|22\.022)[^<]{0,20}/g) || []).slice(0, 8)) + ' tamanho ' + com.length);
+  assert.ok(!com.includes('US$ 128.990,00'), 'o valor em reais saiu com o simbolo do dolar (o print do usuario)');
+  const sem = await doc(null);
+  assert.ok(sem.includes('R$ 128.990,00'), 'sem cotacao o documento sai em reais');
+  assert.ok(!sem.includes('US$ 128.990,00'), 'sem cotacao, o numero em reais com simbolo do dolar');
 });
 
 (async () => {

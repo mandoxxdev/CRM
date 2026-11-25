@@ -1,5 +1,5 @@
 /**
- * Valor da proposta na moeda DELA (25/11/2026: "essa proposta eu coloquei em dólar e aqui está em real... tem que ter um fator de
+ * Valor da proposta na moeda DELA (o modelo mudou em 25/11/2026 — veja valorDaProposta) (25/11/2026: "essa proposta eu coloquei em dólar e aqui está em real... tem que ter um fator de
  * conversão de moeda"). A lista mostrava tudo como R$. Em USD/EUR: "US$ 23.550,00" e, com a cotação gravada (propostas.taxa_cambio,
  * reais por 1 unidade), "≈ R$ 137.939,42" embaixo.
  */
@@ -10,13 +10,22 @@ export function moedaDaProposta(p) {
   return ['USD', 'EUR'].includes(m) ? m : 'BRL';
 }
 
-/** { principal: 'US$ 23.550,00', emReais: '≈ R$ 137.939,42' | null } */
+/**
+ * { principal, emReais }. O valor GRAVADO é em reais em qualquer moeda (25/11/2026: "coloquei 128 mil reais e na proposta aparece
+ * US$ 128.990,00"): em dólar/euro com cotação, o principal é o do documento (reais ÷ cotação, "US$ 22.022,08") e embaixo o valor
+ * em reais ("R$ 128.990,00"). Sem cotação o documento sai em reais — e a lista também.
+ */
 export function valorDaProposta(p) {
+  return valorEmReaisNaMoeda(p, Number(p && p.valor_total) || 0);
+}
+
+/** O mesmo para um valor qualquer da proposta em reais (o líquido com desconto, por exemplo). */
+export function valorEmReaisNaMoeda(p, reais) {
   const moeda = moedaDaProposta(p);
-  const valor = Number(p && p.valor_total) || 0;
-  if (moeda === 'BRL') return { principal: formatar(valor, 'BRL'), emReais: null };
+  const valor = Number(reais) || 0;
   const taxa = Number(p && p.taxa_cambio);
-  return { principal: formatar(valor, moeda), emReais: taxa > 0 ? `≈ ${formatar(valor * taxa, 'BRL')}` : null };
+  if (moeda === 'BRL' || !(taxa > 0)) return { principal: formatar(valor, 'BRL'), emReais: null };
+  return { principal: formatar(valor / taxa, moeda), emReais: formatar(valor, 'BRL') };
 }
 
 /** Texto da cotação para o cadastro: "R$ 5,8573 por US$". */

@@ -665,3 +665,7 @@
   [data-theme="dark"] .plm-limpar { background: #1f1f1f; border-color: rgba(255,255,255,.12); color: #cbd5e1; }
   [data-theme="dark"] .plm-vazio { background: #181818; border-color: rgba(255,255,255,.12); }
 }
+
+/* Proposta em dolar/euro: o valor do documento e, embaixo, o valor em reais (25/11/2026) */
+.propostas-list-valor-moeda { display: flex; flex-direction: column; }
+.propostas-list-valor-em-reais { display: block; font-size: 11px; color: var(--gmp-text-light, #6b7280); font-weight: 500; }

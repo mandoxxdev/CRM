@@ -91,9 +91,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const traducoesDoc = (bi && config.traducoes && typeof config.traducoes === 'object') ? config.traducoes : {};
     const moedaDoc = Bilingue.moedaDaProposta(config.moeda);
     const incotermDoc = String(config.incoterm || '').trim();
+    // Os valores da proposta são digitados em REAIS (como o catálogo). Em dólar/euro, `config.taxa_cambio` (reais por 1 unidade,
+    // a cotação gravada na proposta) converte cada valor no documento — 25/11/2026: "coloquei 128 mil reais e na proposta aparece
+    // US$ 128.990,00". Todo valor do documento passa por estes dois formatadores. As rotas mandam o documento em reais quando a
+    // proposta não tem cotação; sem `taxa_cambio` o valor é tomado como já estando na moeda (o contrato antigo do template).
+    const taxaDoc = moedaDoc !== 'BRL' && Number(config.taxa_cambio) > 0 ? Number(config.taxa_cambio) : 1;
+    const naMoeda = (v) => (Number(v) || 0) / taxaDoc;
     // Nome mantido: com BRL é exatamente o toLocaleString('pt-BR', BRL) de antes (BI-M02).
-    const moedaBRL = (v) => Bilingue.formatarMoeda(v, moedaDoc, 'pt-BR');
-    const moedaTr = (v) => Bilingue.formatarMoeda(v, moedaDoc, idiomaDoc);
+    const moedaBRL = (v) => Bilingue.formatarMoeda(naMoeda(v), moedaDoc, 'pt-BR');
+    const moedaTr = (v) => Bilingue.formatarMoeda(naMoeda(v), moedaDoc, idiomaDoc);
     const T = (pt) => Bilingue.t(idiomaDoc, pt);
     // Um par PT | tradução — UMA unidade para o paginador (RN-BI.03).
     const biPar = (ptHtml, trHtml, classe = '') => `<div class="bi-par${classe ? ` ${classe}` : ''}"><div class="bi-pt">${ptHtml}</div><div class="bi-tr" lang="${idiomaDoc}">${trHtml}</div></div>`;

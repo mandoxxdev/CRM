@@ -42,11 +42,25 @@ test('cotação digitada: vírgula ou ponto; fora do plausível = null', () => {
   for (const v of ['', null, undefined, '0', '-1', 'abc', '5000']) assert.strictEqual(cambio.taxaValida(v), null, String(v));
 });
 
-test('o SQL do valor em reais: real = 1; estrangeira x cotação; sem cotação = 1', () => {
-  const sql = cambio.valorEmReaisSql('p');
-  assert.match(sql, /p\.valor_total/);
-  assert.match(sql, /COALESCE\(p\.taxa_cambio, 1\)/);
-  assert.match(cambio.valorEmReaisSql(), /^\(COALESCE\(valor_total, 0\)/);
+// 25/11/2026 ("coloquei 128 mil reais e na proposta aparece US$ 128.990,00"): o valor gravado e em REAIS em qualquer moeda. A regra
+// da manha (gravado x cotacao) tomava o gravado como dolar. Roda o SQL de verdade num banco em memoria.
+test('o SQL: em reais e o gravado; na moeda do documento e o gravado / cotacao (real ou sem cotacao: o gravado)', async () => {
+  const sqlite3 = require('sqlite3');
+  const db = new sqlite3.Database(':memory:');
+  const all = (sql, p = []) => new Promise((ok, ko) => db.all(sql, p, (e, r) => (e ? ko(e) : ok(r))));
+  await all('CREATE TABLE propostas (id INTEGER, valor_total REAL, moeda TEXT, taxa_cambio REAL)');
+  await all("INSERT INTO propostas VALUES (1, 128990, 'USD', 5.8573), (2, 5000, 'USD', NULL), (3, 7000, 'BRL', NULL), (4, 100, NULL, 9)");
+  const r = await all(`SELECT id, ${cambio.valorEmReaisSql('p')} AS reais, ROUND(${cambio.valorNaMoedaSql('p')}, 2) AS moeda FROM propostas p ORDER BY id`);
+  db.close();
+  assert.deepStrictEqual(r.map((x) => [x.id, x.reais, x.moeda]), [[1, 128990, 22022.09], [2, 5000, 5000], [3, 7000, 7000], [4, 100, 100]]);
+});
+
+test('moedaDoDocumento: dolar/euro so com cotacao valida; sem ela, o documento sai em reais', () => {
+  assert.deepStrictEqual(cambio.moedaDoDocumento({ moeda: 'usd', taxa_cambio: '5,8573' }), { moeda: 'USD', taxa_cambio: 5.8573 });
+  assert.deepStrictEqual(cambio.moedaDoDocumento({ moeda: 'USD', taxa_cambio: null }), { moeda: 'BRL', taxa_cambio: null });
+  assert.deepStrictEqual(cambio.moedaDoDocumento({ moeda: 'BRL', taxa_cambio: 5 }), { moeda: 'BRL', taxa_cambio: null });
+  assert.strictEqual(cambio.ehMoedaEstrangeira(' eur '), true);
+  assert.strictEqual(cambio.ehMoedaEstrangeira('BRL'), false);
 });
 
 if (process.env.CAMBIO_REAL === '1') {

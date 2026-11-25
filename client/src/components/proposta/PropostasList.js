@@ -10,6 +10,7 @@ import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiFileText, FiMoreHorizontal } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
 import './PropostasList.css';
+import { valorEmReaisNaMoeda } from './valorDaProposta';
 
 const STATUS = {
   rascunho: 'Rascunho',
@@ -77,17 +78,28 @@ export default function PropostasList() {
     api.get('/oportunidades', { params: { status: 'ativa' } }).then(r => setOportunidades(Array.isArray(r.data) ? r.data : [])).catch(() => setOportunidades([]));
   }, []);
 
-  const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+  // Proposta em dólar/euro (25/11/2026): o valor gravado é em reais; a lista mostra o do documento (÷ a cotação) e o em reais
+  // embaixo. Sem cotação, em reais — como o documento. (O Propostas.js antigo, que não está em rota nenhuma, foi o que mudou na
+  // manhã de 25/11; esta é a lista da tela.)
+  const formatMoney = (p, v) => valorEmReaisNaMoeda(p, v).principal;
+  const emReais = (p, v) => {
+    const r = valorEmReaisNaMoeda(p, v).emReais;
+    return r ? <small className="propostas-list-valor-em-reais">{r}</small> : null;
+  };
 
   const renderValorComDesconto = (p) => {
     const bruto = Number(p.valor_total) || 0;
     const desconto = Number(p.margem_desconto) || 0;
-    if (desconto <= 0) return formatMoney(bruto);
+    if (desconto <= 0) {
+      const sub = emReais(p, bruto);
+      return sub ? <div className="propostas-list-valor-moeda">{formatMoney(p, bruto)}{sub}</div> : formatMoney(p, bruto);
+    }
     const liquido = Math.max(0, bruto * (1 - desconto / 100));
     return (
       <div className="propostas-list-valor-desconto" title={`Desconto de ${desconto.toFixed(2)}%`}>
-        <span className="propostas-list-valor-antigo">{formatMoney(bruto)}</span>
-        <strong className="propostas-list-valor-novo">{formatMoney(liquido)}</strong>
+        <span className="propostas-list-valor-antigo">{formatMoney(p, bruto)}</span>
+        <strong className="propostas-list-valor-novo">{formatMoney(p, liquido)}</strong>
+        {emReais(p, liquido)}
       </div>
     );
   };

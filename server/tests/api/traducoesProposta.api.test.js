@@ -165,12 +165,13 @@ let idEn; let idPt;
 test('BI-A04 PUT /api/propostas/:id valida idioma e moeda; valido grava', async () => {
   idEn = (await banco("INSERT INTO propostas (numero_proposta, titulo) VALUES ('BI-EN', 'PROJETO TESTE')")).lastID;
   idPt = (await banco("INSERT INTO propostas (numero_proposta, titulo) VALUES ('BI-PT', 'PROJETO TESTE')")).lastID;
-  for (const id of [idEn, idPt]) await banco('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, valor_unitario, valor_total) VALUES (?, ?, 1, 1000, 1000)', [id, 'Item de teste']);
+  // O valor e digitado em REAIS em qualquer moeda e o documento converte pela cotacao (25/11/2026): R$ 5.000 a 5 = US$ 1.000.
+  for (const id of [idEn, idPt]) await banco('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, valor_unitario, valor_total) VALUES (?, ?, 1, 5000, 5000)', [id, 'Item de teste']);
   let r = await req('PUT', `/propostas/${idEn}`, token, { idioma: 'fr' });
   assert.strictEqual(r.status, 400); assert.deepStrictEqual(r.json, { error: 'Idioma inválido. Use pt-BR, en ou es.' });
   r = await req('PUT', `/propostas/${idEn}`, token, { moeda: 'US$' });
   assert.strictEqual(r.status, 400); assert.deepStrictEqual(r.json, { error: 'Moeda inválida. Use BRL, USD ou EUR.' });
-  r = await req('PUT', `/propostas/${idEn}`, token, { idioma: 'en', moeda: 'USD', incoterm: 'FOB – Porto de Santos' });
+  r = await req('PUT', `/propostas/${idEn}`, token, { idioma: 'en', moeda: 'USD', taxa_cambio: '5', incoterm: 'FOB – Porto de Santos' });
   assert.strictEqual(r.status, 200, JSON.stringify(r.json));
   const [p] = await ler('SELECT idioma, moeda, incoterm FROM propostas WHERE id = ?', [idEn]);
   assert.deepStrictEqual(p, { idioma: 'en', moeda: 'USD', incoterm: 'FOB – Porto de Santos' });

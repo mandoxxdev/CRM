@@ -10,12 +10,18 @@ test('[moeda] real: como antes, sem linha em reais', () => {
   expect(valorDaProposta({ valor_total: 23550, moeda: 'BRL' }).emReais).toBeNull();
 });
 
-test('[moeda] dólar e euro: na moeda da proposta, com o valor em reais pela cotação dela', () => {
-  const usd = valorDaProposta({ valor_total: 23550, moeda: 'USD', taxa_cambio: 5.8573 });
-  expect(nbsp(usd.principal)).toBe('US$ 23.550,00');
-  expect(nbsp(usd.emReais)).toBe('≈ R$ 137.939,42');
-  expect(nbsp(valorDaProposta({ valor_total: 1000, moeda: 'EUR', taxa_cambio: 6.426 }).principal)).toBe('€ 1.000,00');
-  expect(valorDaProposta({ valor_total: 1000, moeda: 'USD' }).emReais).toBeNull(); // sem cotação ainda: não inventa
+// 25/11/2026 ("coloquei 128 mil reais e na proposta aparece US$ 128.990,00"): o gravado é em REAIS; a moeda é a do documento.
+test('[moeda] dólar e euro: o valor em reais convertido pela cotação, com o valor em reais embaixo', () => {
+  const usd = valorDaProposta({ valor_total: 128990, moeda: 'USD', taxa_cambio: 5.8573 });
+  expect(nbsp(usd.principal)).toBe('US$ 22.022,09');
+  expect(nbsp(usd.emReais)).toBe('R$ 128.990,00');
+  expect(nbsp(valorDaProposta({ valor_total: 6426, moeda: 'EUR', taxa_cambio: 6.426 }).principal)).toBe('€ 1.000,00');
+});
+
+test('[moeda] dólar sem cotação: em reais, nunca o número em reais com o símbolo do dólar', () => {
+  const v = valorDaProposta({ valor_total: 128990, moeda: 'USD' });
+  expect(nbsp(v.principal)).toBe('R$ 128.990,00');
+  expect(v.emReais).toBeNull();
 });
 
 test('[moeda] moeda desconhecida vale como real; rótulo da cotação', () => {

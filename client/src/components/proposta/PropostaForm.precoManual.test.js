@@ -147,31 +147,39 @@ test('reabrir: item de catalogo SEM valor gravado ainda usa a tabela (proposta a
   proposta.itens[0] = antes;
 });
 
-// 25/11/2026: proposta em dolar — o cadastro mostrava R$ e comparava o valor em US$ com a tabela em reais ("76% abaixo").
-test('em dolar: valores na moeda da proposta, tabela em reais com a conversao, e desconto contra a tabela convertida', async () => {
+// 25/11/2026 ("coloquei 128 mil reais e na proposta aparece US$ 128.990,00"): os valores sao digitados em REAIS em qualquer moeda;
+// a moeda e a do documento. O cadastro fica em R$, compara com a tabela em reais e mostra quanto sai no documento.
+test('em dolar: valores em reais, desconto contra a tabela em reais, e a linha do documento convertida pela cotacao', async () => {
   const antes = { ...proposta };
   Object.assign(proposta, { moeda: 'USD', taxa_cambio: 5, status: 'rascunho' });
-  proposta.itens = [{ ...antes.itens[0], valor_unitario: 190, valor_total: 190, preco_tabela: 1000 }];
+  proposta.itens = [{ ...antes.itens[0], valor_unitario: 950, valor_total: 950, preco_tabela: 1000 }];
   await montar();
-  const texto = container.textContent.replace(/\u00a0/g, ' '); // o Intl separa US$ do numero com espaco fixo
-  expect(texto).toContain('US$ 190,00');
-  expect(texto).toContain('Tabela: R$ 1.000,00 (≈ US$ 200,00)');
-  expect(texto).toContain('5,00% abaixo'); // 190 contra 200, nao contra 1000
-  expect(texto).not.toContain('exige aprovação');
+  const texto = container.textContent.replace(/ /g, ' '); // o Intl separa o simbolo do numero com espaco fixo
+  expect(texto).toContain('R$ 950,00');
+  expect(texto).toContain('Tabela: R$ 1.000,00');
+  expect(texto).toContain('5,00% abaixo');
+  expect(texto).toContain('No documento: US$ 190,00 (cotação R$ 5,0000 por US$)');
   const corpo = await salvar();
+  expect(Number(corpo.itens[0].valor_unitario)).toBe(950); // grava em reais
   expect(corpo.itens[0].desconto_percentual).toBe(5);
-  expect(api.post.mock.calls.some(([url]) => url === '/aprovacoes')).toBe(false);
   Object.keys(proposta).forEach((k) => delete proposta[k]);
   Object.assign(proposta, antes);
 });
 
-test('reaisPorUnidade e descontoDoItem com cotacao: BRL e 1; sem cotacao nao compara', () => {
+test('em dolar sem cotacao: avisa que o documento sai em reais', async () => {
+  const antes = { ...proposta };
+  Object.assign(proposta, { moeda: 'USD', taxa_cambio: null });
+  await montar();
+  expect(container.textContent).toContain('Sem cotação: o documento sai em reais.');
+  Object.keys(proposta).forEach((k) => delete proposta[k]);
+  Object.assign(proposta, antes);
+});
+
+test('reaisPorUnidade: BRL e 1; virgula ou ponto; sem cotacao, null', () => {
   expect(reaisPorUnidade('BRL', '')).toBe(1);
   expect(reaisPorUnidade('USD', '5,8573')).toBe(5.8573);
   expect(reaisPorUnidade('USD', '5.8573')).toBe(5.8573);
   expect(reaisPorUnidade('EUR', '')).toBeNull();
-  expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, 5)).toBe(25);
-  expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, null)).toBe(0);
 });
 
 // 25/11/2026 ("nao consigo digitar o valor aqui"): o campo era type="number" e, no Chrome em pt-BR, "23.550,00" virava 23,55 (o

@@ -47,10 +47,32 @@ function taxaValida(v) {
   return n > 0 && n < 1000 ? n : null;
 }
 
-/** SQL do valor em REAIS de uma proposta: valor_total x a cotação dela (BRL e sem moeda = 1; estrangeira sem cotação = 1, avisado). */
+/**
+ * SQL do valor em REAIS de uma proposta. Desde 25/11/2026 os valores são digitados em reais em qualquer moeda ("coloquei 128 mil
+ * reais e na proposta aparece US$ 128.990,00"): o gravado JÁ é em reais e a moeda só muda o documento. Antes multiplicava pela
+ * cotação (o gravado era tomado como dólar) — com o valor em reais, isso converteria duas vezes. As chamadas continuam por aqui.
+ */
 function valorEmReaisSql(alias) {
   const p = alias ? `${alias}.` : '';
-  return `(COALESCE(${p}valor_total, 0) * (CASE WHEN UPPER(COALESCE(${p}moeda, 'BRL')) IN ('', 'BRL') THEN 1 ELSE COALESCE(${p}taxa_cambio, 1) END))`;
+  return `COALESCE(${p}valor_total, 0)`;
 }
 
-module.exports = { MOEDAS_ESTRANGEIRAS, cotacaoDoDia, taxaValida, valorEmReaisSql, _cache: cache };
+/** SQL do valor na moeda do documento: o gravado (reais) ÷ a cotação; BRL ou sem cotação, o próprio valor em reais. */
+function valorNaMoedaSql(alias) {
+  const p = alias ? `${alias}.` : '';
+  return `(COALESCE(${p}valor_total, 0) / (CASE WHEN UPPER(COALESCE(${p}moeda, 'BRL')) IN ('', 'BRL') OR COALESCE(${p}taxa_cambio, 0) <= 0 THEN 1 ELSE ${p}taxa_cambio END))`;
+}
+
+/**
+ * Moeda e cotação que o DOCUMENTO usa: dólar/euro só com cotação válida (o valor em reais ÷ cotação). Sem cotação o documento sai
+ * em REAIS — nunca o número em reais com o símbolo do dólar.
+ */
+function moedaDoDocumento(proposta) {
+  const moeda = String((proposta && proposta.moeda) || 'BRL').toUpperCase();
+  const taxa = taxaValida(proposta && proposta.taxa_cambio);
+  return MOEDAS_ESTRANGEIRAS.includes(moeda) && taxa ? { moeda, taxa_cambio: taxa } : { moeda: 'BRL', taxa_cambio: null };
+}
+
+const ehMoedaEstrangeira = (moeda) => MOEDAS_ESTRANGEIRAS.includes(String(moeda || '').trim().toUpperCase());
+
+module.exports = { MOEDAS_ESTRANGEIRAS, cotacaoDoDia, taxaValida, valorEmReaisSql, valorNaMoedaSql, moedaDoDocumento, ehMoedaEstrangeira, _cache: cache };
