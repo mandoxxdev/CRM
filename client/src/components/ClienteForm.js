@@ -528,29 +528,13 @@ const ClienteForm = () => {
               <label>Logo do Cliente</label>
               <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
+                  {/* Era um botao laranja em degrade escrito inline (fora de qualquer tema) —
+                      o unico laranja que sobrou na tela (24/11/2026). Agora e o botao
+                      secundario do sistema, como "Cancelar" no topo. */}
                   <label
                     htmlFor="logo-upload"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 20px',
-                      background: 'linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)',
-                      color: 'white',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 2px 8px rgba(255, 107, 53, 0.3)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.transform = 'translateY(-2px)';
-                      e.target.style.boxShadow = '0 4px 12px rgba(255, 107, 53, 0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.transform = 'translateY(0)';
-                      e.target.style.boxShadow = '0 2px 8px rgba(255, 107, 53, 0.3)';
-                    }}
+                    className="btn-secondary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
                   >
                     <FiUpload /> {logoFile ? 'Alterar Logo' : 'Selecionar Logo'}
                   </label>
