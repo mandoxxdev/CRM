@@ -69,13 +69,13 @@ async function salvar() {
 test('o item do catalogo tem o preco EDITAVEL, com a tabela de referencia', async () => {
   await montar();
   expect(campoPreco()).not.toBeNull();
-  expect(campoPreco().value).toBe('1000');
+  expect(campoPreco().value).toBe('1.000,00');
   expect(container.textContent).toContain('Tabela:');
 });
 
 test('subir o preco: grava o valor novo, sem desconto e sem mexer no status', async () => {
   await montar();
-  await digitarPreco(1500);
+  await digitarPreco('1.500,00');
   const corpo = await salvar();
   expect(Number(corpo.itens[0].valor_unitario)).toBe(1500);
   expect(corpo.itens[0]).toMatchObject({ valor_total: 1500, desconto_percentual: 0 });
@@ -85,7 +85,7 @@ test('subir o preco: grava o valor novo, sem desconto e sem mexer no status', as
 
 test('baixar ate 5% da tabela: grava, desconto do item registrado, sem aprovacao', async () => {
   await montar();
-  await digitarPreco(960);
+  await digitarPreco('960,00');
   const corpo = await salvar();
   expect(Number(corpo.itens[0].valor_unitario)).toBe(960);
   expect(corpo.itens[0].desconto_percentual).toBe(4);
@@ -95,7 +95,7 @@ test('baixar ate 5% da tabela: grava, desconto do item registrado, sem aprovacao
 test('baixar mais de 5% da tabela: pede aprovacao — nao passa por fora da regra — e NAO vira desconto geral (sem desconto duplo)', async () => {
   proposta.status = 'rascunho';
   await montar();
-  await digitarPreco(800);
+  await digitarPreco('800,00');
   expect(container.textContent).toContain('exige aprovação');
   const corpo = await salvar();
   expect(Number(corpo.itens[0].valor_unitario)).toBe(800);
@@ -120,7 +120,7 @@ test('reabrir: o valor digitado num item de tabela ZERO (servico) continua o dig
   const antes = proposta.itens[0];
   proposta.itens[0] = { ...antes, valor_unitario: 23550, valor_total: 23550, preco_tabela: 0 };
   await montar();
-  expect(campoPreco().value).toBe('23550');
+  expect(campoPreco().value).toBe('23.550,00');
   const corpo = await salvar();
   expect(Number(corpo.itens[0].valor_unitario)).toBe(23550);
   expect(corpo.itens[0].valor_total).toBe(23550);
@@ -132,7 +132,7 @@ test('reabrir: o valor baixado abaixo da tabela continua o baixado, com o descon
   const antes = proposta.itens[0];
   proposta.itens[0] = { ...antes, valor_unitario: 960, valor_total: 960, preco_tabela: 1000 };
   await montar();
-  expect(campoPreco().value).toBe('960');
+  expect(campoPreco().value).toBe('960,00');
   const corpo = await salvar();
   expect(Number(corpo.itens[0].valor_unitario)).toBe(960);
   expect(corpo.itens[0].desconto_percentual).toBe(4);
@@ -143,7 +143,7 @@ test('reabrir: item de catalogo SEM valor gravado ainda usa a tabela (proposta a
   const antes = proposta.itens[0];
   proposta.itens[0] = { ...antes, valor_unitario: null, valor_total: null, preco_tabela: 1000 };
   await montar();
-  expect(campoPreco().value).toBe('1000');
+  expect(campoPreco().value).toBe('1.000,00');
   proposta.itens[0] = antes;
 });
 
@@ -172,4 +172,17 @@ test('reaisPorUnidade e descontoDoItem com cotacao: BRL e 1; sem cotacao nao com
   expect(reaisPorUnidade('EUR', '')).toBeNull();
   expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, 5)).toBe(25);
   expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, null)).toBe(0);
+});
+
+// 25/11/2026 ("nao consigo digitar o valor aqui"): o campo era type="number" e, no Chrome em pt-BR, "23.550,00" virava 23,55 (o
+// ponto lido como decimal). Agora e o campo de valor do resto do sistema (utils/moeda.js): os digitos entram pela direita.
+test('o valor unitario aceita o formato brasileiro: 23.550,00 fica 23.550,00 (e so digitos entram como centavos)', async () => {
+  await montar();
+  expect(campoPreco().type).toBe('text');
+  expect(campoPreco().value).toBe('1.000,00');
+  await digitarPreco('23.550,00');
+  expect(campoPreco().value).toBe('23.550,00');
+  const corpo = await salvar();
+  expect(Number(corpo.itens[0].valor_unitario)).toBe(23550);
+  expect(corpo.itens[0].valor_total).toBe(23550);
 });

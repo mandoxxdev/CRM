@@ -945,12 +945,14 @@ export default function PropostaForm() {
                         {/* Editável também no item do catálogo (24/11/2026): vem do cadastro e pode ser mudado à mão. */}
                         <div className="proposta-form-money-input">
                           <span className="proposta-form-money-prefix" aria-hidden="true">{simboloMoeda}</span>
+                          {/* Campo de valor do sistema (utils/moeda.js), não type="number": no Chrome em pt-BR o number lia o ponto de
+                              milhar como decimal — "23.550,00" virava 23,55 (25/11/2026, "não consigo digitar o valor"). */}
                           <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={item.valor_unitario}
-                            onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0,00"
+                            value={formatarMoedaBR(item.valor_unitario)}
+                            onChange={(e) => updateItem(idx, 'valor_unitario', digitadoParaValor(e.target.value))}
                             className="input-money"
                             aria-label="Valor unitário"
                           />
