@@ -105,6 +105,26 @@ tema (`data-theme` claro→escuro→claro com `--vt-*` gravados), splash do Come
 (largura, cabeçalho, botões, tabela); telas com cabeçalho ou botão de classe própria
 podem ainda destoar — é olhar uma a uma. A home apple.com continua esperando fotos.
 
+## Noite de 24/11: ajustes ao vivo em produção e o incidente do limitador
+
+Depois do push da rodada 3 o P.O. passou a revisar **em produção** e mandou ajustes
+curtos, todos atendidos no mesmo turno (commits `702faf39`, `a1796257`, `8ce98b18`, `662e8920`):
+
+| O que ele viu | O que entrou |
+|---|---|
+| Tela branca ao abrir às 22:28 (console: `main.af73ec6c.js` 404) | Era a **troca de contêiner** do deploy (Coolify): o `index.html` novo veio de um contêiner e o JS foi pedido ao outro. Entrou um script inline no `index.html` que detecta o 404 do bundle principal, mostra "Atualizando o sistema…" e recarrega (até 3 vezes por aba; o app zera o contador ao subir). |
+| "Muitas requisições" para todo mundo e telas vazias ("parece que zerou o banco") | O limitador da `/api` contava por `req.ip`, que atrás do proxy é **um só para a empresa inteira** (500 pedidos/15 min compartilhados). A noite de três deploys encheu o balde. Agora conta por **usuário do token** (sem token, pelo IP real do `x-forwarded-for`) e o teto padrão subiu para 1500. O banco não foi tocado: a API só recusava. |
+| Esteira de logos parava ao passar o mouse | Segue rolando. |
+| Produtos: "cada imagem parece ter um tamanho" | Cartões brancos com fio, foto 16:10 que preenche, número em pílula, "Ver famílias" como link (`apple-telas.css`, a folha dos ajustes tela a tela). |
+| Barra lateral "sem vida" | Ícones em ladrilhos coloridos e, no rodapé, o **catavento + "GMP / INDUSTRIAIS"** em Inter (ele pediu a marca em todos os dashboards e "mais sério" aqui); no celular o catavento vai para a barra de topo. |
+| Botão "Fundo Animado" sem serventia | Saiu do menu de Preferências (o fundo animado não é mais desenhado em tela nenhuma). |
+| Abertura escura com o pássaro ("essa tela deveria sumir") | `OrionIntro` nunca mais é mostrada; o tour de boas-vindas passa a disparar na montagem. |
+
+> **Deploy:** cada push gera um deploy automático no Coolify. Os três últimos commits da noite
+> levaram mais de 25 minutos para aparecer no servidor (o `index.html` ainda era o das 22:28);
+> se a fila travar, é no painel de "Deployments" do Coolify que se vê — o repositório não tem
+> acesso a ele.
+
 ## Por que isto não quebra nada
 
 É **só CSS**: um arquivo novo, `client/src/styles/apple-theme.css`, importado por último em
