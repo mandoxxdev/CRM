@@ -77,15 +77,73 @@ Não toca motor, trava nem estoque — revisão do plano (Fase 2) e final (Fase 
 
 ## Tasks (todas `tronco`, sequenciais — etapa pequena, um executor)
 
-- [ ] **T1** — servidor: `foto` no `PUT` (RN-263.03) + teste `comprasFornecedorFoto.api.test.js` (POST /foto grava e o GET devolve;
+- [x] **T1** (`9bf903a8`) — servidor: `foto` no `PUT` (RN-263.03) + teste `comprasFornecedorFoto.api.test.js` (POST /foto grava e o GET devolve;
   PUT sem a chave preserva; PUT `null` limpa; PUT com nome → 400 e nada muda). Controle positivo: sabotar o "ausente não mexe" e a recusa.
-- [ ] **T2** — cliente: `fotoFornecedor.js` + seção **Foto** na `FornecedorFicha` (RN-263.01 a 04) + testes no `FornecedorForm.test.js`.
-- [ ] **T3** — cliente: tirar os três campos do `MaterialAlmoxarifadoForm` e mostrar o texto antigo só leitura (RN-263.06 a 08) + testes.
-- [ ] **T4 (integração)** — cenário que cruza: foto enviada pela rota do grupo homologado aparece no `GET /:id` que a ficha lê, e um `PUT`
+- [x] **T2** (`9bf903a8`) — cliente: `fotoFornecedor.js` + seção **Foto** na `FornecedorFicha` (RN-263.01 a 04) + testes no `FornecedorForm.test.js`.
+- [x] **T3** (`6e9d07ca`) — cliente: tirar os três campos do `MaterialAlmoxarifadoForm` e mostrar o texto antigo só leitura (RN-263.06 a 08) + testes.
+- [x] **T4 (integração)** (`9bf903a8`, cenário RN-263.05 de `comprasFornecedorFoto.api.test.js`; para o item 2, `materialCamposRetirados.api.test.js` prova pela porta do Compras o contrato de que a tela depende — `6e9d07ca`) — cenário que cruza: foto enviada pela rota do grupo homologado aparece no `GET /:id` que a ficha lê, e um `PUT`
   da ficha sem `foto` (como o salvar sem tocar na foto) não a apaga; depois o `PUT` com `foto: null` a tira e o `GET` da lista do grupo
   (`/api/compras/grupos/:id/fornecedores`) também a perde.
-- [ ] **T5** — fechamento (`fechar-etapa`), estimado × realizado.
+- [x] **T5** — fechamento (`fechar-etapa`), estimado × realizado (commit de documentos).
+
+## Execução — controle positivo
+
+- Servidor (foto): 3 sabotagens (ausente passa a limpar; sem a recusa de nome; null não limpa) — cada uma derruba o cenário da RN certa.
+- Ficha: 7 sabotagens (sem envio; `foto: null` em todo salvar; envio sem `await`; sem recusa de tipo/tamanho; prévia da gravada depois de tirar;
+  POST sem id) — cada uma pelo teste certo. **A guarda "a nova vence o tirar" é dupla** (`!fotoArquivo` no corpo e `setTirarFoto(false)` na
+  escolha): sabotar uma só não derruba nada; as duas juntas derrubam o cenário RN-263.03 (defeito inalcançável por uma só, mantidas as duas).
+- Material: 4 sabotagens na tela (manda as chaves; esconde o texto antigo; volta o campo Descrição; mostra o bloco vazio) e uma no servidor (ausente
+  vira null só nos três campos) — a do servidor derruba o (a) pela asserção da Descrição preservada (a primeira tentativa, ausente = null em todas
+  as colunas, caía pelo NOT NULL do código — asserção errada; trocada pela dirigida).
+
+## Divergências do plano
+
+- RN-263.02 e o contrato do `/foto`: a literal estava errada (Fase 2, 1) — corrigida e dita acima.
+- RN-263.08: "o PUT leva o mesmo valor carregado" estava errado (Fase 2, 5) — o formulário não manda as três chaves.
+- Pedido do coordenador no meio da T1: reusar as rotas do grupo e **não** criar rota nem coluna — o plano já não criava rota; o "tirar" virou a
+  chave `foto` do PUT existente (B94). O item 1 ficou menor do que o estimado no servidor (as rotas de envio existiam).
+- Fase 5 (revisão final, nenhum bloqueante; 3 achados baixos reais, 0 ruído): (1) POST sem id perdia a foto em silêncio — **corrigido** antes do
+  commit da T2 (toast *"Foto não pôde ser salva, mas o fornecedor foi salvo"*, teste (m2) com sabotagem); (2) **Tirar foto** apaga a foto trocada
+  por outra pessoa depois de a ficha abrir — **mantido**, B1620; (3) o arquivo tirado nunca é limpo — **mantido**, B94. O envio real (fetch +
+  base64) segue sem teste de tela: o código foi só movido.
+- **CLAUDE.md:** nenhuma linha ficou errada (a regra "cadastro é do Compras" vale: tudo no Compras; o Almoxarifado só vê o texto antigo).
+
+## Verificação (medida sobre o código final, `6e9d07ca`)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **670/672 arquivos OK**. Os 2 vermelhos são do módulo de
+  propostas e **não** desta etapa — `propostaBilingueTemplate` (BI-T01: o pt-BR do preview de equipamento mudou de hash) e
+  `propostaPdfExigeLogin` (rota aberta nova `GET /api/uploads/grupos-produtos/:arquivo` em `index.js`); os dois caem do mesmo jeito sozinhos,
+  e esta etapa não toca `index.js` nem a proposta (últimos commits desses arquivos: a outra máquina, "Proposta em dolar ou euro").
+- `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`): **255/255 suítes, 3347/3347 testes**. `CI=true npx react-scripts build`: **Compiled successfully.**
+- Novos: `comprasFornecedorFoto` 4/4, `materialCamposRetirados` 3/3, `FornecedorForm.test.js` 39/39, `MaterialAlmoxarifadoForm.test.js` 77/77.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: **1** (a Fase 5 trouxe uma correção pequena; nenhum teste caiu duas vezes).
+- Achados da revisão: Fase 2 **6 reais / 0 ruído**; Fase 5 **3 reais (baixos) / 0 ruído**.
+- Paralelismo: **0** galhos em paralelo (etapa pequena, um executor); revisões em agente separado.
+- Defeito que escapou: preencher na próxima etapa.
 
 ## Próxima tarefa detalhada
 
-(preenchida no fechamento)
+Os itens **8 e 9** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`), juntos numa etapa — a
+próxima tarefa do plano da 262, que esta etapa (pedido com prioridade) passou na frente. Nada desta etapa toca o que eles mexem. Régua:
+`bloqueioPorLote.bloqueadoDoLoteSql` e o retido de `retidoDoLote.js`.
+
+1. **Item 8 — a Saída e a Perda com lote respeitam as peças bloqueadas do lote (C546, D (249) 1; 1h15, motor).** Medido na 249: *L1* 4 com 2
+   bloqueados em *L1*, *L2* 4 — a **Saída** de 4 do *L1* (Movimentações) passa, confere o bloqueado do **material** e não o do lote; *L1* fica 0
+   e o livro ainda diz *L1 2* bloqueado. Onde: `stockService.registrarMovimentacao` (ramo de saída com `lote_id`; o motor inteiro roda sob
+   `naTravaDoMaterial`); hoje o motor não usa `retidoDoLote` nem `bloqueioPorLote` na saída (só `requisitionService`,
+   `reservaChegadaService`, `lotService`). Fatia visível: o seletor de lote da Saída já mostra o livre do lote (Etapa 241) — somar as
+   bloqueadas. Pontos de atenção: a mesma régua da entrega (`loteImpedido`/`retidoDoLote`, com o limite por família B1436) para não divergir;
+   a literal no molde da recusa do lote na entrega (*"no lote L1 há 4 PC, mas só 2 podem sair …"*); as compensações internas e a devolução para
+   Sucata (`parDaDevolucao`) não podem ser barradas pelo bloqueio que a própria devolução gravou.
+2. **Item 9 — o estorno da entrada de um lote com peças bloqueadas (C547; 1h, motor/estorno).** Medido na 249: *L1* 4 todo bloqueado no
+   lote, *L2* 4 — estornar a entrada do *L1* passa; *L1* 0 e o livro diz *L1 4* bloqueado. Onde: `cancelarMovimentacao`, ramo de entrada
+   (`tiposEntrada`), dentro da seção da trava — conferir `bloqueadoDoLoteSql(material, mov.lote_id)` contra o saldo do lote depois do débito;
+   recusa com o caminho (*Desbloquear* escolhendo o lote). Atenção: a entrada da devolução para Quarentena já é recusada pela RN-262.02 (a guarda
+   nova não pode mudar a mensagem dela — ordem); o claim provisório (régua "vivo" = estorno concluído).
+- Motor/estorno: Fase 2 e Fase 5 com sonda executada, falha forçada e corrida.
+- **O que já está pronto e não reabre:** a foto do fornecedor na ficha e os campos retirados do material (esta etapa); as recusas do estorno da
+  entrada da devolução (262).

@@ -5,7 +5,9 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** **2026-11-23 — Etapa 260 entregue:** a busca de **Compras → Materiais** (e de Almoxarifado →
+> **Onde o desenvolvimento está:** **2026-11-25 — Etapa 263 entregue:** a ficha do fornecedor (Novo, Editar e a janela do F2) mostra,
+> troca e tira a **foto** — a mesma do grupo homologado (B94) —, e o cadastro de material perde **Aplicação**, **Especificações Técnicas** e
+> **Descrição**, com o texto antigo só para leitura (B95). Antes: **2026-11-23 — Etapa 260 entregue:** a busca de **Compras → Materiais** (e de Almoxarifado →
 > Materiais) acha o material pelos fornecedores cadastrados nele — nome, fantasia, código do fornecedor e descrição comercial —, e a lista
 > mostra esses fornecedores embaixo do nome (B93). Antes: **2026-11-20 — Etapa 254 entregue:** o material criado pela sobra e pela remessa a terceiros chega ao
 > **Compras → Materiais** marcado *cadastro a completar*, com aviso, filtro e selo, até o Compras salvar (B92). Antes: **2026-10-30 — Etapa 193 entregue** (`19c69056` a `262c6bd5`, na `main`): o **cadastro de
@@ -637,6 +639,14 @@
   Principal fica na busca e só aparece na lista, marcado *"(cadastro antigo)"*, quando não há fornecedor vinculado.** A migração da Etapa 212
   só converteu o texto que batia com um fornecedor só; tirá-lo da lista esconderia a única informação daquele material. **Descartado:** tirar
   o texto antigo de tudo. Detalhe: **B1610** em `docs/almoxarifado-novidades-por-etapa.md`. **Reversível.**
+- **B94 — 25/11/2026 (Etapa 263): tirar a foto do fornecedor é pela própria ficha, sem rota nova, e o arquivo tirado fica na pasta.** O
+  pedido foi reusar as rotas de foto do grupo homologado. **Escolhido:** o salvar da ficha manda `foto: null` quando **Tirar foto** está marcado;
+  sem a chave, nada muda (é o que o grupo homologado manda); qualquer outro valor é recusado (*"Para trocar a foto, envie a imagem"*), para a
+  ficha nunca apontar para o arquivo de outro fornecedor. O arquivo tirado **não** é apagado (dá para recuperar). **Descartado:** rota nova
+  para tirar; apagar o arquivo junto (irreversível). Vizinha: **B1620** em `docs/almoxarifado-novidades-por-etapa.md`. **Reversível.** `9bf903a8`.
+- **B95 — 25/11/2026 (Etapa 263): Aplicação, Especificações Técnicas e Descrição saem do cadastro de material; o texto antigo fica só para
+  leitura e continua na busca.** Responde os itens 23 e 25 da estimativa de 23/11. Detalhe, escolhido e descartado: **B1619** em
+  `docs/almoxarifado-novidades-por-etapa.md`. **Reversível.** `6e9d07ca`.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -816,6 +826,57 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 263 — A foto do fornecedor na ficha; três campos saem do cadastro de material (2026-11-25)
+
+**Em uma frase.** A foto do fornecedor só aparecia e só se trocava em **Fornecedores homologados**; agora a ficha do fornecedor (Novo, Editar e
+a janela do F2) mostra, troca e tira a **mesma** foto (B94). E o cadastro de material perde **Aplicação**, **Especificações Técnicas** e
+**Descrição**, sem apagar o que já estava escrito (B95). Detalhe dos campos e as decisões vizinhas: seção da Etapa 263 em
+`docs/almoxarifado-novidades-por-etapa.md`.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Fornecedores → Novo / lápis** (e a janela do **F2** no pedido, na cotação e no grupo): nova seção **Foto**, depois de Endereço.
+  Mostra a foto gravada (ou *"Sem foto"*), **Escolher foto** / **Trocar foto** com prévia, **Tirar foto**, e a nota *"JPG, PNG, GIF ou WEBP · até
+  10 MB. A foto é gravada ao salvar."*. A foto vai ao **Salvar**, depois de o fornecedor gravar.
+- Recusas na hora de escolher: *"Formato de imagem não suportado"* (fora dos quatro tipos) e *"Arquivo grande demais (máximo 10 MB)"*. A foto anterior continua.
+- **Tirar foto** → *"A foto sai ao salvar"*; salvo, a foto some da ficha e do grupo homologado.
+- Se a foto falhar depois de o fornecedor ser salvo: *"Foto não pôde ser salva, mas o fornecedor foi salvo: ⟨motivo⟩"* — o fornecedor fica salvo.
+- **Compras → Materiais** (novo e editar) e a consulta do Almoxarifado: sem **Descrição**, **Aplicação** e **Especificações Técnicas**. Material
+  que já tinha texto num deles mostra *"⟨Campo⟩ (campo retirado — só leitura)"* com o texto; salvar não o apaga.
+
+### Por baixo do capô
+
+- As funções da foto saíram da tela do grupo para um módulo comum, que a ficha e o grupo usam; as rotas de envio são as mesmas de antes.
+- O salvar da ficha aceita a chave `foto` só vazia (tira); ausente, não mexe; outro valor, 400 *"Para trocar a foto, envie a imagem"*.
+- O formulário de material não manda mais as três chaves; ausentes, o servidor preserva o gravado (e a conferência de edição concorrente
+  não as compara).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A ficha do fornecedor sem foto | Foto com prévia, trocar e tirar |
+| Foto só pelo grupo homologado | A mesma foto nos dois lugares |
+| Material com Descrição, Aplicação e Especificações Técnicas | Saíram; o texto antigo só para leitura |
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Fornecedores homologados** → um grupo → **Editar fornecedor** de um cartão → ponha uma foto → salve.
+2. **Compras → Fornecedores** → lápis do mesmo fornecedor → **Confira** a mesma foto na seção **Foto** e o botão **Trocar foto**.
+3. **Trocar foto** → escolha outra imagem → **Confira** a prévia → **Salvar** → volte ao grupo → **Confira** a foto nova no cartão.
+4. Lápis de novo → **Tirar foto** → **Confira** *"A foto sai ao salvar"* → **Salvar** → o cartão do grupo fica sem foto.
+5. Lápis → **Trocar foto** com um PDF → **Confira** *"Formato de imagem não suportado"*.
+6. **Compras → Materiais → Novo** → **Confira** que não há Descrição, Aplicação nem Especificações Técnicas; Descrição Técnica e Observações
+   Gerais continuam.
+7. Lápis de um material antigo com Aplicação preenchida → **Confira** *"Aplicação (campo retirado — só leitura)"* com o texto → **Salvar** →
+   abra de novo → o texto continua.
+
+### O que a etapa NÃO cobre
+
+- O arquivo da foto tirada fica na pasta do servidor (B94).
+- **Tirar foto** não confere se outra pessoa trocou a foto depois de a ficha abrir (B1620 no documento do almoxarifado).
+- O texto antigo dos três campos do material não se edita mais (B95).
 
 ## Etapa 260 — A busca de materiais acha pelo fornecedor (2026-11-23)
 

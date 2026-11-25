@@ -11,7 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-24):** **Etapa 262 fechada** (**o estorno da entrada de uma devolução respeita a quarentena e a
+> **Onde o desenvolvimento está (2026-11-25):** **Etapa 263 fechada** (**a foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
+> Descrição fora do cadastro de material** — pedido de 25/11, com prioridade; decisões **B1619**, **B1620** e, no Compras, **B94** e **B95**;
+> limitação **D (263)**; verificação **F (263)**; sem consulta antes do deploy). **Próxima:** os itens 8 e 9 da estimativa de 23/11.
+> Antes: **Etapa 262 fechada** (**o estorno da entrada de uma devolução respeita a quarentena e a
 > requisição já excluída** — itens 6 e 7 da estimativa de 23/11 (**C239** e **C552** resolvidos). Decisões **B1617** e **B1618** (a **B1617** revê a
 > **B761**); limitação **D (262)**; verificação **F (262)**; sem consulta antes do deploy).
 > **Próxima:** os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
@@ -4896,7 +4899,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15673,6 +15676,21 @@ cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
 sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
 
+**B1620 (NOVA, da Etapa 263; decisão do agente) — "Tirar foto" na ficha do fornecedor não confere edição concorrente.** A ficha manda
+`foto: null` ao salvar com **Tirar foto** marcado; se, com a ficha aberta, outra pessoa trocou a foto pelo grupo homologado, a nova é que sai
+(achado da revisão final, baixo). **Escolhido:** deixar assim — a ficha do fornecedor não tem conferência de edição concorrente em campo
+nenhum (o salvar já reenvia todos os textos), e a foto tirada por engano volta com um novo envio. **Descartado:** mandar o nome da foto que a
+ficha leu e recusar se mudou (contrato novo para um caso raro). **Reversível.** `9bf903a8`.
+
+**B1619 (NOVA, da Etapa 263; decisão do agente) — Aplicação, Especificações Técnicas e Descrição saem do formulário de material; o texto
+antigo fica só para leitura e continua sendo lido por quem já lia.** Pedido de 25/11 (resolve os itens 23 e 25 da estimativa de 23/11). As
+colunas ficam. **Escolhido:** (1) no formulário, o texto antigo aparece só para leitura onde o campo ficava; (2) o POST/PUT **não manda** as três
+chaves, e o servidor preserva o gravado — reenviar o valor lido dava 409 sobre um campo que a tela não mostra quando outra pessoa o mudava (Fase 2);
+(3) a busca de materiais (Compras, Almoxarifado e a da requisição) continua achando pela Descrição antiga, e o catálogo da requisição continua
+mostrando-a embaixo do nome. **Descartado:** apagar os textos (irreversível); esconder também da busca e do catálogo (o material antigo perderia
+a única descrição que tem nesses lugares); deixar editável só quando já tem texto (manteria o campo que se pediu para tirar). **Reversível**:
+devolver os campos é voltar três blocos do formulário. `6e9d07ca`.
+
 **B1618 (NOVA, da Etapa 262; decisão do agente) — a entrada de uma devolução de requisição já excluída não se estorna.** A exclusão devolve
 ao estoque o resto da entrega descontando a devolução; estornar depois a entrada dela tirava as peças de novo (5 → 3, **C552**). **Escolhido:**
 recusar em todos os destinos, com o caminho do Ajuste, e **antes** das recusas da Sucata, da Quarentena e das séries (estornar a sucata ou o
@@ -21673,6 +21691,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(263) A foto do fornecedor e os campos retirados, o que ficou de fora.** (1) O arquivo da foto tirada fica na pasta do servidor; a
+  troca pelo envio continua apagando a anterior, mas a tirada não é apagada por ninguém (**B94**). (2) **Tirar foto** não confere se outra pessoa
+  trocou a foto depois de a ficha abrir (**B1620**). (3) Os textos antigos de Descrição, Aplicação e Especificações Técnicas não se editam mais por
+  tela nenhuma (**B1619**). (4) A recusa de tipo e de tamanho da ficha é conferida na tela; o envio usa o caminho da tela do grupo, que em
+  qualquer recusa 400 tenta de novo pela outra porta de envio (a mensagem que aparece é a dela, a mesma literal de formato). (5) Nenhum clique
+  foi dado (**F (263)**).
 - **(262) O estorno da entrada da devolução, o que ficou de fora.** (1) Com outro bloqueio sem lote de pé no mesmo material **feito depois
   desta devolução** — um bloqueio feito à mão, ou a quarentena de **outra** devolução —, a quarentena desta já liberada é recusada pedindo o
   estorno do bloqueio dela, que, se feito, solta o bloqueio do outro (medido na revisão final: duas quarentenas, *A* liberada e *B* de pé —
@@ -23352,6 +23376,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(263) Nenhum clique foi dado.** A foto da ficha foi provada pela tela com o envio simulado (a rota tem cenário próprio no servidor) e os
+campos retirados pela tela e pela porta do Compras. Vale conferir no navegador: o roteiro da Etapa 263 em `docs/almoxarifado-guia-etapas-e-testes.md`
+(foto vista no grupo depois de trocada na ficha; o bloco *"(campo retirado — só leitura)"* num material antigo).
 
 **(262) Nenhum clique foi dado.** As recusas foram provadas pela rota real do **Estornar** (`POST /movimentacoes/:id/cancelar`), com a
 devolução, o Desbloquear, a exclusão da requisição e os estornos reais; as corridas com o estorno parado no meio. Vale 5 minutos: o roteiro da
@@ -44900,12 +44928,60 @@ confere de novo antes de mexer no estoque e recusa com a mesma mensagem. Se o es
 - Com outro bloqueio feito à mão sem lote no mesmo material, a quarentena já liberada também pede o estorno do bloqueio (**D (262)** 1, **B1617**).
 - A devolução de requisição excluída registrada errada só se acerta com Ajuste; os estornos já feitos não mudam (**D (262)**).
 
+## Etapa 263 — A foto do fornecedor na ficha; Aplicação, Especificações Técnicas e Descrição saem do cadastro de material (2026-11-25)
+
+Dois pedidos de 25/11, com prioridade. **(1)** A foto do fornecedor já existia, mas só aparecia e só se trocava na tela do grupo homologado;
+a ficha do fornecedor (Novo, Editar e a janela do F2) não a mostrava. **(2)** O cadastro de material tinha três campos de texto que a equipe
+não usa — **Aplicação**, **Especificações Técnicas** e **Descrição**. Agora a ficha tem a foto, e os três campos saíram do formulário sem
+apagar o que já estava escrito. A seção completa do item 1 (que é do Compras) está em `docs/compras-novidades-por-etapa.md`, Etapa 263.
+Decisões do agente: **B1619** e **B1620** (aqui) e **B94**/**B95** (Compras).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A ficha do fornecedor não mostrava a foto | Seção **Foto**: mostra a gravada, **Escolher foto** / **Trocar foto** com prévia, **Tirar foto**; grava ao **Salvar** |
+| A foto só se trocava em **Fornecedores homologados** | A mesma foto nos dois lugares: posta num, aparece no outro |
+| Cadastro de material com **Descrição**, **Aplicação** e **Especificações Técnicas** | Os três saíram; **Descrição Técnica** e **Observações Gerais** ficam |
+| — | Material que já tinha texto num dos três mostra *"⟨Campo⟩ (campo retirado — só leitura)"* com o texto, e salvar não o apaga |
+
+### As regras, com o cenário exato
+
+**1. A foto na ficha (RN-263.01, RN-263.05).** **Compras → Fornecedores** → lápis de um fornecedor que tem foto no grupo homologado → a seção
+**Foto** mostra a mesma imagem e o botão **Trocar foto**. Escolha um PNG → a prévia troca na hora; **Salvar** → *"Fornecedor salvo"*. Abra o
+grupo homologado: o cartão mostra a foto nova. No **Novo fornecedor** a foto escolhida é enviada logo depois de o fornecedor ser criado.
+
+**2. O que a ficha recusa antes de enviar (RN-263.02).** Escolher um PDF → *"Formato de imagem não suportado"*; uma imagem de mais de 10 MB → *"Arquivo grande demais (máximo 10 MB)"*.
+A foto anterior continua na tela.
+
+**3. Tirar (RN-263.03, B94).** **Tirar foto** → a prévia some e aparece *"A foto sai ao salvar"*; **Salvar** → a foto sai da ficha e do grupo.
+Escolher outra depois de **Tirar foto**: vale a nova.
+
+**4. A foto que falha depois de salvar (RN-263.04).** O fornecedor fica salvo e aparece *"Foto não pôde ser salva, mas o fornecedor foi salvo: ⟨motivo⟩"*.
+
+**5. Os campos retirados do material (RN-263.06 a 08, B1619).** **Compras → Materiais → Novo**: não há mais Descrição, Aplicação nem
+Especificações Técnicas. Edite um material que já tinha texto em *Aplicação* → aparece *"Aplicação (campo retirado — só leitura)"* com o texto,
+sem campo para digitar; **Salvar** → o texto continua gravado. A consulta do Almoxarifado (**Ver**) mostra o mesmo bloco. A busca de materiais
+continua achando pela Descrição antiga, e o catálogo da requisição continua mostrando-a embaixo do nome.
+
+### O que esta etapa NÃO cobre
+
+- O arquivo da foto tirada fica na pasta do servidor (**B94**, **D (263)**).
+- **Tirar foto** não confere se outra pessoa trocou a foto pelo grupo homologado depois de a ficha abrir (**B1620**, **D (263)**).
+- O texto antigo dos três campos não se edita mais por tela nenhuma (**B1619**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 263 entregue (2026-11-25):** **a foto do fornecedor na ficha (cadastro, edição e janela do F2) e Aplicação, Especificações
+  Técnicas e Descrição fora do cadastro de material** (pedido de 25/11, com prioridade; resolve os itens 23 e 25 da estimativa de 23/11).
+  Commits `b2ad50db` (plano e Fase 2), `9bf903a8`, `6e9d07ca` e o fechamento. **O que é seu:** as **B1619** e **B1620** (e **B94**/**B95** no
+  Compras), reversíveis; a limitação **(263)** em D e a verificação **(263)** em F. Sem consulta antes do deploy. **Próxima:** os itens 8 e 9 da
+  estimativa de 23/11 (fim do plano da 263).
 
 - **Etapa 262 entregue (2026-11-24):** **o estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída** (itens 6
   e 7 da estimativa de 23/11; **C239** e **C552** resolvidos). Commits `2c93072e` (plano), `7d5367ce` (motor, testes e a Fase 2), Fase 5

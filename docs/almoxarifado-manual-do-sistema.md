@@ -155,10 +155,10 @@ O formulário é dividido em sete blocos, sempre nesta ordem:
 
 | Bloco | O que reúne |
 |---|---|
-| Identificação | Código, Nome do Material, Descrição, Descrição Técnica |
+| Identificação | Código, Nome do Material, Descrição Técnica |
 | Classificação | Família, Subfamília, Categoria, Tipo de Material, Material crítico |
 | Propriedade | Proprietário (GMP ou um cliente) |
-| Dados Técnicos | Fabricante, Código no Fabricante, Marca, Modelo, Norma Técnica, Material Construtivo, Peso Unitário (kg), Dimensões, NCM, Aplicação, Especificações Técnicas, Observações Gerais |
+| Dados Técnicos | Fabricante, Código no Fabricante, Marca, Modelo, Norma Técnica, Material Construtivo, Peso Unitário (kg), Dimensões, NCM, Observações Gerais |
 | Estoque e Reposição | Unidade de Medida, Saldo Inicial (ou Quantidade Atual, ao editar), Estoque Mínimo, Estoque Máximo, Ponto de Reposição, Lote Econômico, Localização no estoque |
 | Controles | as sete opções descritas em 2.7 |
 | Unidades e Custos | Classe ABC (com legenda), Custo Unitário (R$), Como é comprado (com a frase "1 CX contém 12 UN"), Fornecedor Principal, Código no Fornecedor |
@@ -394,8 +394,12 @@ O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material,
 | Dimensões | medidas do item, em texto livre |
 | NCM | classificação fiscal |
 | Nº do CA / Validade do CA | só EPI — o Certificado de Aprovação e a data até quando vale; sem CA, ou com a validade anterior a hoje, o EPI não é entregue pela tela de Entrega de EPI (21-bis). Os dois campos só aparecem quando o material é EPI pelas mesmas marcas da Entrega de EPI (21-bis.2): o Tipo de Material escolhido marcado como EPI no cadastro de tipos, o tipo *EPI*, a categoria *EPIs* ou o material já ligado a um tipo de EPI; trocar o tipo ou a categoria na tela os mostra ou esconde na hora. Junto deles aparece a frase *"CA é o Certificado de Aprovação do EPI (equipamento de proteção individual): o número e a data de validade que constam no certificado. Só vale para material do tipo EPI."* Escondidos, o CA que já estava gravado não se perde: o salvar o mantém como estava |
-| Aplicação | onde esse item é usado |
-| Especificações Técnicas / Observações Gerais | texto longo, para o que não cabe nos campos acima |
+| Observações Gerais | texto longo, para o que não cabe nos campos acima |
+
+**Descrição, Aplicação e Especificações Técnicas** não fazem parte do formulário. Um material que tenha texto gravado num desses três mostra-o
+só para leitura, no lugar onde ficava, com o rótulo *"Descrição (campo retirado — só leitura)"*, *"Aplicação (campo retirado — só leitura)"* ou
+*"Especificações Técnicas (campo retirado — só leitura)"*; sem texto, nada aparece. Salvar o material não apaga esse texto. A busca da lista de
+materiais continua achando o material pela Descrição gravada, e o catálogo de materiais da requisição continua mostrando-a embaixo do nome.
 
 ### 2.5 Classificação ABC
 
@@ -5072,6 +5076,20 @@ ficha fica em branco no cadastro.
 
 Se o fornecedor tiver sido apagado por outra pessoa enquanto a tela estava aberta, a edição abre com a
 faixa *"Fornecedor não encontrado"*.
+
+**A foto do fornecedor.** Depois do Endereço, a ficha tem o bloco **Foto** — a **mesma** foto que aparece no cartão do fornecedor em
+**Fornecedores homologados** (14c.5): trocada num lugar, aparece no outro. Sem foto, o quadro diz *"Sem foto"* e o botão é **Escolher foto**;
+com foto, **Trocar foto** e **Tirar foto**. A nota embaixo: *"JPG, PNG, GIF ou WEBP · até 10 MB. A foto é gravada ao salvar."*
+
+- Escolher a imagem mostra a prévia na hora, mas **nada é enviado até o Salvar**; Cancelar descarta a escolha. Ao salvar, primeiro o fornecedor
+  é gravado e depois a foto é enviada — no cadastro novo é assim que a foto chega ao fornecedor recém-criado. A tela só volta para a lista (ou
+  a janela do F2 só fecha) depois do envio, e o Salvar fica travado enquanto isso.
+- A ficha recusa, antes de enviar, o arquivo que não é JPEG, PNG, GIF ou WEBP — *"Formato de imagem não suportado"* — e a imagem com mais de 10 MB — *"Arquivo grande demais (máximo 10 MB)"*.
+  A foto anterior continua.
+- **Tirar foto** apaga a prévia e mostra *"A foto sai ao salvar"*; ao salvar, o fornecedor fica sem foto (na ficha e no grupo homologado).
+  Escolher outra imagem depois de **Tirar foto** vale a nova.
+- Se a foto for recusada depois de o fornecedor já ter sido salvo, o fornecedor fica salvo e aparece *"Foto não pôde ser salva, mas o fornecedor foi salvo: ⟨motivo⟩"*.
+- Salvar a ficha sem mexer na foto não a altera.
 
 #### Cadastrar o fornecedor sem sair do pedido, da cotação ou do grupo — a tecla F2
 

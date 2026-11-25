@@ -7,6 +7,13 @@
 > contraria a regra: `CLAUDE.md`, seção "Regra de negócio: cadastro é do Compras; o Almoxarifado só movimenta".
 > Esta feature descreve telas do Almoxarifado que gravam famílias, categorias e tipos de material: isso **vai para o Compras** (estimativa de 12/11/2026, `docs/estimativas/2026-11/estimativa_2026-11-12_cadastros-so-no-compras.md`).
 
+> **+ Etapa 263 (2026-11-25, `6e9d07ca`): Aplicação, Especificações Técnicas e Descrição saem do formulário de material (pedido de 25/11).**
+> - [x] Os três campos fora do cadastro novo e da edição (Compras e consulta do Almoxarifado) — `6e9d07ca`
+> - [x] Texto antigo só para leitura (*"⟨Campo⟩ (campo retirado — só leitura)"*), só quando há texto — `6e9d07ca`
+> - [x] O POST/PUT não manda as três chaves; o servidor preserva o gravado (provado em `materialCamposRetirados.api.test.js`) — `6e9d07ca`
+> - [x] Descrição Técnica e Observações Gerais ficam — `6e9d07ca`
+> - [ ] Tirar as colunas do banco — **fora de propósito**: ficam, para o texto antigo continuar lido pela busca e pelo catálogo da requisição (B1619).
+
 > **+ Etapa 160 (2026-10-19, `eaf682e9`, `d5cd52ea`, Fase 5 `ff3e7d78`): a busca da lista de Materiais acha a letra acentuada em qualquer caixa e aparada (C393, B1019), a lista mostra só a resposta do último pedido, e o filtro dos Estoques mínimos apara e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim; o status não muda.
 
 > **Status:** 🟡 — **continua 🟡. Etapa 126 (`6a1ecee0..11a12cad`): o *Editar* da aba Famílias manda o nome, o tipo de uso e a descrição

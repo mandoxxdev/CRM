@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-24 (Etapa 262 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-25 (Etapa 263 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 262 fechada — 2026-11-24.** **O estorno da entrada de uma devolução respeita a quarentena e a
+> **O desenvolvimento parou aqui: Etapa 263 fechada — 2026-11-25.** **A foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
+> Descrição fora do cadastro de material** (pedido de 25/11, com prioridade). **Sem consulta antes do deploy.** **Nenhum clique foi dado**
+> (roteiro na seção da 263). **Onde parou, exatamente:** a **263 está fechada**; a próxima são os itens 8 e 9 da estimativa de 23/11 (fim do
+> plano da 263).
+>
+> *(Antes:)* **Etapa 262 fechada — 2026-11-24.** **O estorno da entrada de uma devolução respeita a quarentena e a
 > requisição já excluída** (itens 6 e 7 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção
 > da 262). **Onde parou, exatamente:** a **262 está fechada**; a próxima são os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
 >
@@ -7457,6 +7462,34 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 263 — A foto do fornecedor na ficha; Aplicação, Especificações Técnicas e Descrição saem do cadastro de material (ENTREGUE — 2026-11-25)
+
+**Em uma frase:** a ficha do fornecedor (Novo, Editar e a janela do F2) mostra, troca e tira a **mesma foto** do grupo homologado; e o cadastro
+de material perde **Aplicação**, **Especificações Técnicas** e **Descrição** — o texto que já existia aparece só para leitura e não se perde.
+
+| Antes | Agora |
+|---|---|
+| A ficha do fornecedor sem foto | Seção **Foto**: **Escolher foto** / **Trocar foto** com prévia, **Tirar foto**; grava ao **Salvar** |
+| Foto só em **Fornecedores homologados** | A mesma foto nos dois lugares |
+| Material com Descrição, Aplicação e Especificações Técnicas | Os três saíram; o texto antigo aparece como *"⟨Campo⟩ (campo retirado — só leitura)"* |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **administrador do Compras**. **Compras → Fornecedores homologados** → um grupo → **Editar fornecedor** → ponha uma foto → salve.
+2. **Compras → Fornecedores** → lápis do mesmo fornecedor → **Confira:** a mesma foto na seção **Foto** e o botão **Trocar foto**.
+3. **Trocar foto** → outra imagem → **Confira** a prévia → **Salvar** → *"Fornecedor salvo"* → no grupo, **Confira** a foto nova no cartão.
+4. Lápis → **Trocar foto** com um PDF → **Confira:** *"Formato de imagem não suportado"*; a foto anterior continua.
+5. **Tirar foto** → **Confira:** *"A foto sai ao salvar"* → **Salvar** → no grupo, o cartão fica sem foto.
+6. **Compras → Materiais → Novo** → **Confira:** sem Descrição, Aplicação e Especificações Técnicas; com Descrição Técnica e Observações Gerais.
+7. Lápis de um material antigo com Aplicação preenchida → **Confira:** *"Aplicação (campo retirado — só leitura)"* e o texto → **Salvar** → abra de
+   novo → o texto continua. **Almoxarifado → Materiais → Ver** do mesmo material mostra o mesmo bloco.
+
+**O que esta etapa NÃO cobre:** o arquivo da foto tirada fica na pasta do servidor; **Tirar foto** não confere se outra pessoa trocou a foto
+depois de a ficha abrir; o texto antigo dos três campos não se edita mais.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (tela e servidor) provam, escrito para você
+conferir à mão.
 
 ## Etapa 262 — O estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída (ENTREGUE — 2026-11-24)
 
