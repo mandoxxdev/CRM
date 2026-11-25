@@ -633,15 +633,43 @@ function podeInativarProposta(user, proposta) {
 // Rate Limiting simples (em memória)
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10);
-// 500 por IP a cada 15 minutos continua sendo o padrão de produção. O valor
-// virou configurável porque uma varredura automatizada do front (126 telas,
-// nos dois temas) estoura esse teto na metade e passa a receber 429 — e uma
-// tela que não carregou é indistinguível, no pixel, de uma tela vazia. Sem
-// poder levantar o teto no ambiente local, a medição mede o rate limiter.
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '500', 10);
+// 1500 por USUARIO a cada 15 minutos e o padrao de producao (era 500 por IP; ver
+// chaveDoLimitador). O valor virou configuravel porque uma varredura automatizada
+// do front (126 telas, nos dois temas) estoura esse teto na metade e passa a
+// receber 429 — e uma tela que nao carregou e indistinguivel, no pixel, de uma
+// tela vazia. Sem poder levantar o teto no ambiente local, a medicao mede o rate limiter.
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '1500', 10);
+
+// A CHAVE do limitador (24/11/2026, incidente em producao). Atras do proxy do
+// Coolify/Traefik — e sem `trust proxy`, de proposito (ver
+// services/almoxarifado/origemRequisicao.js) — `req.ip` e o IP do proxy para TODO
+// MUNDO: a empresa inteira dividia um balde de 500 pedidos por 15 minutos. Numa
+// noite de tres deploys seguidos (cada troca de conteiner recarrega as abas
+// abertas, e cada dashboard faz 10-15 chamadas) o balde encheu e todos os usuarios
+// passaram a receber 429 — telas vazias, "parece que zerou o banco". A chave agora:
+//   1. o USUARIO do token (payload decodificado sem verificar: isto so agrupa; quem
+//      autentica continua sendo authenticateToken, e um token forjado so ganharia
+//      um balde proprio) — porque a empresa sai por UM IP publico, e por IP
+//      continuaria sendo um balde para todos;
+//   2. sem token, o primeiro endereco do x-forwarded-for (o cliente) e, sem ele,
+//      req.ip. O x-forwarded-for e forjavel, mas forjar so troca de balde.
+function chaveDoLimitador(req) {
+  const auth = String(req.headers.authorization || '');
+  if (auth.startsWith('Bearer ')) {
+    try {
+      const partes = auth.slice(7).split('.');
+      if (partes.length === 3) {
+        const payload = JSON.parse(Buffer.from(partes[1], 'base64url').toString('utf8'));
+        if (payload && payload.id != null) return `u:${payload.id}`;
+      }
+    } catch (e) { /* token fora do formato: cai no IP */ }
+  }
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return `ip:${xff || req.ip || (req.connection && req.connection.remoteAddress) || 'unknown'}`;
+}
 
 function rateLimit(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const ip = chaveDoLimitador(req);
   const now = Date.now();
   
   if (!rateLimitStore.has(ip)) {
