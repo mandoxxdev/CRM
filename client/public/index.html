@@ -36,6 +36,53 @@
          gravidade"), usada na assinatura "GMP Industriais" sob o catavento. -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
     <title>Orion - GMP</title>
+    <!-- Pagina que se recupera sozinha da TROCA DE DEPLOY (24/11/2026).
+         A producao roda em conteiner (Coolify) e cada push troca o conteiner. No instante da
+         troca, o index.html novo pode vir de um conteiner e o `main.<hash>.js` ser pedido ao
+         outro, que nao tem esse arquivo: 404 no bundle principal e TELA BRANCA — foi o que o
+         P.O. viu as 22:28, hora exata do deploy. O chunkLoadRecovery.js cuida dos chunks
+         preguicosos, mas ele mora dentro do bundle que nao carregou. Este script vive no HTML:
+         ouve o erro de carga do main.js/main.css, espera a troca terminar e recarrega (no
+         maximo 3 vezes por aba; o app zera o contador quando sobe). -->
+    <script>
+      (function () {
+        var CHAVE = 'orion_boot_reload_count';
+        var LIMITE = 3;
+        var agendado = false;
+        function eBundlePrincipal(el) {
+          if (!el || !el.tagName) return false;
+          var tag = el.tagName.toUpperCase();
+          var url = tag === 'SCRIPT' ? el.src : (tag === 'LINK' ? el.href : '');
+          return /\/static\/(js|css)\/main\.[a-f0-9]+\.(js|css)(\?|$)/.test(url || '');
+        }
+        function contador() {
+          try { return parseInt(sessionStorage.getItem(CHAVE) || '0', 10) || 0; } catch (e) { return 0; }
+        }
+        function avisar() {
+          try {
+            var raiz = document.getElementById('root');
+            if (raiz && !raiz.firstChild) {
+              raiz.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+                'font:500 14px/1.4 Inter,-apple-system,Segoe UI,sans-serif;color:#6E6E73;background:#fff">' +
+                'Atualizando o sistema…</div>';
+            }
+          } catch (e) { /* ignore */ }
+        }
+        window.addEventListener('error', function (e) {
+          if (agendado || !eBundlePrincipal(e.target)) return;
+          var n = contador();
+          if (n >= LIMITE) return; // deixa o erro aparecer no console em vez de recarregar para sempre
+          agendado = true;
+          try { sessionStorage.setItem(CHAVE, String(n + 1)); } catch (err) { /* ignore */ }
+          avisar();
+          setTimeout(function () {
+            var u = new URL(window.location.href);
+            u.searchParams.set('_cb', String(Date.now()));
+            window.location.replace(u.origin + u.pathname + u.search + u.hash);
+          }, 1800 + n * 1200);
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <noscript>Você precisa habilitar JavaScript para executar este aplicativo.</noscript>

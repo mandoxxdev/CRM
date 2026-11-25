@@ -19,10 +19,16 @@ export function isChunkLoadError(error) {
   );
 }
 
+// Contador do recarregamento feito pelo script inline do index.html quando o
+// PROPRIO main.js nao carrega (troca de conteiner no deploy). Zera junto: o app
+// subiu, entao a proxima troca pode recarregar de novo.
+const BOOT_RELOAD_COUNT_KEY = 'orion_boot_reload_count';
+
 export function clearChunkReloadFlag() {
   try {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY);
     sessionStorage.removeItem(CHUNK_RELOAD_COUNT_KEY);
+    sessionStorage.removeItem(BOOT_RELOAD_COUNT_KEY);
   } catch {
     /* ignore */
   }
