@@ -197,6 +197,17 @@ html .mes-main .producao-badge { border-radius: 980px !important; font-weight: 6
   html .mes-sidebar { width: 86vw !important; }
 }
 
+/* ── Etiqueta generica em tabela (ex.: segmento do cliente) ──────────────────
+   A pilula "TINTAS & VERNIZES" vinha em caixa alta, azul, grande e quebrando
+   em duas linhas. A etiqueta SEM semantica (so `class="badge"`) vira um chip
+   cinza, numa linha so; as de status (badge-success, .ativo...) nao mudam. */
+html .layout td .badge[class="badge"] {
+  display: inline-block; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  font-size: 11.5px !important; font-weight: 600 !important; letter-spacing: 0 !important; text-transform: none !important;
+  padding: 4px 10px !important; border-radius: 980px !important; border: none !important;
+  background: var(--ds-panel, #F5F5F7) !important; color: var(--gmp-text-light) !important;
+}
+
 /* ── Clientes: o logo ao lado do nome na tabela (24/11/2026) ─────────────────── */
 /* ("as fotos ficaram muito pequenas": de 34px para um ladrilho 72x48, com respiro) */
 html .layout .cli-td-nome { display: inline-flex; align-items: center; gap: 14px; }

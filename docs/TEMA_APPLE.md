@@ -145,6 +145,8 @@ classe" + seções por tela):
 | Produtos: fotos de câmera de vários MB, "demorando para carregar"; cartões "sem vida" | Miniatura `?w=800` gerada no servidor com `sharp` e guardada em `_thumbs/` (webp, cache de um dia); `loading="lazy"`; cartão vira a foto inteira (4:3) com o nome sobre um escurecimento no pé |
 | Clientes: logo do cliente | Aparece ao lado da razão social na tabela (ou a inicial), num ladrilho 72×48 ("muito pequenas" a 34px) |
 | Cores dos gráficos de status eram três tons de azul ("Rejeitada deveria ser em vermelho") | `utils/coresStatus.js`: **cor por significado** (verde aprovada/concluída, vermelho rejeitada/cancelada/atrasada, azul enviada/em andamento, âmbar pendente/em revisão, cinza rascunho/planejada) e rótulo legível, usados na rosca e na barra do Dashboard, no gráfico de Relatórios e no modal de detalhe; legenda com a bolinha ao lado do texto |
+| Fábrica: etiquetas com o status cru (`em_producao`, `disponivel`) | `rotuloDoStatus` nas etiquetas do painel, do formulário de OP e dos relatórios ("Em produção", "Disponível") |
+| Clientes: pilula de segmento em caixa alta azul, quebrando em duas linhas | Etiqueta sem semântica (`class="badge"` pura) vira chip cinza numa linha só; as de status não mudam |
 | Acesso negado | Folha branca com ícone em círculo vermelho suave, aviso em painel, botão em pílula |
 | Página 404 | Tela branca, "4 [catavento] 4", endereço em painel, botões em pílula |
 

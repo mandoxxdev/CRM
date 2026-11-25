@@ -42,6 +42,8 @@ const ROTULOS = {
   rejeitada: 'Rejeitada', cancelada: 'Cancelada', expirada: 'Expirada',
   em_producao: 'Em produção', em_andamento: 'Em andamento', planejada: 'Planejada', planejado: 'Planejado',
   concluida: 'Concluída', concluido: 'Concluído', pendente: 'Pendente', aberto: 'Aberto', aberta: 'Aberta',
+  disponivel: 'Disponível', indisponivel: 'Indisponível', manutencao: 'Manutenção', parada: 'Parada',
+  atrasada: 'Atrasada', atrasado: 'Atrasado', em_separacao: 'Em separação', separada: 'Separada',
 };
 
 /** "em_producao" -> "Em produção"; conhecidos pelo mapa, o resto humanizado. */

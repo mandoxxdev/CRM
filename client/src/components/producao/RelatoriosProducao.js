@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
+import { rotuloDoStatus } from '../../utils/coresStatus';
 import { toast } from 'react-toastify';
 import { FiRefreshCw } from 'react-icons/fi';
 import ProducaoPageHeader from './ProducaoPageHeader';
@@ -114,7 +115,7 @@ const RelatoriosProducao = () => {
                         <tr key={r.numero_op}>
                           <td>{r.numero_op}</td><td>{r.produto_descricao}</td>
                           <td>{r.quantidade_planejada}</td><td>{r.quantidade_produzida}</td>
-                          <td><span className="producao-badge info">{r.status}</span></td>
+                          <td><span className="producao-badge info">{rotuloDoStatus(r.status)}</span></td>
                         </tr>
                       ))}
                     </tbody>

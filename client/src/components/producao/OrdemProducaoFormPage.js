@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { rotuloDoStatus } from '../../utils/coresStatus';
 import api from '../../services/api';
 import { hojeLocalISO } from '../../utils/dataLocal';
 import { fetchProducaoMeta, STATUS_OP_LABELS, statusOpClass, invalidateProducaoDashboardCache } from '../../utils/producaoApi';
@@ -189,7 +190,7 @@ const OrdemProducaoFormPage = () => {
                       <td>{et.nome}</td>
                       <td>{et.maquina_codigo || '—'}</td>
                       <td>{et.tempo_previsto_min}</td>
-                      <td><span className="producao-badge info">{et.status}</span></td>
+                      <td><span className="producao-badge info">{rotuloDoStatus(et.status)}</span></td>
                     </tr>
                   ))}
                 </tbody>

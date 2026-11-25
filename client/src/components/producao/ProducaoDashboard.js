@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { rotuloDoStatus } from '../../utils/coresStatus';
 import { fetchProducaoDashboard } from '../../utils/producaoApi';
 import {
   FiRefreshCw, FiLayers, FiActivity, FiAlertTriangle, FiCheckCircle,
@@ -154,7 +155,7 @@ const ProducaoDashboard = () => {
                     <tr key={op.id}>
                       <td><Link to={`/fabrica/ordens-producao/editar/${op.id}`}>{op.numero_op}</Link></td>
                       <td>{op.produto_descricao}</td>
-                      <td><span className={`producao-badge ${op.status === 'em_producao' ? 'warning' : 'primary'}`}>{op.status}</span></td>
+                      <td><span className={`producao-badge ${op.status === 'em_producao' ? 'warning' : 'primary'}`}>{rotuloDoStatus(op.status)}</span></td>
                       <td>{op.data_prevista_fim || '—'}</td>
                     </tr>
                   ))}
@@ -172,7 +173,7 @@ const ProducaoDashboard = () => {
                 <strong>{m.codigo}</strong>
                 <span>{m.nome}</span>
                 <span className={`producao-badge ${m.status === 'em_producao' ? 'warning' : m.status === 'parada' ? 'danger' : 'success'}`} style={{ marginTop: 6 }}>
-                  {m.status}
+                  {rotuloDoStatus(m.status)}
                 </span>
               </div>
             ))}
