@@ -189,6 +189,14 @@
     html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active,
     html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active:hover,
     html .mes-nav[data-pilula] .mes-nav-link.active { background: transparent !important; }
+    /* Escuro: a pilula vira clara (--ds-ink = #F5F5F7) e o texto do ativo tem de ser escuro.
+       Medido com as transicoes desligadas: ja era (#1D1D1F) nos dois shells — a primeira
+       medida deu branco porque o painel estava com a renderizacao pausada e a transicao de
+       cor congelada no valor inicial. Esta regra e so a trava para o texto seguir a pilula. */
+    html[data-theme="dark"] .mes-nav[data-pilula] .mes-nav-link.active,
+    html[data-theme="dark"] .mes-nav[data-pilula] .mes-nav-link.active span,
+    html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active,
+    html[data-theme="dark"] .layout .sidebar .sidebar-nav[data-pilula] .nav-item.active span { color: var(--ds-ink-text, #1D1D1F) !important; }
     html .layout .sidebar .sidebar-nav .nav-item, html .layout .sidebar .sidebar-nav .nav-item span, html .layout .sidebar .sidebar-nav .nav-item svg,
     html .mes-nav .mes-nav-link, html .mes-nav .mes-nav-link span { transition: color .3s ease, background-color .18s ease; }
   }
