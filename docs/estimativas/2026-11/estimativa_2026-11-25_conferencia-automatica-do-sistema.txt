@@ -1,0 +1,9 @@
+*Planejamento — Conferência automática do sistema voltando a rodar inteira*
+_25/11/2026_
+
+*1. Conferência automática das telas voltando a rodar inteira*
+Nove das 251 verificações automáticas das telas (relatórios da Frota, configurações, termo de ferramenta, ficha de EPI e outras) estavam travando antes de começar, por causa da forma como uma biblioteca de comunicação é carregada no ambiente de teste. Passam a rodar de novo, e o placar da conferência volta a valer para o sistema inteiro.
+Tempo estimado: *30min*
+
+*Total estimado: 30min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
