@@ -1,0 +1,9 @@
+*Planejamento — Tela de grupos de Produtos*
+_25/11/2026_
+
+*1. Cartões dos grupos de Produtos legíveis e no lugar*
+Na tela de Produtos, os nomes dos grupos (Moinhos, Dosagens…) saíam brancos sobre fundo branco, os cartões ficavam uns por cima dos outros e saíam pela direita da tela. Os cartões voltam a ficar lado a lado, do mesmo tamanho, com a foto e o nome legível sobre ela, e o botão de editar no canto da foto.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
