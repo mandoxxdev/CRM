@@ -93,7 +93,7 @@
 
 ## Tasks
 
-- [x] **T1 (tronco, motor)** — `7474faa0`: `recusaDaDevolucaoDeRequisicaoExcluida` e `recusaDaDevolucaoEmQuarentena` em `stockService.js`; a
+- [x] **T1 (tronco, motor)** — `7d5367ce`: `recusaDaDevolucaoDeRequisicaoExcluida` e `recusaDaDevolucaoEmQuarentena` em `stockService.js`; a
   leitura de `devolucaoDaEntrada` subiu para antes das guardas de série; as duas antes do claim e de novo no começo da seção da trava.
   `estornoEntradaDevolucaoQuarentenaExcluida.api.test.js` 16 no commit (**9 vermelhos no código de antes**, os 7 "não trava" verdes nos dois).
   Sabotagens **S1-S10** (harness `scratchpad/sab-262-harness.js`: âncora contada = 1, cópia, md5 sabotado ≠ original e restaurado = original):
@@ -103,15 +103,15 @@
   mesma literal antes de qualquer efeito — defesa em profundidade, mantida e declarada (a de fora poupa o claim e a espera da trava).
 - [x] **T2** — no mesmo commit: `devolucaoViva` [R6/C239] passou a provar a recusa; `bloqueioSabeOLote` [RN-217.05] (Fase 2, achado 3)
   prova a recusa pela rota e monta o estado da C504 pela compensação.
-- [x] **T3 integração** — os 27 arquivos de `tests/api` com devolução e estorno, um a um, sobre `7474faa0`: todos verdes.
-- [x] **T4** Fase 2 (acima, consertos no `7474faa0`). **T5** Fase 5 (abaixo).
+- [x] **T3 integração** — os 27 arquivos de `tests/api` com devolução e estorno, um a um, sobre `7d5367ce`: todos verdes.
+- [x] **T4** Fase 2 (acima, consertos no `7d5367ce`). **T5** Fase 5 (abaixo).
 - [x] **T6** fechamento (fechar-etapa sem 7½ e 8) + Passo 7¼. Primeiro boot: **não se aplica** (nenhuma tabela nem coluna).
 
 ## Fase 5 (revisor adversarial fresco, 24/11, sondas executadas `scratchpad/fase5-262-*.js`, pela rota)
 
 1. **[importante, reproduzido]** A régua sem lote caía a 0 com uma liberação de NC **anterior**: a reprovação soma no bloqueado sem livro e a
    liberação grava DESBLOQUEIO sem lote (livro sem lote −2); depois, a devolução para Quarentena (10, 2) e o estorno da entrada passava →
-   **[8, 2]** com a perna viva — a C239 de volta, sem corrida. → **consertado** (`d84c9f1e`): o livro conta **da perna em diante**
+   **[8, 2]** com a perna viva — a C239 de volta, sem corrida. → **consertado** (`182e3790`): o livro conta **da perna em diante**
    (`b.id >= perna.id`), também no lote. Cenário [Fase 5 achado 1]; sabotagem **S11** (desde 0) derruba.
 2. **[menor, reproduzido com gancho]** O claim provisório de **outro** estorno sumia da conta (a soma usava `cancelado = 0`): o estorno de um
    bloqueio avulso parado no claim fazia a entrada passar (20/20); se ele falhasse depois, **[8, 2]** (10/10). → **consertado**: no livro da
@@ -164,14 +164,14 @@ mesma régua do bloqueado por lote (`bloqueioPorLote.bloqueadoDoLoteSql`; e o re
 - **CLAUDE.md:** nenhuma linha ficou errada — a seção das travas não descreve as guardas da entrada da devolução; as releituras novas rodam
   dentro da seção do estorno que ela já descreve, e a conferência devolução × estorno no comando continua como está.
 
-## Verificação (medida sobre o código final, `d84c9f1e`)
+## Verificação (medida sobre o código final, `182e3790`)
 
 - `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **661/661 arquivos OK** (o mais lento: `propostaClausulasGrava`, 70,6 s).
-- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0** (sobre `7474faa0`;
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0** (sobre `7d5367ce`;
   a Fase 5 só mudou a conta da quarentena, coberta pelo `test:api`).
 - Jest da tela (`--maxWorkers=2`; a tela não mudou): **244/244 suítes, 3270/3270 testes**. `CI=true npx react-scripts build`: **Compiled
   successfully.**
-- `estornoEntradaDevolucaoQuarentenaExcluida` 18/18; os 27 arquivos de devolução com estorno, um a um, sobre `7474faa0`: verdes.
+- `estornoEntradaDevolucaoQuarentenaExcluida` 18/18; os 27 arquivos de devolução com estorno, um a um, sobre `7d5367ce`: verdes.
 - Primeiro boot: não se aplica. Nenhum clique no navegador (F (262)).
 
 ## Retro (4 números)
@@ -180,5 +180,5 @@ mesma régua do bloqueado por lote (`bloqueioPorLote.bloqueadoDoLoteSql`; e o re
 - Achados: Fase 2 — 3 importantes (2 consertados, 1 teste atualizado), 2 menores consertados, ruídos conferidos; Fase 5 — 1 importante
   consertado, 1 menor consertado, 2 menores declarados (D (262) 1 e 6), 1 ruído.
 - Paralelismo: nenhum galho (uma task de tronco); os revisores rodaram enquanto o teste e os documentos eram escritos. A Fase 2 sondou o
-  repositório antes do código novo; a Fase 5 sobre o `7474faa0` sem sabotagem rodando ao mesmo tempo.
+  repositório antes do código novo; a Fase 5 sobre o `7d5367ce` sem sabotagem rodando ao mesmo tempo.
 - Defeito que escapou: (preencher na etapa seguinte). Da 261: nenhum apontado.

@@ -509,7 +509,7 @@ saída sem origem no livro (a parte automática da entrega, que baixa de várias
   (sem série; com série a validação das séries já recusa) — `8b5de9df`.
 - [ ] **C553** (Fase 5, achado 1; anterior com duas entregas): depois de uma falha inesperada no meio, a Devolução ainda aceita o que a
   exclusão já devolveu (a régua de `devolucaoViva.js` não conhece a ENTRADA parcial) — declarado; o caminho é excluir de novo logo.
-- [x] ~~**C552** (anterior): estornar pelo livro a entrada de uma devolução depois da exclusão tira as peças duas vezes — declarado.~~ **Resolvido na Etapa 262** (`7474faa0`, B1618): o estorno é recusado (spec 12, Etapa 262).
+- [x] ~~**C552** (anterior): estornar pelo livro a entrada de uma devolução depois da exclusão tira as peças duas vezes — declarado.~~ **Resolvido na Etapa 262** (`7d5367ce`, B1618): o estorno é recusado (spec 12, Etapa 262).
 - [ ] Entrega anterior à 257 (sem registro): como antes — declarado (D (259)).
 
 Teste: `exclusaoDevolvePrateleira.api.test.js`. Quatro testes afirmavam a padrão como destino da parte automática (D (51)) e viraram:

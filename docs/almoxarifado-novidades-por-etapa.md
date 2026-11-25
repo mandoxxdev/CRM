@@ -15671,13 +15671,13 @@ reprovação feita antes zerava a conta e a entrada estornava com a quarentena d
 pé (à mão, ou a quarentena de outra devolução), a quarentena já liberada é recusada pedindo o estorno do bloqueio (o sistema não sabe de quem é
 cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite — **D (262)** 1). **Descartado:** estornar as duas
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
-sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7474faa0`.
+sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
 
 **B1618 (NOVA, da Etapa 262; decisão do agente) — a entrada de uma devolução de requisição já excluída não se estorna.** A exclusão devolve
 ao estoque o resto da entrega descontando a devolução; estornar depois a entrada dela tirava as peças de novo (5 → 3, **C552**). **Escolhido:**
 recusar em todos os destinos, com o caminho do Ajuste, e **antes** das recusas da Sucata, da Quarentena e das séries (estornar a sucata ou o
 bloqueio não destravaria — mandar fazer isso seria mexer à toa). **Descartado:** creditar de volta na requisição (ela não existe mais); só
-avisar (o físico ficaria a menos). **Reversível.** `7474faa0`.
+avisar (o físico ficaria a menos). **Reversível.** `7d5367ce`.
 
 **B1616 (NOVA, da Etapa 261; decisão do agente) — com material separado na caixa, a contagem da prateleira feita depois também trava o estorno
 do ajuste que baixou.** Caso medido: 4 separados na caixa de uma requisição, tirados de *A*; a contagem de *A* não os viu (Ajuste de *A* para
@@ -18326,7 +18326,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      resto que sobra ali é a falha **dupla**, o vínculo do estorno e a limpeza da linha falhando juntos: fica uma linha de
      estorno a mais no livro, com o estoque certo.) *(A falha dupla continua — virou a **C247**.)*
 
-239. **✅ RESOLVIDO NA ETAPA 262 (`7474faa0`; B1617) — a entrada da devolução para quarentena só estorna depois que o bloqueio dela sai (inteiro: *"… Estorne primeiro o bloqueio desta devolução e depois esta entrada."*; liberado em parte: *"… Desbloqueie ⟨N⟩ ⟨un⟩ e depois estorne esta entrada."*; liberado todo: estorna).** O texto original: **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
+239. **✅ RESOLVIDO NA ETAPA 262 (`7d5367ce`; B1617) — a entrada da devolução para quarentena só estorna depois que o bloqueio dela sai (inteiro: *"… Estorne primeiro o bloqueio desta devolução e depois esta entrada."*; liberado em parte: *"… Desbloqueie ⟨N⟩ ⟨un⟩ e depois estorne esta entrada."*; liberado todo: estorna).** O texto original: **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
      certo, mas o disponível fica a menos pela quantidade da devolução; e, como a devolução desfeita já não conta (**B759**),
      devolver para a quarentena e estornar a entrada de novo acumula outro bloqueio a cada volta. **O que fazer:** ao desfazer
      uma devolução para quarentena, estorne também a linha *Bloqueio* com a mesma referência `DEV-⟨número⟩` (**B761**).
@@ -20299,7 +20299,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (no galpão: *A* 2, *B* 5). Na ordem inversa (a Saída antes) fica certo. **O que fazer:** estornar na ordem inversa (o mais recente
      primeiro) ou, depois, acertar com uma Transferência de 3 de *A* para *B*. Sem o ceder, a padrão ficava −3 no meio e travava a entrega
      (**B1605**).
-552. **✅ RESOLVIDO NA ETAPA 262 (`7474faa0`; B1618) — o estorno da entrada de uma devolução de requisição excluída é recusado com *"… que foi excluída — … Se a devolução foi registrada errada, acerte o estoque com um Ajuste."*.** O texto original: **NOVO (da Etapa 259, revisão do plano; anterior) — estornar pelo livro a entrada de uma Devolução depois de excluir a requisição tira
+552. **✅ RESOLVIDO NA ETAPA 262 (`7d5367ce`; B1618) — o estorno da entrada de uma devolução de requisição excluída é recusado com *"… que foi excluída — … Se a devolução foi registrada errada, acerte o estoque com um Ajuste."*.** O texto original: **NOVO (da Etapa 259, revisão do plano; anterior) — estornar pelo livro a entrada de uma Devolução depois de excluir a requisição tira
      as peças duas vezes.** Medido: entrega de 6 (*A* 3, *B* 3); **Devolução** de 2 citando a saída, em *P*; **Excluir** a requisição (devolve
      os 4 que faltavam; físico 8); **Estornar** a entrada da devolução → *P* 0, físico **6**. A exclusão já tinha descontado a devolução; o
      estorno dela diz que as 2 peças não voltaram — mas a requisição que as levou não existe mais. **O que fazer:** não estornar a entrada de
@@ -44908,8 +44908,8 @@ confere de novo antes de mexer no estoque e recusa com a mesma mensagem. Se o es
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
 - **Etapa 262 entregue (2026-11-24):** **o estorno da entrada de uma devolução respeita a quarentena e a requisição já excluída** (itens 6
-  e 7 da estimativa de 23/11; **C239** e **C552** resolvidos). Commits `96778e36` (plano), `7474faa0` (motor, testes e a Fase 2), Fase 5
-  `d84c9f1e` e o fechamento. **O que é seu:** as **B1617** (revê a **B761**) e **B1618** (reversíveis); a limitação **(262)** em D e a verificação
+  e 7 da estimativa de 23/11; **C239** e **C552** resolvidos). Commits `2c93072e` (plano), `7d5367ce` (motor, testes e a Fase 2), Fase 5
+  `182e3790` e o fechamento. **O que é seu:** as **B1617** (revê a **B761**) e **B1618** (reversíveis); a limitação **(262)** em D e a verificação
   **(262)** em F. Sem consulta antes do deploy. **Próxima:** os itens 8 e 9 da estimativa de 23/11 (fim do plano da 262).
 
 - **Etapa 261 entregue (2026-11-24):** **o histórico de Movimentações diz de quais prateleiras a Saída e o Ajuste tiraram as peças, e o
