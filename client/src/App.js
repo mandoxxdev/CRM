@@ -28,6 +28,7 @@ import './styles/apple-structure.css';
 import './styles/apple-charts.css';
 import './styles/apple-desktop.css';
 import './styles/apple-launchpad.css';
+import './styles/apple-telas.css';
 import Pagina404 from './components/Pagina404';
 import {
   Login,
@@ -642,21 +643,22 @@ export function AppRoutes() {
 }
 
 function App() {
-  const [showIntro, setShowIntro] = useState(() => {
-    try {
-      return sessionStorage.getItem('orion_intro_seen') !== 'true';
-    } catch {
-      return true;
-    }
-  });
+  // A abertura (OrionIntro: tela escura com o passaro e "Sistema de Gestao
+  // Industrial") saiu em 24/11/2026 — "essa tela deveria sumir". O componente
+  // continua no repositorio; aqui ele simplesmente nunca e mostrado, e o tour de
+  // boas-vindas, que antes era disparado ao fim da abertura, passa a ser
+  // disparado na montagem (mesma regra: so se ainda nao foi concluido).
+  const [showIntro, setShowIntro] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    // Verificar se já completou onboarding
     const onboardingCompleted = localStorage.getItem('onboarding_completed');
     if (onboardingCompleted === 'true') {
       setShowOnboarding(false);
+      return undefined;
     }
+    const timer = setTimeout(() => setShowOnboarding(true), 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleIntroComplete = () => {

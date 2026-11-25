@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FiSettings, FiMoon, FiSun, FiLayers, FiX } from 'react-icons/fi';
+import { FiSettings, FiMoon, FiSun, FiX } from 'react-icons/fi';
 import { useTheme } from '../context/ThemeContext';
 import './PreferenciasMenu.css';
 
+// "Fundo Animado" saiu deste menu (24/11/2026): desde o tema Apple o fundo animado
+// nao e mais desenhado em tela nenhuma, entao o interruptor nao fazia nada ("esse
+// botao nao tem serventia"). A preferencia continua gravada em localStorage para
+// quem ja a tinha, e o Layout ainda a le — so nao ha mais o que ligar.
 const PreferenciasMenu = () => {
   const [aberto, setAberto] = useState(false);
-  const [fundoAnimado, setFundoAnimado] = useState(
-    localStorage.getItem('animatedBackground') !== 'false'
-  );
   const botaoRef = useRef(null);
   const menuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
@@ -43,13 +44,6 @@ const PreferenciasMenu = () => {
 
   const alternarTema = () => {
     toggleTheme();
-  };
-
-  const alternarFundo = () => {
-    const novo = !fundoAnimado;
-    setFundoAnimado(novo);
-    localStorage.setItem('animatedBackground', novo.toString());
-    window.dispatchEvent(new Event('animatedBackgroundChanged'));
   };
 
   // Aplicar posição diretamente no elemento
@@ -93,20 +87,6 @@ const PreferenciasMenu = () => {
               type="checkbox"
               checked={theme === 'dark'}
               onChange={alternarTema}
-            />
-            <span className="slider"></span>
-          </label>
-        </div>
-        <div className="item-preferencia">
-          <div className="label-preferencia">
-            <FiLayers />
-            <span>Fundo Animado</span>
-          </div>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={fundoAnimado}
-              onChange={alternarFundo}
             />
             <span className="slider"></span>
           </label>

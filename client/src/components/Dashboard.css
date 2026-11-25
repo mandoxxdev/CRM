@@ -42,9 +42,8 @@
   animation: dashboard-logos-scroll 45s linear infinite;
 }
 
-.dashboard-clientes-confiam-track:hover {
-  animation-play-state: paused;
-}
+/* (24/11/2026) A esteira NAO para no hover: o P.O. passou o mouse, ela parou e
+   ele achou que tinha travado. Segue rolando; o logo so ganha cor ao passar. */
 
 @keyframes dashboard-logos-scroll {
   0% { transform: translateX(0); }

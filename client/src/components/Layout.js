@@ -30,6 +30,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { RouteLoading } from './LazyPage';
 import { prefetchRoute } from '../routes/lazyModules';
 import PreferenciasMenu from './PreferenciasMenu';
+import CataventoGMP from './CataventoGMP';
 import { VERSAO_SISTEMA } from '../constants/versao';
 import './Layout.css';
 import '../components/chat/Chat.css';
@@ -475,6 +476,8 @@ const Layout = () => {
           No desktop a marca ja esta na sidebar, entao o CSS esconde esta. */}
       <header className="mobile-topbar">
         <img src="/orion-mark.svg" alt="Orion" className="mobile-topbar__logo" />
+        {/* O catavento da GMP tambem no celular (24/11: "em todos os dashboards"). */}
+        <CataventoGMP size={24} modo="entrada" className="mobile-topbar__catavento" title="GMP Industriais" />
       </header>
       {animatedBackgroundEnabled && <AnimatedBackground />}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
@@ -538,6 +541,15 @@ const Layout = () => {
             );
           })}
         </nav>
+        {/* A marca da empresa na barra lateral (24/11/2026): o P.O. achou a barra
+            "sem vida" e pediu "GMP Industriais e o catavento em todos os dashboards".
+            Como a barra esta em toda tela de modulo, este e o lugar unico. */}
+        <div className="sidebar-marca" aria-label="GMP Industriais">
+          <CataventoGMP size={44} modo="entrada" title="GMP Industriais" />
+          {sidebarOpen && (
+            <span className="sidebar-marca__texto" aria-hidden="true"><b>GMP</b> Industriais</span>
+          )}
+        </div>
         <div className="sidebar-footer">
           <div className="user-info">
             {/* Etapa 82 (RN-82.05): foto_src e a URL ASSINADA (a pasta exige ?exp=&sig=). Se ela
