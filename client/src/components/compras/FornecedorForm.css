@@ -230,3 +230,67 @@
 .fornecedor-form input.fornecedor-maiusculas::placeholder {
   text-transform: none;
 }
+
+/* Etapa 263 (RN-263.01): a foto do fornecedor na ficha (a mesma do grupo homologado). */
+.fornecedor-form .fornecedor-foto {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+}
+
+.fornecedor-form .fornecedor-foto-quadro {
+  width: 140px;
+  height: 140px;
+  border: 1px dashed var(--gmp-border, rgba(0, 0, 0, 0.2));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--gmp-surface, #f6f6f6);
+}
+
+.fornecedor-form .fornecedor-foto-quadro img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.fornecedor-form .fornecedor-foto-vazia {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light, #666);
+  text-align: center;
+  padding: 8px;
+}
+
+.fornecedor-form .fornecedor-foto-acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.fornecedor-form .fornecedor-foto-acoes .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: var(--gmp-surface, #f6f6f6);
+  color: var(--gmp-text, #121212);
+  border: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fornecedor-form .fornecedor-foto-acoes small {
+  color: var(--gmp-text-light, #666);
+}
+
+.fornecedor-form .fornecedor-foto-erro {
+  color: #b91c1c;
+  font-size: 0.85rem;
+  font-weight: 600;
+}

@@ -36,7 +36,7 @@
  *   de modulo do `index.js`, e mover as instancias mudaria ONDE O ARQUIVO E GRAVADO. Passa-las por
  *   DI nao muda nada — os dois diretorios vao no mesmo objeto `uploads`, pelo mesmo motivo (os
  *   handlers de foto e foto-base64 os usam direto, para apagar a foto antiga e para escrever o
- *   base64). As duas rotas de foto NAO tem teste, e isso esta declarado.
+ *   base64). Desde a Etapa 263 o POST /fornecedores/:id/foto tem cenario (comprasFornecedorFoto); as demais de foto nao.
  *
  * Gate de todas as rotas daqui: `authenticateToken` + `checkModulePermission('compras')`. Este
  * modulo core tem **UMA** camada de autorizacao, nao duas: nenhum `requirePermission`, nenhum

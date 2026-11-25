@@ -39,6 +39,9 @@ const GRUPO_DESATIVADO = 'Grupo desativado — reative o grupo em Fornecedores h
 const CPF_INVALIDO = 'CPF inválido. Verifique os dígitos.';
 const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
 
+/** Etapa 263 (RN-263.03) — o PUT só tira a foto; trocar é pelo upload. */
+const FOTO_SO_PELO_UPLOAD = 'Para trocar a foto, envie a imagem';
+
 /**
  * Etapa 192 (RN-192.05) — os textos LIVRES da ficha gravam em maiúsculas, com acento ("são" -> "SÃO").
  * Fora de propósito: email (minúsculo é o normal), telefones, CEP, CNPJ e CPF (dígitos/máscara).
@@ -256,6 +259,16 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       if (!STATUS_VALIDOS.includes(status)) return res.status(400).json({ error: 'Status inválido' });
       sets.push('status = ?');
       params.push(status);
+    }
+
+    // Etapa 263 (RN-263.03): tirar a foto pela ficha, sem rota nova. Ausente nao mexe (o modal do grupo e a
+    // ficha que ninguem tocou); null/'' limpa. A foto NOVA so entra pelo upload (/foto, /foto-base64): outro
+    // valor aqui deixaria a coluna apontar para um nome digitado — ate para o arquivo de outro fornecedor.
+    // O arquivo tirado fica na pasta (reversivel, B nova da Etapa 263); a troca pelo upload continua apagando o antigo.
+    if (temChave(body, 'foto')) {
+      if (textoOuNull(body.foto) != null) return res.status(400).json({ error: FOTO_SO_PELO_UPLOAD });
+      sets.push('foto = ?');
+      params.push(null);
     }
 
     if (!id) return res.status(404).json({ error: NAO_ENCONTRADO });

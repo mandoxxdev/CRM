@@ -260,8 +260,8 @@ async function createTestApp(options = {}) {
   // possivel; removida, todo cenario de `comprasPedidosRotas.api.test.js` volta a 404.
   // Os uploads sao STUB: em producao as duas instancias de multer gravam em
   // `uploadsGruposComprasDir`/`uploadsFornecedoresDir` (variaveis de modulo do `index.js`); aqui
-  // gravam no diretorio temporario deste app. As duas rotas de foto nao tem cenario — o stub
-  // existe para o registrador poder ser montado, nao para ser exercido.
+  // gravam no diretorio temporario deste app (sem o filtro de tipo/tamanho de producao). Desde a Etapa 263 o `POST ./fornecedores/:id/foto`
+  // tem cenario (comprasFornecedorFoto.api.test.js: grava, o GET le, o PUT tira); a de grupo e as foto-base64 continuam sem.
   const uploadsComprasDir = path.join(dataDir, 'uploads', 'compras');
   const uploadComprasStub = multer({ dest: uploadsComprasDir });
   require('../../routes/compras')(app, db, fakeAuth, checkModuloDoHarness, {

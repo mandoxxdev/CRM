@@ -19,10 +19,16 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import FornecedorForm from './FornecedorForm';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import { uploadFotoFornecedor } from './fotoFornecedor';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
+}));
+// Etapa 263: o envio da foto e o da tela do grupo (fetch + base64) — mockado na fronteira, o resto do modulo e o real.
+jest.mock('./fotoFornecedor', () => ({
+  ...jest.requireActual('./fotoFornecedor'),
+  uploadFotoFornecedor: jest.fn(),
 }));
 jest.mock('react-toastify', () => ({
   toast: Object.assign(jest.fn(), { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn(), warning: jest.fn() }),
@@ -149,7 +155,8 @@ describe('FornecedorForm — (a) estrutura', () => {
     await renderEm('/compras/fornecedores/novo');
     expect(container.querySelector('h1').textContent).toMatch(/Novo fornecedor/i);
     const titulos = [...container.querySelectorAll('form.fornecedor-form .form-section > h2')].map((h) => h.textContent.trim());
-    expect(titulos).toEqual(['Identificação', 'Contato', 'Endereço']);
+    // Etapa 263 (RN-263.01): a quarta seção, Foto.
+    expect(titulos).toEqual(['Identificação', 'Contato', 'Endereço', 'Foto']);
     CAMPOS.forEach((c) => expect(campo(c)).not.toBeNull());
     expect(campo('status')).toBeNull();
     const opcoesGrupo = [...campo('grupo').querySelectorAll('option')].map((o) => o.textContent);
@@ -585,5 +592,147 @@ describe('Etapa 192 — G6 a regra de maiusculas no CSS e no modal do grupo', ()
       expect(linha).toBeDefined();
       expect(linha).toContain('style={MAIUSCULAS}');
     }
+  });
+});
+
+/**
+ * Etapa 263 (RN-263.01 a 04) — a foto do fornecedor na ficha, a MESMA do grupo homologado.
+ * O envio (`uploadFotoFornecedor`, a funcao da tela do grupo) e mockado; a rota tem prova em
+ * server/tests/api/comprasFornecedorFoto.api.test.js. O que so a tela pode errar: mostrar a gravada, a previa,
+ * as recusas antes de enviar, o envio DEPOIS de gravar e ANTES de sair da tela, e a chave `foto` so para tirar.
+ */
+describe('FornecedorForm — (m) Etapa 263: a foto do fornecedor', () => {
+  const FORNECEDOR_COM_FOTO = { ...FORNECEDOR_7, foto: 'fornecedor_7_123.png' };
+  const comFoto = (url) => (url === '/compras/fornecedores/7'
+    ? Promise.resolve({ data: { ...FORNECEDOR_COM_FOTO } }) : respostaPadrao(url));
+  const previa = () => container.querySelector('[data-testid="fornecedor-foto-previa"]');
+  const textoDaSecaoFoto = () => [...container.querySelectorAll('section.form-section')]
+    .find((s) => s.querySelector('h2')?.textContent === 'Foto')?.textContent || '';
+
+  async function escolherArquivo(file) {
+    const input = campo('foto-input');
+    if (!input) throw new Error('input da foto nao existe');
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+    });
+    // o FileReader do jsdom termina num tick proprio
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  }
+  const png = () => new File(['png'], 'logo.png', { type: 'image/png' });
+
+  beforeEach(() => {
+    uploadFotoFornecedor.mockResolvedValue({ foto: 'fornecedor_7_999.png', url: '/api/uploads/fornecedores/fornecedor_7_999.png' });
+  });
+
+  test('RN-263.01 edicao: mostra a foto gravada, troca com previa e envia DEPOIS do PUT e ANTES de voltar para a lista', async () => {
+    api.get.mockImplementation(comFoto);
+    await renderEm('/compras/fornecedores/editar/7');
+    expect(previa()).not.toBeNull();
+    expect(previa().getAttribute('src')).toBe('/api/uploads/fornecedores/fornecedor_7_123.png');
+    expect(textoDaSecaoFoto()).toContain('Trocar foto');
+    const arquivo = png();
+    await escolherArquivo(arquivo);
+    expect(previa().getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('foto');
+    expect(uploadFotoFornecedor).toHaveBeenCalledWith(7, arquivo);
+    expect(api.put.mock.invocationCallOrder[0]).toBeLessThan(uploadFotoFornecedor.mock.invocationCallOrder[0]);
+    expect(uploadFotoFornecedor.mock.invocationCallOrder[0]).toBeLessThan(toast.success.mock.invocationCallOrder[0]);
+    expect(container.querySelector('[data-testid="lista"]')).not.toBeNull();
+  });
+
+  test('RN-263.01 cadastro novo: sem foto mostra "Sem foto"; a escolhida vai com o id do POST', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    expect(previa()).toBeNull();
+    expect(textoDaSecaoFoto()).toContain('Sem foto');
+    expect(textoDaSecaoFoto()).toContain('Escolher foto');
+    const arquivo = png();
+    await escolherArquivo(arquivo);
+    await digitar('razao', 'Fornecedor Com Foto');
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(uploadFotoFornecedor).toHaveBeenCalledWith(99, arquivo);
+  });
+
+  test('RN-263.01 salvar sem tocar na foto nao envia foto nem manda a chave', async () => {
+    api.get.mockImplementation(comFoto);
+    await renderEm('/compras/fornecedores/editar/7');
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('foto');
+    expect(uploadFotoFornecedor).not.toHaveBeenCalled();
+  });
+
+  test('RN-263.02 PDF e imagem acima de 10 MB sao recusados com a literal do servidor e a foto gravada continua', async () => {
+    api.get.mockImplementation(comFoto);
+    await renderEm('/compras/fornecedores/editar/7');
+    await escolherArquivo(new File(['%PDF'], 'nota.pdf', { type: 'application/pdf' }));
+    expect(campo('foto-erro').textContent).toBe('Formato de imagem não suportado');
+    expect(previa().getAttribute('src')).toBe('/api/uploads/fornecedores/fornecedor_7_123.png');
+    const grande = png();
+    Object.defineProperty(grande, 'size', { value: 10 * 1024 * 1024 + 1 });
+    await escolherArquivo(grande);
+    expect(campo('foto-erro').textContent).toBe('Arquivo grande demais (máximo 10 MB)');
+    expect(previa().getAttribute('src')).toBe('/api/uploads/fornecedores/fornecedor_7_123.png');
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(uploadFotoFornecedor).not.toHaveBeenCalled();
+  });
+
+  test('RN-263.03 "Tirar foto" some com a previa e o PUT leva foto: null; escolher outra depois, a nova vence', async () => {
+    api.get.mockImplementation(comFoto);
+    await renderEm('/compras/fornecedores/editar/7');
+    await clicar('[data-testid="fornecedor-foto-tirar"]');
+    expect(previa()).toBeNull();
+    expect(textoDaSecaoFoto()).toContain('A foto sai ao salvar');
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][1].foto).toBeNull();
+    expect(api.put.mock.calls[0][1]).toHaveProperty('razao_social', 'TECNOPAR FIXADORES LTDA');
+    expect(uploadFotoFornecedor).not.toHaveBeenCalled();
+  });
+
+  test('RN-263.03 tirar e depois escolher outra: o PUT nao leva a chave e a nova e enviada', async () => {
+    api.get.mockImplementation(comFoto);
+    await renderEm('/compras/fornecedores/editar/7');
+    await clicar('[data-testid="fornecedor-foto-tirar"]');
+    const arquivo = png();
+    await escolherArquivo(arquivo);
+    await submeter();
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('foto');
+    expect(uploadFotoFornecedor).toHaveBeenCalledWith(7, arquivo);
+  });
+
+  test('RN-263.04 a foto recusada depois de salvar: o fornecedor fica salvo e o toast diz o motivo', async () => {
+    api.get.mockImplementation(comFoto);
+    uploadFotoFornecedor.mockRejectedValue(Object.assign(new Error('Request failed with status code 400'),
+      { response: { status: 400, data: { error: 'Formato de imagem não suportado' } } }));
+    await renderEm('/compras/fornecedores/editar/7');
+    await escolherArquivo(png());
+    await submeter();
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o fornecedor foi salvo: Formato de imagem não suportado');
+    expect(toast.success).toHaveBeenCalledWith('Fornecedor salvo');
+    expect(container.querySelector('[data-testid="lista"]')).not.toBeNull();
+  });
+});
+
+describe('FornecedorForm — (m2) Etapa 263, Fase 5: o POST sem id nao perde a foto em silencio', () => {
+  test('RN-263.04 resposta do POST sem id: o toast avisa que a foto nao foi salva e nada e enviado', async () => {
+    api.post.mockResolvedValue({ data: {} });
+    await renderEm('/compras/fornecedores/novo');
+    const input = campo('foto-input');
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [new File(['png'], 'a.png', { type: 'image/png' })], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+    });
+    await digitar('razao', 'Sem Id Ltda');
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(uploadFotoFornecedor).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o fornecedor foi salvo');
   });
 });

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiSearch, FiLoader } from 'react-icons/fi';
+import { FiSave, FiSearch, FiLoader, FiImage, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
 import {
   somenteDigitos, formatarCNPJ, formatarCNPJCompleto, formatarCEP, validarCNPJ, camposDaConsultaCNPJ, mesclarSoVazios,
 } from '../../utils/cnpj';
 import { formatarCPF, validarCPF, CPF_INVALIDO, CPF_E_CNPJ } from '../../utils/cpf';
+import { getFotoUrlFornecedor, uploadFotoFornecedor, recusaDaFotoFornecedor, TIPOS_FOTO_FORNECEDOR } from './fotoFornecedor';
 import './FornecedorForm.css';
 
 /**
@@ -30,6 +31,11 @@ import './FornecedorForm.css';
  *  - o corpo do POST/PUT são as 13 colunas da ficha (+ `status` na edição). O servidor trata
  *    `''` como "limpar", então mandar tudo é o certo aqui — a semântica "ausente não mexe"
  *    existe para o modal antigo, não para esta tela.
+ *  - Etapa 263 (RN-263.01 a 04): a FOTO. Mostra a gravada (a mesma do grupo homologado), escolhe/troca com prévia
+ *    e envia AO SALVAR, depois de o fornecedor gravar (no cadastro novo o id só existe depois), pela mesma rota do
+ *    grupo (`uploadFotoFornecedor`). "Tirar foto" manda `foto: null` no PUT — a chave só vai nesse caso: o
+ *    servidor recusa qualquer outro valor, e mandá-la sempre travaria o salvar de quem tem foto. `onSalvo` só
+ *    depois do envio (a página navega e o F2 fecha) e o Salvar fica travado até lá (sem segundo POST).
  */
 
 const UFS = [
@@ -117,6 +123,14 @@ const FornecedorFicha = ({
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [erro, setErro] = useState('');
   const razaoRef = useRef(null);
+  // Etapa 263: a foto gravada (nome do arquivo), a escolhida e ainda não enviada, a prévia dela e o "tirar" marcado.
+  const [fotoGravada, setFotoGravada] = useState(null);
+  const [fotoArquivo, setFotoArquivo] = useState(null);
+  const [fotoPrevia, setFotoPrevia] = useState(null);
+  const [tirarFoto, setTirarFoto] = useState(false);
+  const [erroFoto, setErroFoto] = useState('');
+  const fotoInputRef = useRef(null);
+  const fotoEscolhaRef = useRef(0);
 
   const grupoDesativado = gruposCarregados && form.grupo_id !== ''
     && !grupos.some((g) => String(g.id) === String(form.grupo_id));
@@ -134,7 +148,7 @@ const FornecedorFicha = ({
     let vivo = true;
     setCarregando(true);
     api.get(`/compras/fornecedores/${fornecedorId}`)
-      .then((r) => { if (vivo) setForm(formDoServidor(r.data || {})); })
+      .then((r) => { if (vivo) { setForm(formDoServidor(r.data || {})); setFotoGravada(r.data?.foto || null); } })
       .catch((e) => {
         if (vivo) setErro(e?.response?.data?.error || 'Não foi possível carregar o fornecedor');
       })
@@ -206,6 +220,39 @@ const FornecedorFicha = ({
     }
   }, []);
 
+  /* ── foto (Etapa 263) ───────────────────────────────────────────── */
+  const escolherFoto = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const recusa = recusaDaFotoFornecedor(file);
+    if (recusa) {
+      // RN-263.02: a anterior (gravada ou já escolhida) continua; o input limpa para a mesma escolha poder ser refeita.
+      setErroFoto(recusa);
+      e.target.value = '';
+      return;
+    }
+    setErroFoto('');
+    setFotoArquivo(file);
+    setTirarFoto(false);
+    fotoEscolhaRef.current += 1;
+    const escolha = fotoEscolhaRef.current;
+    const reader = new FileReader();
+    reader.onload = (ev) => { if (fotoEscolhaRef.current === escolha) setFotoPrevia(ev.target.result); };
+    reader.readAsDataURL(file);
+  };
+
+  const tirarAFoto = () => {
+    fotoEscolhaRef.current += 1;
+    setFotoArquivo(null);
+    setFotoPrevia(null);
+    setErroFoto('');
+    setTirarFoto(true);
+    if (fotoInputRef.current) fotoInputRef.current.value = '';
+  };
+
+  const urlDaFoto = fotoPrevia || (!tirarFoto && fotoGravada ? getFotoUrlFornecedor(fotoGravada) : null);
+  const temFotoNaTela = Boolean(fotoArquivo || urlDaFoto);
+
   /* ── submit ───────────────────────────────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -234,6 +281,8 @@ const FornecedorFicha = ({
       corpo[k] = v;
     });
     if (editando) corpo.status = form.status;
+    // RN-263.03: a chave só vai para TIRAR (e só se nenhuma foto nova foi escolhida depois — a nova vence).
+    if (editando && tirarFoto && !fotoArquivo && fotoGravada) corpo.foto = null;
 
     setSalvando(true);
     let salvo = null;
@@ -244,6 +293,17 @@ const FornecedorFicha = ({
       } else {
         const r = await api.post('/compras/fornecedores', corpo);
         salvo = { ...corpo, id: r?.data?.id, status: 'ativo' };
+      }
+      // RN-263.01/04: a foto vai depois de o fornecedor gravar; se falhar, o fornecedor fica salvo e a tela diz.
+      // Fase 5: o POST sem id (resposta fora do contrato) não perde a foto em silêncio.
+      if (fotoArquivo && !salvo.id) toast.error('Foto não pôde ser salva, mas o fornecedor foi salvo');
+      if (fotoArquivo && salvo.id) {
+        try {
+          await uploadFotoFornecedor(salvo.id, fotoArquivo);
+        } catch (errFoto) {
+          const motivo = errFoto?.response?.data?.error || errFoto?.message;
+          toast.error(motivo ? `Foto não pôde ser salva, mas o fornecedor foi salvo: ${motivo}` : 'Foto não pôde ser salva, mas o fornecedor foi salvo');
+        }
       }
     } catch (err) {
       setErro(err?.response?.data?.error || err?.message || 'Erro ao salvar fornecedor');
@@ -380,6 +440,35 @@ const FornecedorFicha = ({
                   {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
                 </select>
               </Campo>
+            </div>
+          </section>
+
+          {/* Etapa 263 (RN-263.01): a mesma foto do grupo homologado. */}
+          <section className="form-section">
+            <h2>Foto</h2>
+            <div className="fornecedor-foto">
+              <div className="fornecedor-foto-quadro">
+                {urlDaFoto ? (
+                  <img src={urlDaFoto} alt="Foto do fornecedor" data-testid="fornecedor-foto-previa" />
+                ) : (
+                  <span className="fornecedor-foto-vazia">{tirarFoto && fotoGravada ? 'A foto sai ao salvar' : 'Sem foto'}</span>
+                )}
+              </div>
+              <div className="fornecedor-foto-acoes">
+                <label className="btn-secondary fornecedor-foto-escolher" htmlFor="fornecedor-foto-input">
+                  <FiImage /> {temFotoNaTela ? 'Trocar foto' : 'Escolher foto'}
+                </label>
+                <input id="fornecedor-foto-input" data-testid="fornecedor-foto-input" type="file" ref={fotoInputRef}
+                  accept={TIPOS_FOTO_FORNECEDOR.join(',')} onChange={escolherFoto} disabled={salvando} hidden />
+                {temFotoNaTela && (
+                  <button type="button" className="btn-secondary" data-testid="fornecedor-foto-tirar" onClick={tirarAFoto}
+                    disabled={salvando}>
+                    <FiTrash2 /> Tirar foto
+                  </button>
+                )}
+                <small>JPG, PNG, GIF ou WEBP · até 10 MB. A foto é gravada ao salvar.</small>
+                {erroFoto && <div className="fornecedor-foto-erro" data-testid="fornecedor-foto-erro">{erroFoto}</div>}
+              </div>
             </div>
           </section>
 

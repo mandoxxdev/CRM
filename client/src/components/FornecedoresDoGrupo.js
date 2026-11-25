@@ -9,41 +9,12 @@ import './ModalGrupoForm.css';
 import './Loading.css';
 import FornecedorModal from './compras/FornecedorModal';
 import useAtalhoF2 from './compras/useAtalhoF2';
+// Etapa 263 (RN-263.05): as funcoes da foto moram em compras/fotoFornecedor.js — a ficha do fornecedor usa as mesmas.
+import { getFotoUrlFornecedor, uploadFotoFornecedor } from './compras/fotoFornecedor';
 
 // Etapa 192 (RN-192.05): o servidor grava razao, fantasia, contato e endereco em maiusculas; o modal de edicao
 // mostra assim enquanto digita (CSS, para o cursor nao pular para o fim a cada tecla).
 const MAIUSCULAS = { textTransform: 'uppercase' };
-
-function getFotoUrlFornecedor(foto) {
-  if (!foto) return null;
-  if (typeof foto === 'string' && foto.startsWith('data:')) return foto;
-  const base = api.defaults.baseURL || '/api';
-  return base.replace(/\/api\/?$/, '') + '/api/uploads/fornecedores/' + foto;
-}
-
-async function uploadFotoFornecedor(id, file) {
-  const baseURL = (api.defaults.baseURL || '/api').replace(/\/$/, '');
-  const url = `${baseURL}/compras/fornecedores/${id}/foto`;
-  const formData = new FormData();
-  formData.append('foto', file);
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(url, { method: 'POST', headers, body: formData });
-  if (res.ok) return res.json();
-  if (res.status === 400) {
-    const reader = new FileReader();
-    const base64 = await new Promise((resolve, reject) => {
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
-      reader.readAsDataURL(file);
-    });
-    const { data } = await api.post(`/compras/fornecedores/${id}/foto-base64`, { foto_base64: base64 });
-    return data;
-  }
-  const errData = await res.json().catch(() => ({}));
-  throw new Error(errData.error || res.statusText);
-}
 
 const FornecedoresDoGrupo = () => {
   const { grupoId } = useParams();
