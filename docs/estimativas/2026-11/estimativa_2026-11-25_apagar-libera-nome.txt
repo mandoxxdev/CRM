@@ -1,0 +1,9 @@
+*Planejamento — Apagar libera o nome*
+_25/11/2026_
+
+*1. Cadastrar de novo o que foi apagado*
+Hoje, ao apagar uma família ou um produto, o nome e o código continuam presos e não dá para cadastrar outro igual. Passa a dar: o produto com o código de um apagado é cadastrado aproveitando o registro antigo (as propostas que já o usavam continuam funcionando), e uma família pode ser renomeada ou clonada com o nome de uma apagada. O que foi apagado continua guardado no histórico.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
