@@ -19,6 +19,7 @@ import {
 // UTC: a vespera — e o mes anterior)
 import { formatarDataDoBanco, lerDataDoBanco } from '../utils/dataLocal';
 import { periodoDoAno, ehPeriodoPadrao, rotuloDoPeriodo, paramsDoPeriodo, atalhosDoPeriodo } from './periodoDashboard';
+import { avisosDeOutraMoeda } from './moedaNoPainel';
 import './Dashboard.css';
 
 /** Etapa 165 (B1058): o rotulo curto do mes `AAAA-MM` do historico ("out."); ilegivel -> `null`. Antes `new Date('AAAA-MM-01')`: o mes anterior. */
@@ -494,6 +495,9 @@ const Dashboard = () => {
         <div>
           <h1>Dashboard Executivo</h1>
           <p>Visão geral completa do CRM GMP INDUSTRIAIS · <strong className="dashboard-periodo-atual">{rotuloPeriodo}</strong></p>
+          {avisosDeOutraMoeda(stats && stats.propostasEmOutraMoeda).map((t) => (
+            <p key={t} className="dashboard-aviso-moeda">Valores em reais. {t}</p>
+          ))}
         </div>
         <div className="header-actions">
           {/* Toggle de Visualização */}

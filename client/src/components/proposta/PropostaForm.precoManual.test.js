@@ -6,7 +6,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import PropostaForm, { descontoDoItem } from './PropostaForm';
+import PropostaForm, { descontoDoItem, reaisPorUnidade } from './PropostaForm';
 import api from '../../services/api';
 
 jest.mock('../../services/api', () => ({
@@ -111,4 +111,65 @@ test('descontoDoItem: so item do catalogo abaixo da tabela; tabela zero (servico
   expect(descontoDoItem({ manual: false, preco_tabela: 100, valor_unitario: 120 })).toBe(0);
   expect(descontoDoItem({ manual: false, preco_tabela: 0, valor_unitario: 139870 })).toBe(0);
   expect(descontoDoItem({ manual: true, preco_tabela: 100, valor_unitario: 1 })).toBe(0);
+});
+
+// 25/11/2026 (print "Valor Total dos Servicos US$ 0,00"): ao REABRIR a proposta o item do catalogo voltava ao preco de tabela e o
+// valor digitado sumia — no Projeto Conceitual (tabela 0) o salvar seguinte gravava 0 e o documento saia zerado. Os testes acima
+// digitam e salvam na mesma abertura; estes reabrem o que foi gravado.
+test('reabrir: o valor digitado num item de tabela ZERO (servico) continua o digitado, e salvar sem mexer grava o mesmo', async () => {
+  const antes = proposta.itens[0];
+  proposta.itens[0] = { ...antes, valor_unitario: 23550, valor_total: 23550, preco_tabela: 0 };
+  await montar();
+  expect(campoPreco().value).toBe('23550');
+  const corpo = await salvar();
+  expect(Number(corpo.itens[0].valor_unitario)).toBe(23550);
+  expect(corpo.itens[0].valor_total).toBe(23550);
+  expect(corpo.valor_total).toBe(23550);
+  proposta.itens[0] = antes;
+});
+
+test('reabrir: o valor baixado abaixo da tabela continua o baixado, com o desconto do item', async () => {
+  const antes = proposta.itens[0];
+  proposta.itens[0] = { ...antes, valor_unitario: 960, valor_total: 960, preco_tabela: 1000 };
+  await montar();
+  expect(campoPreco().value).toBe('960');
+  const corpo = await salvar();
+  expect(Number(corpo.itens[0].valor_unitario)).toBe(960);
+  expect(corpo.itens[0].desconto_percentual).toBe(4);
+  proposta.itens[0] = antes;
+});
+
+test('reabrir: item de catalogo SEM valor gravado ainda usa a tabela (proposta antiga)', async () => {
+  const antes = proposta.itens[0];
+  proposta.itens[0] = { ...antes, valor_unitario: null, valor_total: null, preco_tabela: 1000 };
+  await montar();
+  expect(campoPreco().value).toBe('1000');
+  proposta.itens[0] = antes;
+});
+
+// 25/11/2026: proposta em dolar — o cadastro mostrava R$ e comparava o valor em US$ com a tabela em reais ("76% abaixo").
+test('em dolar: valores na moeda da proposta, tabela em reais com a conversao, e desconto contra a tabela convertida', async () => {
+  const antes = { ...proposta };
+  Object.assign(proposta, { moeda: 'USD', taxa_cambio: 5, status: 'rascunho' });
+  proposta.itens = [{ ...antes.itens[0], valor_unitario: 190, valor_total: 190, preco_tabela: 1000 }];
+  await montar();
+  const texto = container.textContent.replace(/\u00a0/g, ' '); // o Intl separa US$ do numero com espaco fixo
+  expect(texto).toContain('US$ 190,00');
+  expect(texto).toContain('Tabela: R$ 1.000,00 (≈ US$ 200,00)');
+  expect(texto).toContain('5,00% abaixo'); // 190 contra 200, nao contra 1000
+  expect(texto).not.toContain('exige aprovação');
+  const corpo = await salvar();
+  expect(corpo.itens[0].desconto_percentual).toBe(5);
+  expect(api.post.mock.calls.some(([url]) => url === '/aprovacoes')).toBe(false);
+  Object.keys(proposta).forEach((k) => delete proposta[k]);
+  Object.assign(proposta, antes);
+});
+
+test('reaisPorUnidade e descontoDoItem com cotacao: BRL e 1; sem cotacao nao compara', () => {
+  expect(reaisPorUnidade('BRL', '')).toBe(1);
+  expect(reaisPorUnidade('USD', '5,8573')).toBe(5.8573);
+  expect(reaisPorUnidade('USD', '5.8573')).toBe(5.8573);
+  expect(reaisPorUnidade('EUR', '')).toBeNull();
+  expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, 5)).toBe(25);
+  expect(descontoDoItem({ manual: false, preco_tabela: 1000, valor_unitario: 150 }, null)).toBe(0);
 });

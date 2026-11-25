@@ -107,9 +107,23 @@ export function produtoParaItem(p) {
  * tabela, a diferença É desconto do item e entra na MESMA regra de aprovação do desconto da proposta (acima do limite: rascunho +
  * Aprovações) — senão baixar o preço à mão passaria por fora da aprovação. Acima da tabela (ou tabela zero, como serviço) = 0.
  */
-export function descontoDoItem(it) {
+/** Reais por 1 unidade da moeda da proposta: 1 em BRL; em USD/EUR a cotação do campo ("5,8573" ou "5.8573"); sem cotação, null. */
+export function reaisPorUnidade(moeda, taxaCambio) {
+  if (!moeda || moeda === 'BRL') return 1;
+  const t = String(taxaCambio == null ? '' : taxaCambio).trim();
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return n > 0 ? n : null;
+}
+
+/**
+ * Desconto do item do catálogo: quanto o valor ficou abaixo da tabela. A tabela do catálogo é em REAIS; numa proposta em dólar ou
+ * euro ela é convertida pela cotação da proposta antes de comparar (25/11/2026: US$ 23.550 contra uma tabela de R$ 100.000 dava
+ * "76% abaixo" e pedia aprovação). Sem cotação não há como comparar: 0.
+ */
+export function descontoDoItem(it, reaisPorUn = 1) {
   if (!it || it.manual) return 0;
-  const tabela = Number(it.preco_tabela) || 0;
+  if (!(Number(reaisPorUn) > 0)) return 0;
+  const tabela = (Number(it.preco_tabela) || 0) / Number(reaisPorUn);
   const v = Number(it.valor_unitario) || 0;
   if (tabela <= 0 || v >= tabela) return 0;
   return Math.round((1 - v / tabela) * 10000) / 100;
@@ -264,10 +278,13 @@ export default function PropostaForm() {
           const precoTabela = i.preco_tabela != null
             ? Number(i.preco_tabela)
             : (manual ? null : (Number(i.valor_unitario) || 0));
-          // Preço de catálogo volta ao valor de tabela; desconto fica só no total da proposta
+          // O valor GRAVADO é o do item (desde 24/11/2026 o preço do catálogo é editável). Antes, reabrir trocava o item do catálogo
+          // pela tabela: o valor digitado sumia e, no Projeto Conceitual (tabela 0), o salvar seguinte gravava 0 — o documento saía
+          // "US$ 0,00" (25/11/2026). A tabela só entra quando o item não tem valor gravado (proposta antiga).
+          const gravado = i.valor_unitario != null && String(i.valor_unitario).trim() !== '' ? Number(i.valor_unitario) : null;
           const valorUnit = manual
-            ? (Number(i.valor_unitario) || 0)
-            : (precoTabela != null ? precoTabela : (Number(i.valor_unitario) || 0));
+            ? (gravado || 0)
+            : (gravado != null && Number.isFinite(gravado) ? gravado : (precoTabela != null ? precoTabela : 0));
           const qtd = Number(i.quantidade) || 1;
           return {
             // Etapa 142 (C298, RN-142.01): o id do item gravado fica no estado e volta no salvar (montarPayloadProposta) — é como o
@@ -283,7 +300,8 @@ export default function PropostaForm() {
             regiao_busca: i.regiao_busca ?? '',
             manual,
             preco_tabela: precoTabela,
-            desconto_percentual: 0,
+            desconto_percentual: descontoDoItem({ manual, preco_tabela: precoTabela, valor_unitario: valorUnit },
+              reaisPorUnidade(moedaDoBanco(data.moeda), data.taxa_cambio)),
             // Sem isto, reabrir a proposta traria os itens sem os acessórios na tela — e o
             // save seguinte mandaria '[]', apagando de verdade o que estava gravado. Este
             // mapeamento monta o item campo a campo, então todo campo novo precisa entrar
@@ -303,7 +321,7 @@ export default function PropostaForm() {
         const it = next[idx];
         const q = Number(it.quantidade) || 0;
         const v = Number(it.valor_unitario) || 0;
-        next[idx] = { ...next[idx], valor_total: q * v, desconto_percentual: descontoDoItem(it) };
+        next[idx] = { ...next[idx], valor_total: q * v, desconto_percentual: descontoDoItem(it, reaisPorUnidade(form.moeda, form.taxa_cambio)) };
       }
       return next;
     });
@@ -420,7 +438,10 @@ export default function PropostaForm() {
     // um item com preço baixado à mão abaixo da tabela. Gravar o do item no desconto geral faria o documento descontar duas vezes —
     // o preço já reduzido e mais a porcentagem sobre o total.
     const maxDesc = Number(form.margem_desconto) || 0;
-    const maxDescAprovacao = Math.max(maxDesc, ...itens.map(descontoDoItem));
+    // O desconto do item é refeito com a moeda e a cotação de AGORA (trocar a moeda ou a cotação depois de digitar muda a conta).
+    const porUn = reaisPorUnidade(form.moeda, form.taxa_cambio);
+    const itensParaGravar = itens.map((it) => ({ ...it, desconto_percentual: descontoDoItem(it, porUn) }));
+    const maxDescAprovacao = Math.max(maxDesc, ...itensParaGravar.map((it) => it.desconto_percentual));
     let statusSalvar = form.status;
     const statusJaLiberado = ['desconto_aprovado', 'enviada', 'visualizada', 'aceita', 'aprovada'].includes(form.status);
     if (maxDescAprovacao > DESCONTO_LIMITE_SEM_APROVACAO && !statusJaLiberado) {
@@ -434,7 +455,7 @@ export default function PropostaForm() {
     try {
       const valorTotal = subtotalItens;
       // Etapa 138: o corpo sai de montarPayloadProposta — os campos apagados vão como null (o servidor mantém o que não vier).
-      const payload = montarPayloadProposta({ form, itens, statusSalvar, valorTotal, maxDesc, exigeMotivo });
+      const payload = montarPayloadProposta({ form, itens: itensParaGravar, statusSalvar, valorTotal, maxDesc, exigeMotivo });
       if (!payload.numero_proposta || payload.numero_proposta === 'Gerando...' || !String(payload.numero_proposta).trim()) {
         delete payload.numero_proposta;
       }
@@ -590,7 +611,14 @@ export default function PropostaForm() {
     }
   };
 
-  const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+  // Os valores da proposta na moeda DELA (25/11/2026: numa proposta em dólar o cadastro mostrava tudo em R$). A tabela do catálogo
+  // continua em reais (formatReais) — é o preço cadastrado — e, em outra moeda, ganha a conversão pela cotação ao lado.
+  const moedaTela = moedaDoBanco(form.moeda);
+  const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: moedaTela }).format(Number(v) || 0);
+  const formatReais = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+  const simboloMoeda = { USD: 'US$', EUR: '€' }[moedaTela] || 'R$';
+  const porUnTela = reaisPorUnidade(moedaTela, form.taxa_cambio);
+  const tabelaNaMoeda = (precoReais) => (moedaTela === 'BRL' || !porUnTela || !(Number(precoReais) > 0) ? '' : ` (≈ ${formatMoney((Number(precoReais) || 0) / porUnTela)})`);
 
   if (loadingData) return <div className="proposta-form"><p className="proposta-form-loading">Carregando...</p></div>;
 
@@ -916,7 +944,7 @@ export default function PropostaForm() {
                         <span>Valor unitário</span>
                         {/* Editável também no item do catálogo (24/11/2026): vem do cadastro e pode ser mudado à mão. */}
                         <div className="proposta-form-money-input">
-                          <span className="proposta-form-money-prefix" aria-hidden="true">R$</span>
+                          <span className="proposta-form-money-prefix" aria-hidden="true">{simboloMoeda}</span>
                           <input
                             type="number"
                             min={0}
@@ -929,9 +957,9 @@ export default function PropostaForm() {
                         </div>
                         {!item.manual && (
                           <small className="proposta-form-preco-tabela">
-                            Tabela: {formatMoney(item.preco_tabela)}
-                            {descontoDoItem(item) > 0 && ` · ${descontoDoItem(item).toFixed(2).replace('.', ',')}% abaixo`}
-                            {descontoDoItem(item) > DESCONTO_LIMITE_SEM_APROVACAO && ' — exige aprovação'}
+                            Tabela: {formatReais(item.preco_tabela)}{tabelaNaMoeda(item.preco_tabela)}
+                            {descontoDoItem(item, porUnTela) > 0 && ` · ${descontoDoItem(item, porUnTela).toFixed(2).replace('.', ',')}% abaixo`}
+                            {descontoDoItem(item, porUnTela) > DESCONTO_LIMITE_SEM_APROVACAO && ' — exige aprovação'}
                           </small>
                         )}
                       </div>
@@ -1016,7 +1044,7 @@ export default function PropostaForm() {
                               className="proposta-form-acessorio-qtd"
                             />
                             <div className="proposta-form-acessorio-moeda">
-                              <span aria-hidden="true">R$</span>
+                              <span aria-hidden="true">{simboloMoeda}</span>
                               <input
                                 type="text"
                                 inputMode="decimal"

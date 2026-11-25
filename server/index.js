@@ -17415,10 +17415,27 @@ app.get('/api/dashboard', authenticateToken, exigirComercialNasPropostas, (req, 
               if (err) return res.status(500).json({ error: err.message });
               stats.propostasPorStatus = rows || [];
 
-              // Valor total de propostas aprovadas
-              db.get(`SELECT SUM(${cambio.valorEmReaisSql()}) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}`, ['aprovada'], (err, row) => {
+              // Valor total de propostas aprovadas (em reais, pela cotação de cada proposta) — e, desde 25/11/2026, quanto do período
+              // veio em dólar/euro: o painel soma tudo em R$ e o usuário via "aparecendo em real" sem saber que a proposta em US$
+              // estava ali dentro (ou, sem cotação gravada, contada 1 para 1). Uma consulta só, por status e moeda.
+              db.all(`SELECT status, UPPER(COALESCE(NULLIF(TRIM(moeda), ''), 'BRL')) AS moeda, COUNT(*) AS n,
+                        SUM(COALESCE(valor_total, 0)) AS valor, SUM(${cambio.valorEmReaisSql()}) AS em_reais,
+                        SUM(CASE WHEN taxa_cambio IS NULL OR taxa_cambio <= 0 THEN 1 ELSE 0 END) AS sem_cotacao
+                      FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)} GROUP BY status, 2`, [], (err, porMoeda) => {
                 if (err) return res.status(500).json({ error: err.message });
-                stats.valorTotalPropostasAprovadas = row.total || 0;
+                const linhasMoeda = porMoeda || [];
+                stats.valorTotalPropostasAprovadas = linhasMoeda.filter((l) => l.status === 'aprovada').reduce((s, l) => s + (Number(l.em_reais) || 0), 0);
+                const outras = {};
+                for (const l of linhasMoeda) {
+                  if (l.moeda === 'BRL') continue;
+                  const o = outras[l.moeda] || (outras[l.moeda] = { moeda: l.moeda, propostas: 0, valor: 0, em_reais: 0, sem_cotacao: 0, aprovadas_valor: 0 });
+                  o.propostas += Number(l.n) || 0;
+                  o.valor += Number(l.valor) || 0;
+                  o.em_reais += Number(l.em_reais) || 0;
+                  o.sem_cotacao += Number(l.sem_cotacao) || 0;
+                  if (l.status === 'aprovada') o.aprovadas_valor += Number(l.valor) || 0;
+                }
+                stats.propostasEmOutraMoeda = Object.values(outras);
 
                 // Calcular taxa de conversão
                 const totalPropostas = stats.propostasPorStatus.reduce((sum, item) => sum + (item.total || 0), 0);

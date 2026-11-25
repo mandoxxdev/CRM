@@ -1286,3 +1286,10 @@
   border-color: var(--gmp-primary);
   color: var(--gmp-primary);
 }
+
+/* Aviso das propostas em dólar/euro somadas em reais (25/11/2026) */
+.dashboard-aviso-moeda {
+  margin: 6px 0 0 !important;
+  font-size: 13px !important;
+  color: #8a5a00 !important;
+}

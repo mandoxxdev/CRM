@@ -135,6 +135,22 @@ test('MO-04 o painel soma em reais pela cotacao de cada proposta', async () => {
   assert.strictEqual(v.json.pipeline.valorPorEtapa.Aprovadas, 13500);
 });
 
+// 25/11/2026 ("la no painel ... fica aparecendo em real"): o painel diz quanto do periodo veio em dolar/euro e por quanto entrou,
+// e conta a proposta sem cotacao (que entra 1 para 1).
+test('MO-05 o painel informa as propostas em outra moeda (valor, em reais, sem cotacao)', async () => {
+  const semCotacao = await nova({ moeda: 'USD', taxa_cambio: '5' });
+  await run("UPDATE propostas SET taxa_cambio = NULL, status = 'enviada' WHERE id = ?", [semCotacao]);
+  const r = await req('GET', '/dashboard', token);
+  const usd = (r.json.propostasEmOutraMoeda || []).find((o) => o.moeda === 'USD');
+  assert.ok(usd, JSON.stringify(r.json.propostasEmOutraMoeda));
+  // pDigitada (1000 x 5,5) + pDoDia (1000 x 6) aprovadas + a sem cotacao (1000 x 1)
+  assert.deepStrictEqual({ propostas: usd.propostas, valor: usd.valor, em_reais: usd.em_reais, sem_cotacao: usd.sem_cotacao, aprovadas_valor: usd.aprovadas_valor },
+    { propostas: 3, valor: 3000, em_reais: 12500, sem_cotacao: 1, aprovadas_valor: 2000 });
+  assert.ok(!(r.json.propostasEmOutraMoeda || []).some((o) => o.moeda === 'BRL'), 'o real nao e "outra moeda"');
+  // o total aprovado nao mudou: a sem cotacao esta enviada
+  assert.strictEqual(r.json.valorTotalPropostasAprovadas, 13500);
+});
+
 (async () => {
   for (const [nome, fn] of testes) {
     try { await fn(); passed++; console.log('  ✓ ' + nome); } catch (e) { failed++; console.log('  ✗ ' + nome + '\n      ' + (e && e.message)); }

@@ -79,7 +79,8 @@ describe('montarPayloadProposta (RN-08)', () => {
     // eslint-disable-next-line global-require
     const path = require('path');
     const fonte = fs.readFileSync(path.join(__dirname, 'PropostaForm.js'), 'utf8');
-    expect(fonte.split('const payload = montarPayloadProposta({ form, itens, statusSalvar, valorTotal, maxDesc, exigeMotivo });').length).toBe(2);
+    // 25/11/2026: os itens vao com o desconto do item refeito na moeda e cotacao da hora (itensParaGravar), nao o do estado.
+    expect(fonte.split('const payload = montarPayloadProposta({ form, itens: itensParaGravar, statusSalvar, valorTotal, maxDesc, exigeMotivo });').length).toBe(2);
     expect(fonte.split('const valorTotal = subtotalItens;').length).toBe(2);
   });
 });
