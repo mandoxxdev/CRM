@@ -263,21 +263,30 @@ html .acesso-negado-actions .btn-voltar {
   min-height: 40px; padding: 0 22px !important; font-size: 14px !important; font-weight: 600 !important;
 }
 
-/* ── Produtos > grupos (24/11/2026) ───────────────────────────────────────────
-   "As fotos deram a carregar e a pagina esta pessima, cada imagem parece ter
-   um tamanho": a foto era `object-fit: contain` sobre um degrade azul/ciano
-   (tres temas), entao cada foto aparecia com uma moldura colorida de tamanho
-   diferente, e o nome vinha numa pilula branca com "Ver familias" em botao de
-   borda. Agora: cartao branco com fio (como a tela de modulos), foto em 16:10
-   que PREENCHE a area (`cover`) e cresce de leve no hover, numero do grupo em
-   pilula cinza, nome a esquerda, "Ver familias" como link azul, lapis so no
-   hover. "Adicionar grupo" deixa o degrade pela pilula do sistema. */
+/* ── Produtos > grupos ─────────────────────────────────────────────────────────
+   Historia: 24/11 — "cada imagem parece ter um tamanho" (foto `contain` sobre
+   degrade) -> cartao branco com foto `cover`; depois — "ficou muito sem vida" ->
+   a FOTO vira o cartao inteiro e o texto sobe para cima dela, sobre um
+   escurecimento no pe (como os cartoes da App Store).
+   25/11 — "essa parte de produtos esta um lixo, tudo bugado": as duas passadas
+   conviviam e brigavam. (1) A primeira vinha DEPOIS no arquivo e ganhava: o pe do
+   cartao ficava transparente/branco e o nome branco sumia ("Moinhos" branco no
+   branco). (2) O `min-height: 280px` do GruposProdutos.css + `aspect-ratio: 4/3`
+   daqui faziam o navegador calcular a LARGURA pela altura (280 x 4/3 = 373px) numa
+   coluna de 254px: cada cartao vazava sobre o vizinho e para fora da tela. Agora
+   existe uma versao so (a segunda, que era a pretendida), com a largura da coluna
+   mandando: `width: 100%`, `min-height: 0`, altura pela proporcao.
+   Teste: server/tests/gruposProdutosVitrine.test.js (CSS do sistema, no navegador). */
 html .grupos-grid {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
   gap: 16px !important;
 }
 html .grupo-card {
-  background: var(--gmp-surface) !important;
+  position: relative !important;
+  display: block !important;
+  width: 100% !important; min-width: 0 !important; min-height: 0 !important; height: auto !important;
+  aspect-ratio: 4 / 3;
+  background: var(--ds-panel, #F5F5F7) !important;
   border: 1px solid var(--ds-hair, rgba(0,0,0,.07)) !important;
   border-radius: 20px !important;
   box-shadow: none !important;
@@ -291,11 +300,7 @@ html .grupo-card:hover {
 }
 html[data-theme="dark"] .grupo-card { border-color: rgba(255,255,255,.08) !important; }
 html[data-theme="dark"] .grupo-card:hover { border-color: rgba(255,255,255,.16) !important; }
-/* Segunda passada (P.O.: "ficou muito sem vida agora"): a FOTO vira o cartao
-   inteiro (4:3) e o texto sobe para cima dela, sobre um escurecimento no pe —
-   como os cartoes da App Store. O lapis vira um circulo branco sempre visivel
-   (estava branco sobre branco: a cor do icone vinha do CSS antigo). */
-html .grupo-card { display: block !important; aspect-ratio: 4 / 3; background: var(--ds-panel, #F5F5F7) !important; }
+/* Foto: o cartao inteiro. */
 html .grupo-card-header {
   position: absolute !important; inset: 0 !important;
   aspect-ratio: auto !important; width: 100% !important; height: 100% !important;
@@ -303,60 +308,60 @@ html .grupo-card-header {
   background: var(--ds-panel, #F5F5F7) !important;
   border-radius: 0 !important;
 }
-html .grupo-card-body {
-  position: absolute !important; left: 0; right: 0; bottom: 0; z-index: 2;
-  padding: 44px 18px 18px !important;
-  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.72) 100%) !important;
-  color: #fff !important;
-}
-html .grupo-card .grupo-card-numero { background: rgba(255,255,255,.22) !important; color: #fff !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-html .grupo-card .grupo-card-nome { color: #fff !important; -webkit-text-fill-color: #fff !important; font-size: 18px !important; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
-html .grupo-card .grupo-card-cta-label { color: rgba(255,255,255,.9) !important; }
-html .grupo-card .grupo-card-placeholder { color: rgba(0,0,0,.25) !important; font-size: 0; }
-html .grupo-card .btn-icon-grupo, html .grupo-card .btn-icon-grupo svg { color: #1D1D1F !important; }
-html .grupo-card .btn-icon-grupo { opacity: 1 !important; background: rgba(255,255,255,.92) !important; width: 32px !important; height: 32px !important; }
 html .grupo-card-foto-img {
+  width: 100% !important; height: 100% !important;
   object-fit: cover !important;
   object-position: center !important;
   background: var(--ds-panel, #F5F5F7) !important;
   transition: transform .6s cubic-bezier(.22,1,.36,1);
 }
 html .grupo-card:hover .grupo-card-foto-img { transform: scale(1.04); }
-html .grupo-card-placeholder { color: var(--gmp-gray-400, #AEAEB2) !important; }
-html .grupo-card-actions { top: 10px !important; right: 10px !important; }
-html .btn-icon-grupo {
-  width: 30px !important; height: 30px !important;
-  background: rgba(255,255,255,.94) !important; color: var(--gmp-text, #1D1D1F) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,.18) !important;
-  opacity: 0; transition: opacity .16s ease, transform .16s ease !important;
+html .grupo-card .grupo-card-placeholder { color: rgba(0,0,0,.22) !important; }
+html[data-theme="dark"] .grupo-card .grupo-card-placeholder { color: rgba(255,255,255,.22) !important; }
+/* Texto: em cima da foto, sobre o escurecimento do pe — sempre branco. */
+html .grupo-card .grupo-card-body {
+  position: absolute !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important; z-index: 2;
+  width: auto !important; min-height: 0 !important;
+  display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 2px;
+  padding: 48px 16px 14px !important;
+  text-align: left !important;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.50) 50%, rgba(0,0,0,.72) 100%) !important;
+  border-radius: 0 !important;
+  color: #fff !important;
 }
-html .btn-icon-grupo:hover { transform: none !important; background: #fff !important; }
-html .grupo-card:hover .btn-icon-grupo, html .btn-icon-grupo:focus { opacity: 1; }
-@media (hover: none) { html .btn-icon-grupo { opacity: 1; } }
-html .grupo-card-body {
-  padding: 14px 16px 16px !important;
-  text-align: left !important; align-items: flex-start !important;
-  min-height: 0 !important; gap: 4px;
-  background: transparent !important; border-radius: 0 !important;
-}
-html .grupo-card-numero {
+html .grupo-card .grupo-card-numero {
   font-size: 11px !important; font-weight: 600 !important; letter-spacing: .02em !important;
-  color: var(--gmp-text-light) !important; background: var(--ds-panel, #F5F5F7) !important;
+  color: #fff !important; background: rgba(255,255,255,.22) !important;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   border-radius: 980px !important; padding: 2px 8px !important; margin: 0 0 4px !important;
 }
-html .grupo-card-nome {
-  font-size: 16px !important; font-weight: 600 !important; letter-spacing: -0.01em !important; line-height: 1.25 !important;
-  color: var(--gmp-text) !important; -webkit-text-fill-color: var(--gmp-text) !important;
+html .grupo-card .grupo-card-nome {
+  font-size: 18px !important; font-weight: 650 !important; letter-spacing: -0.01em !important; line-height: 1.2 !important;
+  color: #fff !important; -webkit-text-fill-color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
   background: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+  overflow-wrap: anywhere;
 }
-html .grupo-card-cta-label {
+html .grupo-card .grupo-card-cta-label {
   display: inline-flex !important; align-items: center; gap: 4px;
-  margin: 8px 0 0 !important; padding: 0 !important;
-  font-size: 13px !important; font-weight: 600 !important; color: var(--gmp-primary) !important;
-  background: transparent !important; border: none !important; box-shadow: none !important;
+  margin: 6px 0 0 !important; padding: 0 !important;
+  font-size: 13px !important; font-weight: 600 !important;
+  color: rgba(255,255,255,.92) !important; -webkit-text-fill-color: rgba(255,255,255,.92) !important;
+  background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 0 !important;
 }
 html .grupo-card-chevron { transition: transform .18s ease; }
 html .grupo-card:hover .grupo-card-chevron { transform: translateX(2px); }
+/* Lapis: circulo branco no canto, sempre visivel (era branco sobre branco). */
+html .grupo-card-actions { position: absolute !important; top: 10px !important; right: 10px !important; left: auto !important; z-index: 3 !important; }
+html .grupo-card .btn-icon-grupo {
+  width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; padding: 0 !important;
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  border: none !important; border-radius: 50% !important;
+  background: rgba(255,255,255,.94) !important; box-shadow: 0 1px 3px rgba(0,0,0,.18) !important;
+  color: #1D1D1F !important; opacity: 1 !important; transition: transform .16s ease !important;
+}
+html .grupo-card .btn-icon-grupo svg { color: #1D1D1F !important; stroke: #1D1D1F !important; }
+html .grupo-card .btn-icon-grupo:hover { transform: scale(1.06) !important; background: #fff !important; }
 html .btn-novo-grupo {
   background: var(--gmp-primary) !important; background-image: none !important;
   color: #fff !important; border: none !important; border-radius: 980px !important; box-shadow: none !important;
