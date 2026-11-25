@@ -216,12 +216,16 @@ html .layout td .badge[class="badge"] {
 /* ── Clientes: o logo ao lado do nome na tabela (24/11/2026) ─────────────────── */
 /* ("as fotos ficaram muito pequenas": de 34px para um ladrilho 72x48, com respiro) */
 html .layout .cli-td-nome { display: inline-flex; align-items: center; gap: 14px; }
+/* CNPJ numa linha so (quebrava em "26.747.054/0001-" / "09"). */
+html .layout .clientes .data-table td:nth-child(3) { white-space: nowrap !important; }
 html .layout .cli-logo-mini {
   width: 72px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: contain;
   background: #fff; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)); padding: 5px; box-sizing: border-box;
 }
+/* A inicial no MESMO quadro da logo (72x48): com 48px de largura, o nome do cliente sem logo comecava 24px mais a esquerda que o do
+   cliente com logo ("A.A. comeca mais para a esquerda e Acor mais para a direita", 25/11/2026). */
 html .layout .cli-logo-ini {
-  width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px;
+  width: 72px; height: 48px; flex: 0 0 auto; border-radius: 10px;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--ds-panel, #F5F5F7); color: var(--gmp-text-light); font-size: 17px; font-weight: 700;
 }

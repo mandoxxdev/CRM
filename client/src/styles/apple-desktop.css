@@ -307,7 +307,17 @@
   }
   html .layout .data-table tbody tr:hover td, html .layout table tbody tr:hover td { background: var(--ds-panel) !important; }
   html .layout .data-table .btn-icon, html .layout .action-buttons .btn-icon,
-  html .layout .action-buttons a, html .layout .action-buttons button { width: 30px !important; height: 30px !important; border-radius: 8px !important; }
+  html .layout .action-buttons a, html .layout .action-buttons button {
+    width: 30px !important; height: 30px !important; border-radius: 8px !important;
+    /* (25/11/2026) padding 0 + flex: a regra geral de alvo de toque (.btn-icon { padding: 12px }) deixava 6px dentro dos 30px e o icone
+       de EDITAR saia com 4px de largura — um ponto cinza em todas as tabelas; a lixeira (um <button>) nao herdava o padding e ficava
+       diferente. Os dois botoes agora do mesmo tamanho, lado a lado, com o icone de 16px no meio. */
+    padding: 0 !important; min-width: 30px !important; min-height: 30px !important;
+    display: inline-flex !important; align-items: center !important; justify-content: center !important; flex: 0 0 auto !important;
+  }
+  html .layout .data-table .btn-icon svg, html .layout .action-buttons .btn-icon svg,
+  html .layout .action-buttons a svg, html .layout .action-buttons button svg { width: 16px !important; height: 16px !important; flex: 0 0 auto !important; }
+  html .layout .action-buttons { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; gap: 6px !important; }
 
   /* ── 7. Cartoes de formulario: branco com um fio; de dados: painel cinza ─
      Medido: o glass-override.css pinta TUDO que tem "-card" no nome com
