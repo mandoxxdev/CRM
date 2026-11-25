@@ -1,0 +1,802 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APPLE-THEME — a pele visual do sistema inteiro (computador E celular)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Pedido: "mude o front-end inteiro, use a tematica da Apple como referencia
+   visual, glass e etc. Quero algo bem diferente, muito limpo, suave de navegar
+   e menos tunado. Nao perca nenhuma funcao; so visual, nada que quebre codigo."
+
+   COMO ISTO FUNCIONA, E POR QUE E SEGURO
+   --------------------------------------
+   E SO CSS. Nenhum componente, rota, handler ou dado muda — por isso nenhuma
+   funcao se perde e nada quebra. A folha entra POR ULTIMO no pacote (App.js,
+   depois de glass-override.css e app-glass.css): empate de `!important` se
+   resolve pela ordem, e a ultima ganha.
+
+   Tres alavancas, da mais barata para a mais pontual:
+     1. VARIAVEIS. O design system inteiro (glass-override, componentes, cards,
+        modais, tabelas, sidebar) le `--gmp-*`, `--glass-*`, `--sidebar-*`,
+        `--elevation-*`, `--radius-*`. Trocar o valor da variavel re-pinta tudo
+        isso sem brigar com especificidade nenhuma.
+     2. COMPONENTES. O que esta HARDCODED (gradientes de botao, brilho, laranja
+        do login, item ativo da gaveta, selos de acesso) e sobrescrito pelo
+        proprio seletor, com !important onde a base ja usa !important.
+     3. CELULAR. O app-glass.css define `--ag-*` dentro de @media (max-width:
+        768px); aqui as mesmas variaveis sao redefinidas, dentro do mesmo media
+        query e depois dele, para o vidro neutro da Apple. A estrutura
+        (dock-pilula, gaveta, cartoes) fica; so a cor e o excesso saem.
+
+   A LINGUAGEM VISUAL (o que "Apple" quer dizer aqui)
+   --------------------------------------------------
+   · Fundo quase branco (#F5F5F7), superficies brancas, UMA cor de acao: o azul
+     da Apple (#0071E3). Nada de gradiente, brilho (glow), halo ou neon.
+   · Vidro de verdade so onde conteudo passa por baixo: barra lateral, topo,
+     dock, modais — `saturate(180%) blur(20px)` sobre branco a 72%.
+   · Cantos: cartao 16px, campo 10px, botao principal em PILULA.
+   · Sombras quase invisiveis (profundidade por camada, nao por sombra).
+   · Tipografia do sistema (SF no Apple, Segoe no Windows): titulos com
+     letra apertada (-0.02em), peso 600, nunca 800/900.
+   · Movimento curto (200ms) e sem "pular" (os translateY(-3px) saem).
+   · Sem fundo animado: calma e parte do estilo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────── 1. TOKENS (claro) ───────────────────────────── */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+               "Segoe UI", Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* Acao: azul Apple. A familia primaria inteira muda, porque muitos seletores
+     leem --gmp-primary-500/600/700 direto. */
+  --gmp-primary-50:  #F0F6FF;
+  --gmp-primary-100: #DCEBFF;
+  --gmp-primary-200: #B9D7FF;
+  --gmp-primary-300: #85BAFF;
+  --gmp-primary-400: #4A9BFF;
+  --gmp-primary-500: #0A84FF;
+  --gmp-primary-600: #0071E3;
+  --gmp-primary-700: #0062C4;
+  --gmp-primary-800: #0051A3;
+  --gmp-primary-900: #003F80;
+  --gmp-primary:       #0071E3;
+  --gmp-primary-dark:  #0062C4;
+  --gmp-primary-light: #4A9BFF;
+  --gmp-accent:        #0071E3;
+  --gmp-info:          #0A84FF;
+  --gmp-info-light:    #4A9BFF;
+  --gmp-info-dark:     #0062C4;
+  --gmp-info-50:       rgba(10, 132, 255, 0.08);
+  --gmp-info-100:      rgba(10, 132, 255, 0.15);
+  --gmp-info-500:      #0A84FF;
+
+  /* Semanticas no tom do sistema iOS — saturadas, mas sem fluorescencia. */
+  --gmp-success:       #248A3D;
+  --gmp-success-light: #34C759;
+  --gmp-success-dark:  #1B6E30;
+  --gmp-success-50:    rgba(52, 199, 89, 0.10);
+  --gmp-success-100:   rgba(52, 199, 89, 0.18);
+  --gmp-success-500:   #34C759;
+  --gmp-warning:       #C93400;
+  --gmp-warning-light: #FF9F0A;
+  --gmp-warning-dark:  #A12900;
+  --gmp-warning-50:    rgba(255, 159, 10, 0.12);
+  --gmp-warning-100:   rgba(255, 159, 10, 0.20);
+  --gmp-warning-500:   #FF9F0A;
+  --gmp-error:         #D70015;
+  --gmp-error-light:   #FF3B30;
+  --gmp-error-dark:    #A80010;
+  --gmp-error-50:      rgba(255, 59, 48, 0.10);
+  --gmp-error-100:     rgba(255, 59, 48, 0.18);
+  --gmp-error-500:     #FF3B30;
+
+  /* Superficies */
+  --gmp-bg:                #F5F5F7;
+  --gmp-bg-subtle:         #F5F5F7;
+  --gmp-surface:           #FFFFFF;
+  --gmp-surface-hover:     #F2F2F7;
+  --gmp-surface-secondary: #FAFAFC;
+  --gmp-card-bg:           #FFFFFF;
+  --gmp-secondary:         #F5F5F7;
+  --gmp-text:              #1D1D1F;
+  --gmp-text-light:        #6E6E73;
+  --gmp-border:            rgba(0, 0, 0, 0.08);
+  --gmp-shadow:            rgba(0, 0, 0, 0.06);
+
+  --gmp-gray-50:  #FAFAFC;
+  --gmp-gray-100: #F5F5F7;
+  --gmp-gray-200: #E8E8ED;
+  --gmp-gray-300: #D2D2D7;
+  --gmp-gray-400: #AEAEB2;
+  --gmp-gray-500: #8E8E93;
+  --gmp-gray-600: #6E6E73;
+  --gmp-gray-700: #48484A;
+  --gmp-gray-800: #2C2C2E;
+  --gmp-gray-900: #1D1D1F;
+
+  /* Vidro */
+  --glass-bg:           rgba(255, 255, 255, 0.72);
+  --glass-bg-md:        rgba(255, 255, 255, 0.82);
+  --glass-bg-strong:    rgba(255, 255, 255, 0.92);
+  --glass-bg-sidebar:   rgba(255, 255, 255, 0.72);
+  --glass-border:       rgba(0, 0, 0, 0.08);
+  --glass-border-hover: rgba(0, 0, 0, 0.14);
+  --glass-blur:         blur(20px) saturate(180%);
+  --glass-blur-strong:  blur(28px) saturate(180%);
+  --glass-shadow:       0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --glass-shadow-hover: 0 2px 4px rgba(0,0,0,0.05), 0 14px 36px rgba(0,0,0,0.09);
+  --glass-glow-primary: none;
+  --glass-glow-accent:  none;
+
+  /* Barra lateral */
+  --sidebar-bg:          rgba(255, 255, 255, 0.72);
+  --sidebar-border:      rgba(0, 0, 0, 0.08);
+  --sidebar-text:        #3A3A3C;
+  --sidebar-text-hover:  #1D1D1F;
+  --sidebar-text-active: #0071E3;
+  --sidebar-text-muted:  #8E8E93;
+
+  /* Elevacoes: profundidade por camada, nao por sombra pesada. */
+  --elevation-1: 0 1px 2px rgba(0,0,0,0.04);
+  --elevation-2: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05);
+  --elevation-3: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --elevation-4: 0 2px 4px rgba(0,0,0,0.05), 0 14px 36px rgba(0,0,0,0.09);
+  --elevation-5: 0 4px 8px rgba(0,0,0,0.06), 0 24px 56px rgba(0,0,0,0.12);
+  --elevation-6: 0 6px 12px rgba(0,0,0,0.07), 0 32px 72px rgba(0,0,0,0.16);
+  --shadow-primary: 0 6px 16px rgba(0,113,227,0.20);
+  --shadow-success: 0 6px 16px rgba(52,199,89,0.18);
+  --shadow-error:   0 6px 16px rgba(255,59,48,0.18);
+  --shadow-warning: 0 6px 16px rgba(255,159,10,0.18);
+
+  /* Cantos */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  24px;
+  --border-radius: 12px;
+
+  /* Movimento curto, curva da Apple. */
+  --transition-fast:   120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-base:   200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-slow:   280ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-bounce: 280ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  --skeleton-bg:      #F2F2F7;
+  --skeleton-border:  #E8E8ED;
+  --skeleton-shimmer: linear-gradient(90deg, #E8E8ED 25%, #F5F5F7 50%, #E8E8ED 75%);
+}
+
+/* ───────────────────────────── 1b. TOKENS (escuro) ─────────────────────────── */
+[data-theme="dark"] {
+  --gmp-primary:       #0A84FF;
+  --gmp-primary-dark:  #0071E3;
+  --gmp-primary-light: #64B5FF;
+  --gmp-accent:        #0A84FF;
+
+  --gmp-bg:                #000000;
+  --gmp-bg-subtle:         #0A0A0C;
+  --gmp-surface:           #1C1C1E;
+  --gmp-surface-hover:     #2C2C2E;
+  --gmp-surface-secondary: #161618;
+  --gmp-card-bg:           #1C1C1E;
+  --gmp-secondary:         #000000;
+  --gmp-text:              #F5F5F7;
+  --gmp-text-light:        #98989D;
+  --gmp-border:            rgba(255, 255, 255, 0.12);
+  --gmp-shadow:            rgba(0, 0, 0, 0.5);
+
+  --gmp-gray-50:  #0A0A0C;
+  --gmp-gray-100: #161618;
+  --gmp-gray-200: #1C1C1E;
+  --gmp-gray-300: #2C2C2E;
+  --gmp-gray-400: #3A3A3C;
+  --gmp-gray-500: #636366;
+  --gmp-gray-600: #8E8E93;
+  --gmp-gray-700: #AEAEB2;
+  --gmp-gray-800: #D1D1D6;
+  --gmp-gray-900: #F5F5F7;
+
+  --glass-bg:           rgba(28, 28, 30, 0.72);
+  --glass-bg-md:        rgba(28, 28, 30, 0.82);
+  --glass-bg-strong:    rgba(28, 28, 30, 0.92);
+  --glass-bg-sidebar:   rgba(20, 20, 22, 0.76);
+  --glass-border:       rgba(255, 255, 255, 0.12);
+  --glass-border-hover: rgba(255, 255, 255, 0.20);
+  --glass-shadow:       0 1px 2px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.40);
+  --glass-shadow-hover: 0 2px 4px rgba(0,0,0,0.35), 0 14px 36px rgba(0,0,0,0.50);
+  --glass-glow-primary: none;
+  --glass-glow-accent:  none;
+
+  --sidebar-bg:          rgba(20, 20, 22, 0.76);
+  --sidebar-border:      rgba(255, 255, 255, 0.10);
+  --sidebar-text:        #D1D1D6;
+  --sidebar-text-hover:  #FFFFFF;
+  --sidebar-text-active: #0A84FF;
+  --sidebar-text-muted:  #8E8E93;
+
+  --elevation-1: 0 1px 2px rgba(0,0,0,0.30);
+  --elevation-2: 0 1px 2px rgba(0,0,0,0.30), 0 4px 12px rgba(0,0,0,0.35);
+  --elevation-3: 0 1px 2px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.40);
+  --elevation-4: 0 2px 4px rgba(0,0,0,0.35), 0 14px 36px rgba(0,0,0,0.50);
+  --elevation-5: 0 4px 8px rgba(0,0,0,0.40), 0 24px 56px rgba(0,0,0,0.55);
+  --elevation-6: 0 6px 12px rgba(0,0,0,0.45), 0 32px 72px rgba(0,0,0,0.60);
+
+  --skeleton-bg:      #1C1C1E;
+  --skeleton-border:  #2C2C2E;
+  --skeleton-shimmer: linear-gradient(90deg, #1C1C1E 25%, #2C2C2E 50%, #1C1C1E 75%);
+}
+
+/* ───────────────────────────── 2. BASE ─────────────────────────────────────── */
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: var(--font-sans) !important;
+  background: var(--gmp-bg) !important;
+  color: var(--gmp-text) !important;
+  letter-spacing: -0.005em;
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2 {
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  color: var(--gmp-text) !important;
+}
+h1, .h1 { font-weight: 700 !important; letter-spacing: -0.025em; }
+
+/* Os fundos animados saem em TODA tela: a malha/constelacao do app e as esferas
+   flutuantes do login e do seletor de modulos. Calma e parte do estilo. O
+   interruptor do usuario continua existindo — so nao ha mais o que ligar. */
+.animated-background, .floating-balls-bg { display: none !important; }
+
+/* O passaro decorativo no canto do seletor de modulos (aria-hidden) era um
+   desenho solto numa caixa; a marca ja esta no GMP + ORION a esquerda. */
+.tipo-selecao__bird-logo { display: none !important; }
+
+/* Brilhos e "glow" sao o oposto de Apple. */
+.glow-primary, .glow-success, .glow-warning, .glow-error { box-shadow: none !important; }
+.btn-premium-shine, .glass-shimmer::after { display: none !important; }
+
+/* O selo "Orion-BETA-V0" flutuando no canto e marca de desenvolvimento, nao de
+   produto. Some em toda tela (o celular ja o escondia). */
+.orion-version-badge { display: none !important; }
+
+/* Barra de rolagem fina e discreta (WebKit). */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+[data-theme="dark"] *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); background-clip: padding-box; border: 2px solid transparent; }
+
+/* Foco acessivel, no padrao do sistema. */
+:where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--gmp-primary) !important;
+  outline-offset: 2px;
+}
+
+/* ───────────────────────────── 3. BOTOES ───────────────────────────────────── */
+/* Toda a familia perde gradiente, brilho e o "pulo" no hover. A cor de cada
+   variante continua dizendo o que ela faz — so que no tom do sistema. */
+.btn-premium, .btn-primary, .btn-secondary, .btn-success, .btn-error, .btn-warning,
+.btn, [class*='btn-']:where(:not([class*='btn-icon'])) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border-radius: 980px !important;
+  transition: background var(--transition-base), color var(--transition-base),
+              box-shadow var(--transition-base), opacity var(--transition-base),
+              transform 120ms cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+.btn-premium:hover, .btn-primary:hover:not(:disabled), .btn-secondary:hover:not(:disabled),
+.btn-success:hover:not(:disabled), .btn-error:hover:not(:disabled), .btn-warning:hover:not(:disabled) {
+  transform: none !important;
+}
+.btn-premium:active, .btn-primary:active, .btn-secondary:active,
+.btn-success:active, .btn-error:active, .btn-warning:active { transform: scale(0.98) !important; }
+
+/* Principal: azul Apple, solido. (Vale tambem para o botao "premium", que era o
+   laranja com halo e depois o ink escuro — uma cor de acao so, em todo lugar.) */
+.btn-premium, .btn-primary,
+[class*='btn-primar'], [class*='-primario'] {
+  background: var(--gmp-primary) !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.btn-premium *, .btn-primary * { color: #FFFFFF !important; }
+.btn-premium:hover, .btn-primary:hover:not(:disabled) { background: #0077ED !important; }
+.btn-premium-icon { background: rgba(255,255,255,0.18) !important; box-shadow: none !important; border-radius: 10px !important; }
+
+/* Secundario: cinza claro do sistema, texto azul (o botao "de texto" da Apple). */
+.btn-secondary {
+  background: var(--gmp-surface-hover) !important;
+  color: var(--gmp-primary) !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--gmp-gray-200) !important; border-color: transparent !important; box-shadow: none !important; }
+[data-theme="dark"] .btn-secondary { background: var(--gmp-surface-hover) !important; color: var(--gmp-primary) !important; }
+[data-theme="dark"] .btn-secondary:hover:not(:disabled) { background: var(--gmp-gray-400) !important; }
+
+.btn-success { background: var(--gmp-success-light) !important; background-image: none !important; color: #FFFFFF !important; box-shadow: none !important; }
+.btn-success:hover:not(:disabled) { background: #2DB84F !important; box-shadow: none !important; }
+.btn-error   { background: var(--gmp-error-light) !important;   background-image: none !important; color: #FFFFFF !important; box-shadow: none !important; }
+.btn-error:hover:not(:disabled)   { background: #E6342A !important; box-shadow: none !important; }
+.btn-warning { background: var(--gmp-warning-light) !important; background-image: none !important; color: #1D1D1F !important; box-shadow: none !important; }
+.btn-warning:hover:not(:disabled) { background: #F09200 !important; box-shadow: none !important; }
+
+.btn-premium:disabled, .btn-primary:disabled, .btn-secondary:disabled,
+.btn-success:disabled, .btn-error:disabled, .btn-warning:disabled { opacity: 0.45; transform: none !important; }
+
+/* Botoes de icone (editar/excluir/etc.): quadrado arredondado, cinza, sem borda azul. */
+.btn-icon,
+.action-buttons a, .action-buttons button,
+.propostas-list-cell-actions button, .propostas-list-cell-actions a {
+  border-radius: 10px !important;
+  background: var(--gmp-surface-hover) !important;
+  border: 1px solid transparent !important;
+  color: var(--gmp-text-light) !important;
+  box-shadow: none !important;
+}
+.btn-icon:hover, .action-buttons a:hover, .action-buttons button:hover,
+.propostas-list-cell-actions button:hover, .propostas-list-cell-actions a:hover {
+  background: var(--gmp-gray-200) !important;
+  color: var(--gmp-text) !important;
+  transform: none !important;
+}
+.btn-icon.btn-danger, .action-buttons .btn-danger, button.btn-danger { color: var(--gmp-error-light) !important; }
+.btn-icon.btn-success, .action-buttons .btn-success { color: var(--gmp-success-light) !important; background: var(--gmp-surface-hover) !important; }
+
+/* O "+" laranja/ink do cabecalho das listas (btn-premium) ja virou azul acima. */
+
+/* ───────────────────────────── 4. CAMPOS ───────────────────────────────────── */
+/* Campo da Apple: preenchido em cinza claro, sem borda dura; a borda azul e o
+   anel aparecem no foco. Nao mexe em font-size: no celular a regra de 16px
+   (anti-zoom do iOS) continua valendo. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]),
+select,
+textarea,
+.input-premium, .select-premium, .textarea-premium,
+.search-box input, .filter-select, .tipo-selecao__search {
+  font-family: var(--font-sans);
+  background: var(--gmp-surface-hover) !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  color: var(--gmp-text) !important;
+  box-shadow: none !important;
+  transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):hover,
+select:hover, textarea:hover { border-color: var(--gmp-border) !important; }
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):focus,
+select:focus, textarea:focus,
+.input-premium:focus, .select-premium:focus, .textarea-premium:focus,
+.search-box input:focus, .filter-select:focus, .tipo-selecao__search:focus {
+  outline: none !important;
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-primary) !important;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.18) !important;
+}
+input::placeholder, textarea::placeholder { color: var(--gmp-gray-500) !important; }
+.input-with-icon:focus-within .input-icon, .search-box:focus-within svg { color: var(--gmp-primary) !important; }
+
+/* Caixa de busca com lupa: o campo por dentro, a caixa por fora. */
+.search-box input { padding-left: 42px !important; }
+.search-box svg { color: var(--gmp-gray-500); }
+
+label, .form-group label, .form-label { font-weight: 500; color: var(--gmp-text-light); letter-spacing: 0; }
+
+/* ───────────────────────────── 5. SUPERFICIES ──────────────────────────────── */
+/* Cards: branco puro, canto 16, hairline, sombra quase invisivel. Os cards
+   genericos ja leem as variaveis (secao 1); aqui so o canto e a borda. */
+.card, .card-premium, .card-glass, .card-container,
+.table-container, .filters, .form-section,
+.form, .form-container, .form-card, .form-box, .form-wrapper {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--gmp-border) !important;
+  box-shadow: var(--elevation-2) !important;
+  background: var(--gmp-surface) !important;
+}
+.card-premium:hover { transform: none !important; box-shadow: var(--elevation-3) !important; }
+
+/* Filtros: uma faixa limpa, sem caixa pesada. */
+.filters { padding: 12px !important; gap: 12px !important; }
+
+/* Cabecalho de pagina: hairline, titulo 28/700 apertado, subtitulo cinza. */
+.page-header { border-bottom: 1px solid var(--gmp-border) !important; padding-bottom: 20px !important; margin-bottom: 24px !important; }
+.page-header h1 { font-size: 28px !important; font-weight: 700 !important; letter-spacing: -0.025em !important; margin: 0 0 4px !important; color: var(--gmp-text) !important; }
+.page-header p  { font-size: 15px !important; color: var(--gmp-text-light) !important; margin: 0 !important; }
+.header-actions { gap: 10px !important; }
+
+/* Tabelas: cabecalho discreto (cinza, miudo), linhas com hairline, sem azul. */
+.data-table thead, table thead { background: transparent !important; }
+.data-table th, table th {
+  background: transparent !important;
+  color: var(--gmp-text-light) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid var(--gmp-border) !important;
+}
+.data-table td, table td { border-color: var(--gmp-border) !important; color: var(--gmp-text) !important; }
+.data-table tbody tr:hover td, table tr:hover td { background: var(--gmp-surface-hover) !important; }
+.table-container { overflow: hidden; }
+
+/* Etiquetas de status: pilula suave, tom do sistema. */
+.badge, .status-badge, [class*='badge-'], [class*='status-badge'] {
+  border-radius: 980px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+}
+.status-badge.ativo, .badge-success  { background: var(--gmp-success-50) !important; color: var(--gmp-success) !important; border: none !important; }
+.status-badge.inativo                 { background: rgba(142,142,147,0.16) !important; color: var(--gmp-text-light) !important; border: none !important; }
+.badge-warning                        { background: var(--gmp-warning-50) !important; color: var(--gmp-warning) !important; border: none !important; }
+.badge-error                          { background: var(--gmp-error-50) !important;   color: var(--gmp-error) !important;   border: none !important; }
+.badge-primary, .badge-premium, .badge-info { background: var(--gmp-info-50) !important; color: var(--gmp-primary) !important; border: none !important; }
+
+/* Modais: folha branca de canto 20, cortina leve e desfocada (o vidro certo). */
+.modal-overlay, .modal-backdrop, .almox-modal-overlay, .producao-modal-overlay, .modal-grupo-overlay,
+.propostas-list-modal-overlay, [class*='-modal-overlay'] {
+  background: rgba(0, 0, 0, 0.32) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+.modal-content, .modal, .almox-modal, .producao-modal, .modal-grupo-container,
+.propostas-list-modal, [class*='-modal']:not([class*='-modal-']):not([class*='overlay']) {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--elevation-6) !important;
+}
+.modal-header, .almox-modal-header, .producao-modal-header, .modal-grupo-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--gmp-border) !important;
+}
+.modal-footer, .almox-modal-footer, .producao-modal-footer {
+  background: transparent !important;
+  border-top: 1px solid var(--gmp-border) !important;
+}
+.modal-close, .almox-modal-close, .modal-grupo-close {
+  border-radius: 50% !important;
+  background: var(--gmp-surface-hover) !important;
+  color: var(--gmp-text-light) !important;
+  border: none !important;
+}
+
+/* Alertas: tinta suave, sem gradiente. */
+.alert-success { background: var(--gmp-success-50) !important; border-color: transparent !important; }
+.alert-warning { background: var(--gmp-warning-50) !important; border-color: transparent !important; }
+.alert-error   { background: var(--gmp-error-50) !important;   border-color: transparent !important; }
+.alert-info    { background: var(--gmp-info-50) !important;    border-color: transparent !important; }
+
+/* Links: azul do sistema, sublinhado so no hover. */
+a:not([class*="btn"]):not([class*="nav-"]):not([class*="-link"]) { color: var(--gmp-primary) !important; text-decoration: none; }
+a:not([class*="btn"]):not([class*="nav-"]):not([class*="-link"]):hover { text-decoration: underline; }
+
+/* ───────────────────────────── 6. BARRA LATERAL (computador) ───────────────── */
+.sidebar {
+  background: var(--sidebar-bg) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  border-right: 1px solid var(--sidebar-border) !important;
+  box-shadow: none !important;
+  color: var(--sidebar-text) !important;
+}
+.sidebar-header { border-bottom: 1px solid var(--sidebar-border) !important; background: transparent !important; min-height: 96px !important; }
+.sidebar-footer { border-top: 1px solid var(--sidebar-border) !important; background: transparent !important; }
+.sidebar-header h2, .user-name { color: var(--gmp-text) !important; }
+.user-role { color: var(--sidebar-text-muted) !important; }
+
+.nav-item, .nav-item-button {
+  color: var(--sidebar-text) !important;
+  border-radius: 10px !important;
+  border: 1px solid transparent !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  padding: 10px 12px !important;
+  margin: 2px 10px !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+.nav-item:hover, .nav-item-button:hover { background: rgba(0, 0, 0, 0.05) !important; color: var(--sidebar-text-hover) !important; }
+[data-theme="dark"] .nav-item:hover, [data-theme="dark"] .nav-item-button:hover { background: rgba(255,255,255,0.06) !important; }
+.nav-item-button::before { display: none !important; }
+
+/* Item ativo: pilula azul-clara com texto azul — e so. Sem barra lateral,
+   sem sombra, sem brilho. */
+.nav-item.active, .sidebar .nav-item.active {
+  background: rgba(0, 113, 227, 0.10) !important;
+  color: var(--gmp-primary) !important;
+  border: 1px solid transparent !important;
+  border-left: 1px solid transparent !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+.nav-item.active svg, .nav-item.active span, .nav-item.active .nav-text { color: var(--gmp-primary) !important; }
+[data-theme="dark"] .nav-item.active, [data-theme="dark"] .sidebar .nav-item.active { background: rgba(10, 132, 255, 0.16) !important; }
+
+.nav-item-module-selector { color: var(--gmp-primary) !important; background: rgba(0, 113, 227, 0.08) !important; }
+.nav-item-module-selector::before { display: none !important; }
+
+/* Medido no computador: duas regras de componente, mais especificas, ainda
+   venciam — a sidebar guardava uma sombra lateral e o item ativo o tint do azul
+   antigo (#4facfe). Um degrau a mais de especificidade resolve sem depender da
+   ordem de carga. */
+.layout .sidebar, .layout .sidebar.open, .layout .sidebar.closed { box-shadow: none !important; }
+.layout .sidebar .nav-item.active { background: rgba(0, 113, 227, 0.10) !important; }
+[data-theme="dark"] .layout .sidebar .nav-item.active { background: rgba(10, 132, 255, 0.16) !important; }
+
+.account-button, .logout-button {
+  background: var(--gmp-surface-hover) !important;
+  border: 1px solid transparent !important;
+  color: var(--gmp-text) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+.account-button:hover { background: var(--gmp-gray-200) !important; color: var(--gmp-text) !important; }
+.logout-button { color: var(--gmp-error-light) !important; }
+.logout-button:hover { background: var(--gmp-error-50) !important; color: var(--gmp-error) !important; box-shadow: none !important; }
+.chat-nav-badge { background: var(--gmp-error-light) !important; border-radius: 980px !important; }
+
+/* Barra de topo do computador (quando existe): vidro claro. */
+.main-header {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid var(--gmp-border) !important;
+  box-shadow: none !important;
+}
+
+/* ───────────────────────────── 7. SELETOR DE MODULOS ───────────────────────── */
+.tipo-selecao,
+[data-theme="light"] .tipo-selecao {
+  background-color: var(--gmp-bg) !important;
+  /* Um unico halo azul muito suave no topo, em vez de cinco manchas coloridas. */
+  background-image: radial-gradient(ellipse 70% 50% at 50% -10%, rgba(0, 113, 227, 0.10) 0%, transparent 60%) !important;
+}
+[data-theme="dark"] .tipo-selecao {
+  background-color: #000 !important;
+  background-image: radial-gradient(ellipse 70% 50% at 50% -10%, rgba(10, 132, 255, 0.14) 0%, transparent 60%) !important;
+}
+.tipo-selecao::before, .tipo-selecao::after { display: none !important; }
+
+.tipo-selecao__greeting h1 { font-weight: 700 !important; letter-spacing: -0.03em !important; }
+.tipo-selecao__wordmark { font-weight: 600 !important; letter-spacing: 0.18em !important; color: var(--gmp-text) !important; }
+.tipo-selecao__admin-badge,
+.tipo-selecao__access-tier,
+.tipo-selecao__access-tier.tier-basic, .tipo-selecao__access-tier.tier-standard,
+.tipo-selecao__access-tier.tier-premium, .tipo-selecao__access-tier.tier-full {
+  background: var(--gmp-surface-hover) !important;
+  background-image: none !important;
+  color: var(--gmp-text-light) !important;
+  border: 1px solid var(--gmp-border) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-radius: 980px !important;
+}
+.tipo-selecao__search { border-radius: 980px !important; background: var(--gmp-surface) !important; border: 1px solid var(--gmp-border) !important; box-shadow: var(--elevation-1) !important; }
+.tipo-selecao__section-title { font-weight: 600 !important; letter-spacing: -0.02em !important; }
+
+/* Os cartoes de modulo mantem a cor (e identidade), mas ganham canto 18,
+   sombra suave e saturacao um pouco mais baixa — menos "tunado". */
+.tipo-selecao .orion-tile {
+  border-radius: 18px !important;
+  box-shadow: var(--elevation-2) !important;
+  filter: saturate(0.88);
+  transition: transform 200ms cubic-bezier(0.25,0.1,0.25,1), box-shadow 200ms ease, filter 200ms ease !important;
+}
+.tipo-selecao .orion-tile--ativo:hover { transform: translateY(-2px) !important; box-shadow: var(--elevation-4) !important; filter: saturate(1); }
+.tipo-selecao .orion-tile__play { border-radius: 50% !important; background: rgba(255,255,255,0.22) !important; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: none !important; }
+
+/* ───────────────────────────── 8. LOGIN ────────────────────────────────────── */
+/* A primeira tela. Sai tudo que era "efeito": manchas, barras girando, o aperto
+   de maos ao fundo, o laranja. Fica um fundo quase branco, um cartao de vidro
+   centrado, o logo, uma frase e um botao azul. */
+.login-container {
+  background: #F5F5F7 !important;
+  background-image:
+    radial-gradient(ellipse 60% 45% at 20% 0%, rgba(0, 113, 227, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 85% 100%, rgba(10, 132, 255, 0.08) 0%, transparent 60%) !important;
+  padding: 24px !important;
+}
+[data-theme="dark"] .login-container {
+  background: #000 !important;
+  background-image:
+    radial-gradient(ellipse 60% 45% at 20% 0%, rgba(10, 132, 255, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 85% 100%, rgba(10, 132, 255, 0.10) 0%, transparent 60%) !important;
+}
+.login-background, .login-shapes, .shape, .spinning-bars, .spinning-bar, .handshake-background { display: none !important; }
+
+.login-box {
+  background: rgba(255, 255, 255, 0.78) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 24px 60px rgba(0,0,0,0.10) !important;
+  border-radius: 28px !important;
+  padding: 44px 40px 36px !important;
+  max-width: 420px !important;
+  animation: apple-login-in 480ms cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+[data-theme="dark"] .login-box {
+  background: rgba(28, 28, 30, 0.72) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 24px 60px rgba(0,0,0,0.6) !important;
+}
+@keyframes apple-login-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+.login-header { border-bottom: none !important; margin-bottom: 28px !important; padding-bottom: 0 !important; }
+.logo-container { margin-bottom: 18px !important; animation: none !important; }
+/* O logo deixa de ser branco invertido (era para fundo escuro) e volta a cor,
+   em tamanho de aplicativo — 84px, como o icone de um app. */
+.login-logo {
+  width: 84px !important; height: 84px !important;
+  object-fit: contain !important;
+  filter: none !important;
+  border-radius: 20px;
+}
+.login-logo:hover { transform: none !important; }
+
+.login-header-content h1 {
+  color: var(--gmp-text) !important;
+  -webkit-text-fill-color: var(--gmp-text) !important;
+  background: none !important;
+  text-shadow: none !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  margin-bottom: 6px !important;
+}
+.login-header-content h2 { color: var(--gmp-text-light) !important; font-size: 15px !important; font-weight: 500 !important; letter-spacing: 0 !important; margin-bottom: 2px !important; }
+.login-subtitle { color: var(--gmp-gray-500) !important; font-size: 13px !important; }
+
+.login-form { gap: 18px !important; }
+.login-form .form-group label { color: var(--gmp-text-light) !important; font-weight: 500 !important; font-size: 13px !important; margin-bottom: 6px !important; letter-spacing: 0 !important; }
+.login-form .input-icon { color: var(--gmp-gray-500) !important; left: 14px !important; font-size: 18px !important; }
+.login-form .form-group:focus-within .input-icon { color: var(--gmp-primary) !important; transform: translateY(-50%) !important; }
+.login-form .form-group input {
+  background: var(--gmp-surface-hover) !important;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  color: var(--gmp-text) !important;
+  padding: 14px 16px 14px 44px !important;
+  font-size: 16px !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .login-form .form-group input { background: rgba(255,255,255,0.08) !important; }
+.login-form .form-group input::placeholder { color: var(--gmp-gray-500) !important; }
+.login-form .form-group input:focus {
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-primary) !important;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.18) !important;
+  transform: none !important;
+}
+[data-theme="dark"] .login-form .form-group input:focus { background: rgba(255,255,255,0.10) !important; }
+
+.login-button {
+  background: var(--gmp-primary) !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  border-radius: 980px !important;
+  padding: 15px 24px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.005em !important;
+  box-shadow: none !important;
+  margin-top: 6px !important;
+}
+.login-button::before { display: none !important; }
+.login-button:hover:not(:disabled) { background: #0077ED !important; transform: none !important; box-shadow: none !important; }
+.login-button:active { transform: scale(0.985) !important; }
+.button-spinner { border-color: rgba(255,255,255,0.35) !important; border-top-color: #fff !important; }
+
+.error-message, .login-sessao-expirada {
+  background: var(--gmp-error-50) !important;
+  background-image: none !important;
+  color: var(--gmp-error) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  animation: none !important;
+  font-weight: 500 !important;
+}
+.login-sessao-expirada { background: var(--gmp-warning-50) !important; color: var(--gmp-warning) !important; }
+
+.login-footer { border-top: 1px solid var(--gmp-border) !important; color: var(--gmp-gray-500) !important; margin-top: 28px !important; padding-top: 18px !important; font-size: 12px !important; }
+.login-footer p { color: var(--gmp-gray-500) !important; }
+
+/* ───────────────────────────── 9. TELAS DE CARGA ───────────────────────────── */
+.premium-splash-content, .module-splash, [class*='splash-content'] {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--gmp-border) !important;
+  border-radius: 24px !important;
+  box-shadow: var(--elevation-3) !important;
+}
+
+/* ───────────────────────────── 10. CELULAR — harmonizar o app-glass ────────── */
+/* O app-glass.css (so celular) decide a pele pelas variaveis --ag-*. Aqui elas
+   viram o vidro neutro da Apple: fundo quase branco, cartoes brancos a 82%,
+   manchas de cor MUITO mais discretas, botao principal solido. A estrutura
+   dele (dock em pilula, gaveta, cartoes ricos) fica inteira. */
+@media (max-width: 768px) {
+  :root {
+    --ag-blob-1: #0A84FF;
+    --ag-blob-2: #5AC8FA;
+    --ag-blob-3: #BF5AF2;
+    --ag-base-1: #F5F5F7;
+    --ag-base-2: #FFFFFF;
+    --ag-vidro:        rgba(255, 255, 255, 0.82);
+    --ag-vidro-forte:  rgba(255, 255, 255, 0.86);
+    --ag-solido:       rgba(255, 255, 255, 0.97);
+    --ag-borda:        rgba(255, 255, 255, 0.95);
+    --ag-borda-sutil:  rgba(0, 0, 0, 0.07);
+    --ag-texto:        #1D1D1F;
+    --ag-texto-fraco:  #6E6E73;
+    --ag-sombra:       0 1px 2px rgba(0,0,0,0.04), 0 10px 24px rgba(0,0,0,0.06);
+    --ag-sombra-alta:  0 4px 10px rgba(0,0,0,0.06), 0 18px 48px rgba(0,0,0,0.12);
+  }
+  [data-theme="dark"] {
+    --ag-base-1: #000000;
+    --ag-base-2: #0A0A0C;
+    --ag-vidro:        rgba(28, 28, 30, 0.72);
+    --ag-vidro-forte:  rgba(28, 28, 30, 0.84);
+    --ag-solido:       rgba(28, 28, 30, 0.97);
+    --ag-borda:        rgba(255, 255, 255, 0.12);
+    --ag-borda-sutil:  rgba(255, 255, 255, 0.08);
+    --ag-texto:        #F5F5F7;
+    --ag-texto-fraco:  #98989D;
+  }
+
+  /* As manchas de cor ficam como um sopro, nao como tres sois. */
+  .agfx-blob { opacity: 0.22 !important; filter: blur(70px) !important; }
+  [data-theme="dark"] .agfx-blob { opacity: 0.26 !important; }
+
+  /* Botao principal: solido, igual ao computador (o app-glass punha gradiente). */
+  .btn-primary, .btn-premium, .plm-nova, .prm-novo, .plm-aplicar,
+  [class*='btn-primar'], [class*='-primario'] {
+    background: var(--gmp-primary) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+  .plm-chip.is-on, .prm-chip.is-on {
+    background: var(--gmp-primary) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Dock: pilula de vidro, sem o halo pulsante no item ativo. */
+  .bim-ativo::before { animation: none !important; opacity: 0.9 !important;
+    background: radial-gradient(circle, rgba(10,132,255,.18) 0%, rgba(10,132,255,0) 70%) !important; }
+  .bim-ativo { color: var(--gmp-primary) !important; }
+
+  /* Item ativo da gaveta: a mesma pilula azul-clara do computador. */
+  .sidebar .nav-item.active,
+  html:not([data-theme="dark"]) .sidebar .nav-item.active {
+    background: rgba(0, 113, 227, 0.10) !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    border-left: 1px solid transparent !important;
+    box-shadow: none !important;
+    color: var(--gmp-primary) !important;
+  }
+
+  /* Cortina da gaveta: leve. */
+  .sidebar-overlay { background: rgba(0, 0, 0, 0.28) !important; }
+
+  /* Login no celular: o cartao segue o mesmo vidro claro (o app-glass o deixava
+     solido escuro por desempenho; branco a 97% e igualmente barato). */
+  .login-box { background: rgba(255, 255, 255, 0.97) !important; }
+  [data-theme="dark"] .login-box { background: rgba(28, 28, 30, 0.97) !important; }
+}
+
+/* ───────────────────────────── 11. MOVIMENTO REDUZIDO ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

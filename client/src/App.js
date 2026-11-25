@@ -17,6 +17,10 @@ import './styles/glass-override.css';
    !important em body, inputs e tabelas, e empate de !important se decide por
    quem vem depois no pacote. Este import tem de continuar sendo o ultimo. */
 import './styles/app-glass.css';
+/* Tema visual Apple do sistema inteiro (computador e celular). Entra DEPOIS do
+   app-glass pela mesma regra acima: empate de !important vai para quem vem por
+   ultimo. E so CSS — nenhuma funcao muda. */
+import './styles/apple-theme.css';
 import Pagina404 from './components/Pagina404';
 import {
   Login,

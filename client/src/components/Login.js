@@ -109,7 +109,9 @@ const Login = () => {
       <div className="login-box">
         <div className="login-header">
           <div className="logo-container">
-            <img src="/logo.png" alt="Orion" className="login-logo" />
+            {/* Marca em estilo de icone de aplicativo (public/orion-mark.svg). O logo GMP
+                original (logo.png) continua na barra lateral e na barra de topo. */}
+            <img src="/orion-mark.svg" alt="Orion" className="login-logo" />
           </div>
           <div className="login-header-content">
             <h1>ORION</h1>

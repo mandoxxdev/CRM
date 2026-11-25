@@ -16,6 +16,7 @@
 | Gaveta de navegação ("Menu") | Abria PRESA fora da tela — o toque parecia não fazer nada | Abre de verdade, estilo app (~86% da tela, conteúdo espiando sob o overlay) |
 | **Visual geral (premium)** | Cartões cinza chapados, barra colada na borda, campos com borda dura, badges retangulares | Fundo com profundidade, **cartões brancos flutuando** com sombra suave, **barra inferior flutuante** arredondada, campos preenchidos/arredondados, chips em pílula |
 | **Acentos (sóbrio)** | CTA "+" laranja com halo, pill "FULL ACCESS" rosa/roxo chamativo | CTA principal INK escuro discreto (padrão Apple/Stripe), selo de acesso em pill neutro; mais respiro e tipografia refinada |
+| **Tema Apple (sistema inteiro)** | Pele de vidro azul no celular (três manchas fortes, botão em gradiente); no computador, gradientes, brilhos e fundo animado | Vidro **neutro** e calmo nos dois: fundo quase branco, uma cor de ação (azul Apple), botões sólidos em pílula, cartões brancos, login novo com logo novo, sem fundo animado — ver `docs/TEMA_APPLE.md` |
 
 ## O que já estava bom (mantido, não mexi)
 - Barra inferior de navegação (tipo app), que troca de itens conforme o módulo.
