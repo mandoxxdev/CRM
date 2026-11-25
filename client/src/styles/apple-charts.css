@@ -57,8 +57,10 @@
 .recharts-label, .recharts-text { font-family: var(--font-sans); }
 /* Legenda: texto 12px cinza, bolinhas. */
 .recharts-default-legend { padding-top: 10px !important; }
-.recharts-legend-item { margin-right: 14px !important; }
-.recharts-legend-item-text { font-size: 12px !important; color: var(--gmp-text-light) !important; font-weight: 500; }
+.recharts-legend-item { margin-right: 14px !important; display: inline-flex !important; align-items: center; gap: 6px; }
+/* a bolinha caia numa linha acima do texto (um `svg { display:block }` global); lado a lado */
+.recharts-legend-item .recharts-surface { display: inline-block !important; vertical-align: middle; margin-right: 0 !important; }
+.recharts-legend-item-text { font-size: 12px !important; color: var(--gmp-text-light) !important; font-weight: 500; vertical-align: middle; }
 /* Tooltip: folha branca, canto 12, sombra macia. */
 .recharts-tooltip-wrapper { outline: none; }
 .recharts-default-tooltip, .custom-tooltip {

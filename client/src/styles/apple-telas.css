@@ -198,15 +198,16 @@ html .mes-main .producao-badge { border-radius: 980px !important; font-weight: 6
 }
 
 /* ── Clientes: o logo ao lado do nome na tabela (24/11/2026) ─────────────────── */
-html .layout .cli-td-nome { display: inline-flex; align-items: center; gap: 10px; }
+/* ("as fotos ficaram muito pequenas": de 34px para um ladrilho 72x48, com respiro) */
+html .layout .cli-td-nome { display: inline-flex; align-items: center; gap: 14px; }
 html .layout .cli-logo-mini {
-  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px; object-fit: contain;
-  background: #fff; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)); padding: 3px; box-sizing: border-box;
+  width: 72px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: contain;
+  background: #fff; border: 1px solid var(--ds-hair, rgba(0,0,0,.07)); padding: 5px; box-sizing: border-box;
 }
 html .layout .cli-logo-ini {
-  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px;
+  width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ds-panel, #F5F5F7); color: var(--gmp-text-light); font-size: 13px; font-weight: 700;
+  background: var(--ds-panel, #F5F5F7); color: var(--gmp-text-light); font-size: 17px; font-weight: 700;
 }
 
 /* ── Acesso negado (24/11/2026) ──────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiMaximize2, FiDownload, FiRefreshCw } from 'react-icons/fi';
+import { rotuloDoStatus } from '../utils/coresStatus';
 import html2canvas from 'html2canvas';
 // Etapa 166 (B1062): o dia local no nome do PNG (antes `toISOString`, o dia UTC: das 21h, o de amanha)
 import { hojeLocalISO } from '../utils/dataLocal';
@@ -549,14 +550,15 @@ const ModalGrafico = ({ isOpen, onClose, titulo, descricao, tipoGrafico, dados, 
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent, value }) => 
-                  `${name}: ${formatValue(value)} (${(percent * 100).toFixed(1)}%)`
+                label={({ name, percent, value }) =>
+                  `${rotuloDoStatus(name)}: ${formatValue(value)} (${(percent * 100).toFixed(1)}%)`
                 }
                 outerRadius={200}
                 innerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
-                paddingAngle={2}
+                paddingAngle={3}
+                cornerRadius={6}
               >
                 {dadosCompletos.map((entry, index) => (
                   <Cell 
@@ -568,10 +570,11 @@ const ModalGrafico = ({ isOpen, onClose, titulo, descricao, tipoGrafico, dados, 
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
-              <Legend 
+              <Legend
                 verticalAlign="bottom"
                 height={36}
                 wrapperStyle={{ paddingTop: '20px' }}
+                formatter={(v) => rotuloDoStatus(v)}
               />
               </PieChart>
           </ResponsiveContainer>

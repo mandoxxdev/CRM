@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { corDoStatus, rotuloDoStatus } from '../utils/coresStatus';
 import {
   FiTrendingUp, FiTrendingDown, FiDollarSign, FiUsers, FiTarget,
   FiMapPin, FiBarChart2, FiPieChart, FiActivity, FiAward,
@@ -761,7 +762,7 @@ const Relatorios = () => {
             'Distribuição completa de propostas por status',
             'pie',
             dados.graficos?.propostasPorStatus || [],
-            COLORS
+            (dados.graficos?.propostasPorStatus || []).map((i, idx) => corDoStatus(i.status ?? i.name, idx))
           )}
           style={{ cursor: 'pointer' }}
         >
@@ -772,21 +773,27 @@ const Relatorios = () => {
           </div>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <PieChart>
+              {/* Cor por SIGNIFICADO do status (verde aprovada, vermelho rejeitada...) e o
+                  nome legivel — ver utils/coresStatus.js (25/11/2026). */}
               <Pie
                 data={dados.graficos?.propostasPorStatus || []}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={isMobile ? 70 : 100}
+                nameKey={(dados.graficos?.propostasPorStatus || [])[0]?.status !== undefined ? 'status' : 'name'}
+                label={({ name, percent }) => `${rotuloDoStatus(name)}: ${(percent * 100).toFixed(0)}%`}
+                outerRadius={isMobile ? 70 : 96}
+                innerRadius={isMobile ? 40 : 58}
+                paddingAngle={3}
+                cornerRadius={6}
                 fill="#8884d8"
                 dataKey="total"
               >
                 {(dados.graficos?.propostasPorStatus || []).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`cell-${index}`} fill={corDoStatus(entry.status ?? entry.name, index)} stroke="var(--chart-gap, #fff)" strokeWidth={3} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value, name) => [value, rotuloDoStatus(name)]} />
             </PieChart>
           </ResponsiveContainer>
         </div>

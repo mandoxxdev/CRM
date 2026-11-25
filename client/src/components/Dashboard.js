@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { corDoStatus, rotuloDoStatus } from '../utils/coresStatus';
 import api from '../services/api';
 import { 
   FiUsers, FiBriefcase, FiDollarSign, 
@@ -340,19 +341,9 @@ const Dashboard = () => {
   const CHART_MOTION = useMemo(() => ({ animationDuration: 900, animationEasing: 'ease-out' }), []);
   // Rotulos legiveis (24/11/2026). A rosca de status mostrava "0: 46 (46%)": o dado tem
   // `status`, nao `name`, e o Recharts caia no indice. O P.O. perguntou "o que esse grafico
-  // indica?" — com razao.
-  const STATUS_PROPOSTA_LABEL = useMemo(() => ({
-    rascunho: 'Rascunho', em_revisao: 'Em revisão', aprovada_internamente: 'Aprovada internamente',
-    enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', aprovada: 'Aprovada',
-    rejeitada: 'Rejeitada', cancelada: 'Cancelada', expirada: 'Expirada',
-  }), []);
-  const humanizar = useCallback((s) => {
-    if (s === null || s === undefined) return '';
-    const chave = String(s);
-    if (STATUS_PROPOSTA_LABEL[chave]) return STATUS_PROPOSTA_LABEL[chave];
-    const texto = chave.replace(/_/g, ' ').trim();
-    return texto.charAt(0).toUpperCase() + texto.slice(1);
-  }, [STATUS_PROPOSTA_LABEL]);
+  // indica?" — com razao. Rotulo e COR por status vem de utils/coresStatus.js (uma regua
+  // para todos os modulos): aprovada verde, rejeitada vermelha, enviada azul...
+  const humanizar = useCallback((s) => rotuloDoStatus(s), []);
 
   const formatCurrency = useCallback((value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -850,7 +841,7 @@ const Dashboard = () => {
                 'Distribuição completa de propostas comerciais',
                 'pie',
                 safeStats.propostasPorStatus || [],
-                COLORS
+                (safeStats.propostasPorStatus || []).map((i, idx) => corDoStatus(i.status, idx))
               )}
               style={{ cursor: 'pointer' }}
             >
@@ -881,7 +872,7 @@ const Dashboard = () => {
                   {safeStats.propostasPorStatus.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
+                      fill={corDoStatus(entry.status, index)}
                       stroke="var(--chart-gap, #fff)"
                       strokeWidth={3}
                     />
@@ -970,7 +961,12 @@ const Dashboard = () => {
                   maxBarSize={36}
                   name="Quantidade"
                   {...CHART_MOTION}
-                />
+                >
+                  {/* cada barra na cor do seu status (verde concluido, vermelho atrasado...) */}
+                  {safeStats.projetosPorStatus.map((entry, index) => (
+                    <Cell key={`pj-${index}`} fill={corDoStatus(entry.status, index)} />
+                  ))}
+                </Bar>
               </BarChart>
                 </ResponsiveContainer>
               ) : (
