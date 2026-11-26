@@ -11,7 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-25):** **Etapa 263 fechada** (**a foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
+> **Onde o desenvolvimento está (2026-11-26):** **Etapa 264 fechada** (**a Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o
+> estorno da entrada também** — itens 8 e 9 da estimativa de 23/11 (**C546** e **C547** resolvidos); decisões **B1621** a **B1623**; limitação
+> **D (264)**; verificação **F (264)**; sem consulta antes do deploy). **Próxima:** os itens 10 e 11 da estimativa de 23/11.
+> Antes: **Etapa 263 fechada** (**a foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
 > Descrição fora do cadastro de material** — pedido de 25/11, com prioridade; decisões **B1619**, **B1620** e, no Compras, **B94** e **B95**;
 > limitação **D (263)**; verificação **F (263)**; sem consulta antes do deploy). **Próxima:** os itens 8 e 9 da estimativa de 23/11.
 > Antes: **Etapa 262 fechada** (**o estorno da entrada de uma devolução respeita a quarentena e a
@@ -4899,7 +4902,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15676,6 +15679,31 @@ cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
 sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
 
+**B1623 (NOVA, da Etapa 264; decisão do agente) — o seletor de lote desconta e diz as peças bloqueadas no lote.** **Escolhido:** a lista de
+lotes do material passa a trazer quantas peças estão presas em cada lote (a mesma conta da B1621) e o *livre* as desconta; Movimentações
+(Saída e Perda) escreve *"(2 bloqueadas no lote)"* e a janela da devolução ao cliente troca *"ou libere a reserva do material"* por *"ou
+escolha outro lote"* quando é o bloqueio que limita. Só onde a saída confere (controle por lote, sem série, sem saldo negativo). **Descartado:**
+apagar o lote no seletor (o lote ainda tem livre). **Reversível.**
+
+**B1622 (NOVA, da Etapa 264; decisão do agente; revista pela revisão do plano) — o estorno da entrada de um lote com peças presas nele é
+recusado.** **Escolhido:** sem a entrada, o lote não pode ficar com menos peças que as presas nele — o bloqueio feito indicando o lote, a
+reprovação da inspeção do lote e o que está com terceiro (a remessa não baixa o lote) — e a mensagem diz quanto liberar e por onde (Desbloquear
+escolhendo o lote; a não conformidade; o retorno da remessa). Um estorno de bloqueio ainda terminando conta como bloqueio de pé (a lição da
+B1617). A reprovação só conta no que o bloqueado do material ainda cobre (a reprovação já liberada pelo *"Sem lote"* não trava — revisão
+final), e a peça com terceiro, no que o material ainda tem em terceiros. A peça em inspeção fica fora (o estorno da nota já a desfaz). **Descartado:** desbloquear junto no estorno (dois efeitos num gesto,
+o mesmo descartado da **B760**/**B1617**); só o bloqueio (a primeira versão do plano — a revisão mostrou a reprovação fazendo o mesmo estrago com
+outra entrada do lote). **Reversível** (é a guarda).
+
+**B1621 (NOVA, da Etapa 264; decisão do agente; revista pela revisão do plano) — a Saída e a Perda escolhendo o lote respeitam as peças presas
+nele, na conta da entrega.** **Escolhido:** o que pode sair do lote = saldo do lote − em inspeção nele − o que está preso nele (bloqueio,
+reprovação, terceiro), a mesma conta que a entrega e a separação usam; vale para todo tipo de saída das portas onde **a pessoa escolhe o
+lote**: Movimentações (e o modal rápido), a devolução ao cliente, o retalho com baixa e o sucateamento comum. Vale também quando a saída
+consome uma reserva (a reserva é do material, nunca do lote — revisão final). **Descartado:** (a) só o
+bloqueio feito à mão (a reprovação e a remessa sairiam pela Saída e o seletor diria um livre diferente da entrega); (b) valer para todas as
+baixas do sistema (a entrega e a separação já têm a delas, e as baixas da não conformidade, da devolução e de terceiros tiram justamente a peça
+presa). **Fora:** a peça separada numa requisição dentro do lote (a Saída avulsa confere a separação do material, como desde a Etapa 97);
+material com série; saldo negativo permitido. **Reversível.**
+
 **B1620 (NOVA, da Etapa 263; decisão do agente) — "Tirar foto" na ficha do fornecedor não confere edição concorrente.** A ficha manda
 `foto: null` ao salvar com **Tirar foto** marcado; se, com a ficha aberta, outra pessoa trocou a foto pelo grupo homologado, a nova é que sai
 (achado da revisão final, baixo). **Escolhido:** deixar assim — a ficha do fornecedor não tem conferência de edição concorrente em campo
@@ -20278,11 +20306,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      bloqueado do lote.** Com *L1* 4, 2 bloqueados em *L1* e *L2* 4, a **Saída** de 4 do *L1* na tela de Movimentações passa (confere o bloqueado
      do material, não o do lote); o *L1* fica com 0 e o bloqueado continua dizendo *L1 2* — na prática a peça bloqueada passou a ser do *L2*.
      A entrega, a separação e a aprovação respeitam o lote. **O que fazer:** na Saída e na Perda, não escolher o lote que tem peça bloqueada.
-     Conserto: a saída com lote conferir o bloqueado do lote (não medido).
+     Conserto: a saída com lote conferir o bloqueado do lote (não medido). *(**Resolvido na Etapa 264** — a Saída, a Perda e as outras
+     portas que escolhem o lote conferem as peças presas nele, e o seletor as desconta (**B1621**, **B1623**).)*
 547. **NOVO (da Etapa 249, revisão final; já era assim com a quarentena da Etapa 209, C504) — o estorno da entrada de um lote passa com o lote
      bloqueado nele.** Com *L1* 4 todo bloqueado no lote e *L2* 4, estornar a entrada do *L1* passa: o *L1* fica com 0 e o bloqueado continua
      dizendo *L1 4* (o total bloqueado cai sobre as peças do *L2*). **O que fazer:** antes de estornar a entrada de um lote, desbloquear o que
      está bloqueado nele (**Desbloquear Material**, escolhendo o lote). Conserto: o estorno da entrada conferir o bloqueado do lote (não medido).
+     *(**Resolvido na Etapa 264** — o estorno é recusado e diz quanto desbloquear; vale também para a reprovação e o terceiro do lote (**B1622**).)*
 548. **NOVO (da Etapa 253, revisão final; já era assim desde a Etapa 51) — o Ajuste sem lote, para baixo, pode tirar da prateleira onde está a
      caixa separada de uma requisição.** O Ajuste sem localização que baixa o total tira das prateleiras sem lote, a maior primeiro — e a maior
      pode ser a da peça separada. Medido: *A* com 4 (separadas de *A* numa requisição) e *B* com 3, Ajuste do total para 4 → *A* 1, *B* 3, e a
@@ -21691,6 +21721,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(264) A Saída com lote e o estorno da entrada respeitando a peça presa, o que ficou de fora.** (1) Quando os bloqueios por lote e as
+  reprovações somam mais que o bloqueado do material, a Saída usa a conta da entrega — que nesse caso deixa de contar a reprovação no lote — e
+  o Ajuste com lote e o Bloquear usam a conta crua: o Ajuste para 4 do *L1* é recusado e o Ajuste negativo de 4 do mesmo lote passa (só pela
+  API; não está no formulário). (2) Um estorno de **bloqueio** ainda terminando no mesmo instante de uma Saída do lote: a Saída já não conta
+  aquele bloqueio (como a entrega); se o estorno falhar, o bloqueio volta sobre o lote que ficou sem a peça — o estorno da entrada, ao
+  contrário, conta esse bloqueio. (3) A peça separada numa requisição dentro do lote não sai do livre do lote na Saída avulsa (a separação é
+  conferida no material inteiro, como antes). (4) Material com número de série ou que permite saldo negativo: na Saída, como antes
+  (**B1621**); o estorno da entrada, ao contrário, confere a peça presa também no material que permite saldo negativo. (5) O **estorno de um
+  Desbloquear** com lote bloqueia de novo sem conferir se o lote ainda tem as peças (**C504**, **D (249)** 2): bloquear 4 no *L1*, desbloquear,
+  estornar a entrada do *L1* (passa, certo) e estornar o Desbloquear → passa, e o bloqueio volta apontando para o *L1* vazio — o mesmo estado que
+  esta etapa fecha nas outras portas (revisão final, reproduzido). **O que fazer:** não estornar um Desbloquear de lote que já saiu; o caminho é
+  o Bloquear com lote (que confere o livre do lote). Conserto: o estorno do Desbloquear conferir o livre do lote (~45 min, motor).
 - **(263) A foto do fornecedor e os campos retirados, o que ficou de fora.** (1) O arquivo da foto tirada fica na pasta do servidor; a
   troca pelo envio continua apagando a anterior, mas a tirada não é apagada por ninguém (**B94**). (2) **Tirar foto** não confere se outra pessoa
   trocou a foto depois de a ficha abrir (**B1620**). (3) Os textos antigos de Descrição, Aplicação e Especificações Técnicas não se editam mais por
@@ -21798,7 +21840,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   não descontando a da outra (Etapa 188). (5) O alerta de retenção no material não muda (**B1575**). (6) A caixa separada no automático (sem
   lote) não sai do teto do lote — como na separação.
 - **(249) Bloquear indicando o lote, o que ficou de fora.** (1) A Saída e a Perda com lote e o estorno da entrada do lote não conferem o
-  bloqueado do lote (**C546**, **C547**). (2) O estorno de um **Desbloqueio** com lote bloqueia o lote de novo sem conferir o livre dele (como
+  bloqueado do lote (**C546**, **C547**). *(Resolvido na Etapa 264.)* (2) O estorno de um **Desbloqueio** com lote bloqueia o lote de novo sem conferir o livre dele (como
   antes, **C504**). (3) A caixa separada sem lote não sai do livre do lote (**B1568** 3). (4) Material sem controle por lote ou com série não
   bloqueia por lote (**B1567**). (5) A aceitação da não conformidade continua recusada quando o *"Sem lote"* não cobre a reprovação — só a
   frase mudou (**B1570**).
@@ -23376,6 +23418,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(264) Nenhum clique foi dado.** As recusas foram provadas pela rota real (Saída v1 e v2, devolução ao cliente, Estornar) e pelo serviço
+(retalho, sucateamento), com o Bloquear e o Desbloquear reais e duas corridas de 15 rodadas; o seletor e a janela da devolução, pela tela com a
+lista simulada. Vale 5 minutos: o roteiro da Etapa 264 no guia (o rótulo *"(2 bloqueadas no lote)"* e as duas recusas).
 
 **(263) Nenhum clique foi dado.** A foto da ficha foi provada pela tela com o envio simulado (a rota tem cenário próprio no servidor) e os
 campos retirados pela tela e pela porta do Compras. Vale conferir no navegador: o roteiro da Etapa 263 em `docs/almoxarifado-guia-etapas-e-testes.md`
@@ -44970,12 +45016,79 @@ continua achando pela Descrição antiga, e o catálogo da requisição continua
 - **Tirar foto** não confere se outra pessoa trocou a foto pelo grupo homologado depois de a ficha abrir (**B1620**, **D (263)**).
 - O texto antigo dos três campos não se edita mais por tela nenhuma (**B1619**).
 
+## Etapa 264 — A Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o estorno da entrada também (2026-11-26)
+
+Dois pedidos da semana sobre a mesma peça presa. **(1)** Desde a Etapa 249 dá para bloquear peças **indicando o lote**. A entrega já
+respeitava esse bloqueio, mas a **Saída** e a **Perda** de Movimentações não: com 2 peças bloqueadas no lote *L1*, a Saída de 4 do *L1*
+passava, o *L1* ficava vazio e o bloqueio continuava dizendo "*L1* 2" — na prática a peça bloqueada passava a ser uma do *L2*. **(2)** O
+**Estornar** da entrada do *L1* passava do mesmo jeito: o lote ficava sem peças e o bloqueio apontando para ele. Agora as duas são recusadas,
+com o caminho na mensagem, e o seletor de lote da Saída e da Perda já diz quantas peças estão bloqueadas e desconta do livre. Vale também
+para a devolução ao cliente, o retalho com baixa e o sucateamento (sem não conformidade) escolhendo o lote. Decisões do agente: **B1621** a
+**B1623**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Seletor de lote da Saída: *"L1 — saldo 4"* com 2 bloqueadas no *L1* | *"L1 — saldo 4 — livre 2 (2 bloqueadas no lote)"* |
+| Saída (ou Perda) de 4 do *L1* com 2 bloqueadas nele → passa; *L1* 0 e o bloqueio diz *L1 2* | Recusada; de 2 passa |
+| Devolução ao cliente, retalho com baixa e sucateamento de 4 do *L1* → passam | Recusados com a mesma mensagem |
+| **Estornar** a entrada do *L1* com as 4 peças bloqueadas nele → passa; *L1* 0 e o bloqueio diz *L1 4* | Recusado, pedindo para desbloquear antes |
+| O mesmo com 3 peças reprovadas na inspeção do *L1* → passa | Recusado, pedindo para resolver a reprovação |
+
+### As regras, com o cenário exato
+
+Preparação: administrador; um material com controle por lote (sem número de série) com entrada de 4 no lote *L1* e 4 no lote *L2*.
+**Inspeções → Bloquear Material** 2, escolhendo o lote *L1*.
+
+**1. O seletor (RN-264.05, B1623).** **Movimentações → Nova** → Saída, o material. O lote aparece como *"L1 — saldo 4 — livre 2 (2
+bloqueadas no lote)"*; o *L2*, *"L2 — saldo 4"*. Na Transferência o rótulo continua só com o saldo.
+
+**2. A Saída e a Perda (RN-264.01, B1621).** Saída de 4 escolhendo o *L1* (com a justificativa) → *"No lote L1 há 4 UN, mas só 2 podem
+sair: 2 UN estão bloqueadas nele (quarentena, reprovação na inspeção ou com terceiro); não cobre a quantidade (4). Escolha outro lote ou
+diminua a quantidade."* (a unidade é a do material). Nada sai. A Perda de 3 do *L1*, a mesma frase com *"(3)"*. A Saída de 2 do *L1* passa, e a
+de 4 do *L2* também. Com peça em inspeção no lote, a frase acrescenta *"; N UN em inspeção"*.
+
+**3. Antes dela, as de sempre.** Se o material inteiro não tem livre (por exemplo, mais 4 bloqueadas no *L2*), vem a mensagem de sempre
+(*"Saldo insuficiente. Disponível: …"* ou *"Material bloqueado não pode ser utilizado"*).
+
+**4. As outras portas que escolhem o lote (RN-264.03).** **Materiais de Clientes → Devolver** escolhendo o lote: a janela mostra o livre menor
+e, acima dele, *"Do lote L1 estão livres só 2 (2 bloqueadas no lote): devolva até 2 ou escolha outro lote."*; o servidor recusa com a frase
+do item 2. O **retalho** com baixa do original e o **sucateamento** (o comum, sem não conformidade) escolhendo o *L1*: a mesma frase (no
+sucateamento, ao dar a segunda assinatura, que é desfeita).
+
+**5. O estorno da entrada (RN-264.06, B1622).** Num material novo preparado igual, bloqueie as 4 do *L1* (**Bloquear Material**, lote *L1*). Em **Movimentações**, **Estornar**
+a entrada do *L1* → *"Não é possível estornar: o lote L1 tem 4 UN bloqueadas e, sem esta entrada, ficaria com 0 UN — o bloqueio ficaria
+apontando para peças que não estão no lote. Desbloqueie 4 UN do lote L1 (Desbloquear Material, escolhendo o lote L1) e depois estorne esta
+entrada."* Nada muda. **Inspeções → Desbloquear Material** 4 escolhendo *L1* → o estorno passa. Se o lote tem outras entradas que cobrem o
+bloqueio (por exemplo, *L1* com 4 + 2 e 2 bloqueadas, estornando a de 4), passa direto; se cobrem em parte, a mensagem diz quanto desbloquear.
+
+**6. Reprovação e terceiro no estorno.** Com peças do lote reprovadas na inspeção (ou com um terceiro), a frase muda para *"Não é possível
+estornar: o lote L1 tem 3 UN presas nele (3 reprovadas na inspeção) e, sem esta entrada, ficaria com 2 UN — o lote ficaria apontando para
+peças que não estão nele. Libere 1 UN do lote L1 (a reprovação pela não conformidade) e depois estorne esta entrada."* — cada parte com o seu
+caminho (o bloqueio no Desbloquear Material; a reprovação pela não conformidade; a peça com terceiro pelo retorno da remessa).
+
+### O que esta etapa NÃO cobre
+
+- A peça separada numa requisição dentro do lote não conta no livre do lote da Saída avulsa (ela confere a separação do material, como
+  antes), nem material com número de série ou que permite saldo negativo (**B1621**, **D (264)**).
+- Quando as reprovações e os bloqueios por lote somam mais que o bloqueado do material, a Saída usa a conta da entrega (que deixa de contar a
+  reprovação) e o Ajuste com lote usa a conta crua — podem dizer coisas diferentes (**D (264)** 1).
+- Um estorno de bloqueio ainda terminando no mesmo instante de uma Saída do lote (**D (264)** 2).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 264 entregue (2026-11-26):** **a Saída e a Perda com lote (e a devolução ao cliente, o retalho e o sucateamento comum) respeitam as
+  peças presas no lote, o seletor as desconta, e o estorno da entrada não deixa o lote com menos que o preso** (itens 8 e 9 da estimativa de
+  23/11; **C546** e **C547** resolvidos). Commits `8ff1e714` (plano), `a5d374b9` (saída e seletor), `347d24e6` (estorno e testes), Fase 5
+  `3aa15a7b` e o fechamento. **O que é seu:** as **B1621** a **B1623** (reversíveis); a limitação **(264)** em D (inclui o estorno do Desbloquear
+  com lote, **C504**, reproduzido) e a verificação **(264)** em F. Sem consulta antes do deploy. **Próxima:** os itens 10 e 11 da estimativa
+  de 23/11 (fim do plano da 264).
 
 - **Etapa 263 entregue (2026-11-25):** **a foto do fornecedor na ficha (cadastro, edição e janela do F2) e Aplicação, Especificações
   Técnicas e Descrição fora do cadastro de material** (pedido de 25/11, com prioridade; resolve os itens 23 e 25 da estimativa de 23/11).

@@ -5,14 +5,18 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-25 (Etapa 263 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 264 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 263 fechada — 2026-11-25.** **A foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
+> **O desenvolvimento parou aqui: Etapa 264 fechada — 2026-11-26.** **A Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o
+> estorno da entrada também** (itens 8 e 9 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na
+> seção da 264). **Onde parou, exatamente:** a **264 está fechada**; a próxima são os itens 10 e 11 da estimativa de 23/11 (fim do plano da 264).
+>
+> *(Antes:)* **Etapa 263 fechada — 2026-11-25.** **A foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
 > Descrição fora do cadastro de material** (pedido de 25/11, com prioridade). **Sem consulta antes do deploy.** **Nenhum clique foi dado**
 > (roteiro na seção da 263). **Onde parou, exatamente:** a **263 está fechada**; a próxima são os itens 8 e 9 da estimativa de 23/11 (fim do
 > plano da 263).
@@ -7462,6 +7466,43 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 264 — A Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o estorno da entrada também (ENTREGUE — 2026-11-26)
+
+**Em uma frase:** a **Saída** e a **Perda** escolhendo o lote (e a devolução ao cliente, o retalho e o sucateamento comum) deixam de levar as
+peças bloqueadas **naquele lote**, o seletor de lote passa a dizer quantas estão bloqueadas, e o **Estornar** da entrada de um lote com peças
+bloqueadas nele é recusado.
+
+| Antes | Agora |
+|---|---|
+| Seletor da Saída: *"L1 — saldo 4"* com 2 bloqueadas no *L1* | *"L1 — saldo 4 — livre 2 (2 bloqueadas no lote)"* |
+| Saída de 4 do *L1* → passa; *L1* 0 e o bloqueio diz *L1 2* | Recusada (*"No lote L1 há 4 UN, mas só 2 podem sair: …"*); de 2 passa |
+| **Estornar** a entrada do *L1* com as 4 bloqueadas nele → passa | Recusado (*"… Desbloqueie 4 UN do lote L1 …"*); desbloqueado, estorna |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **administrador**. Escolha um material com controle por lote (sem número de série). **Movimentações → Nova**: Entrada de 4 no
+   lote *L1* e de 4 no lote *L2*.
+2. **Inspeções → Bloquear Material**: 2, escolhendo o lote *L1*.
+3. **Movimentações → Nova** → Saída, o material → **Confira** o seletor de lote: *"L1 — saldo 4 — livre 2 (2 bloqueadas no lote)"* e *"L2 —
+   saldo 4"*.
+4. Saída de 4 escolhendo *L1* (preencha a justificativa) → **Confira:** *"No lote L1 há 4 UN, mas só 2 podem sair: 2 UN estão bloqueadas nele
+   (quarentena, reprovação na inspeção ou com terceiro); não cobre a quantidade (4). Escolha outro lote ou diminua a quantidade."* (a unidade é a
+   do material). Troque o tipo para **Perda** com 3 → a mesma frase com *(3)*.
+5. Saída de 2 do *L1* → passa.
+6. Entrada de 4 no lote *L3*; **Inspeções → Bloquear Material**: 4, escolhendo o lote *L3*. Em **Movimentações**, clique **Estornar** na
+   entrada do *L3* → **Confira:** *"Não é possível estornar: o lote L3 tem 4 UN bloqueadas e, sem esta entrada, ficaria com 0 UN — o bloqueio
+   ficaria apontando para peças que não estão no lote. Desbloqueie 4 UN do lote L3 (Desbloquear Material, escolhendo o lote L3) e depois estorne
+   esta entrada."* Nada muda.
+7. **Inspeções → Desbloquear Material**: 4, escolhendo o lote *L3* → volte e **Estornar** a entrada do *L3* → **Confira:** passa (o *L3* fica 0).
+
+**O que esta etapa NÃO cobre:** a peça separada numa requisição dentro do lote não sai do livre do lote na Saída avulsa (ela confere a
+separação do material inteiro, como antes); material com número de série ou que permite saldo negativo fica como antes; quando bloqueios por
+lote e reprovações somam mais que o bloqueado do material, a Saída e o Ajuste com lote podem contar diferente (D (264) do documento de
+novidades).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 263 — A foto do fornecedor na ficha; Aplicação, Especificações Técnicas e Descrição saem do cadastro de material (ENTREGUE — 2026-11-25)
 

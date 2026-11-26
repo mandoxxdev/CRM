@@ -1069,10 +1069,32 @@ FEFO significa *first expired, first out* — **o que vence primeiro sai primeir
 Onde aparece: na tela de **Movimentações**, ao escolher uma Saída, Perda ou Transferência, a lista de lotes vem ordenada assim — **primeiro os elegíveis, depois por validade crescente** (lote sem validade vai para o fim), e o **primeiro lote elegível já vem pré-selecionado**. A mesma ordem é usada no seletor de lote da tela de Devoluções e nos seletores da tela de Sobras e Retalhos (gerar retalho e solicitar sucateamento).
 
 Cada lote aparece com o saldo guardado nele (*"L1 — saldo 3"*). Na **Saída** e na **Perda**, quando parte do material está reservada ou
-retida, o lote mostra também o **livre** — o menor entre o saldo do lote e o livre do material (a reserva é do material, não do lote; a
-conta está em 16.7): *"L1 — saldo 3 — livre 0"*. Acima do livre, a saída é recusada com *"Saldo insuficiente. Disponível: … UN"*. Na
-**Transferência** o livre não aparece: ela muda o material de prateleira e não mexe no reservado. Os seletores de Devoluções e de Sobras e
-Retalhos mostram só o saldo.
+retida, o lote mostra também o **livre** — o menor entre o saldo do lote, o livre do material (a reserva é do material, não do lote; a conta
+está em 16.7) e o que pode sair do próprio lote: *"L1 — saldo 3 — livre 0"*. Acima do livre do material, a saída é recusada com *"Saldo
+insuficiente. Disponível: … UN"*. Na **Transferência** o livre não aparece: ela muda o material de prateleira e não mexe no reservado. Os
+seletores de Devoluções e de Sobras e Retalhos mostram só o saldo.
+
+**As peças presas no lote não saem por quem escolhe o lote.** Em material com controle por lote (sem número de série, e que não permite saldo
+negativo), o que pode sair de um lote é:
+
+```
+pode sair do lote = saldo do lote − em inspeção no lote − preso no lote
+preso no lote     = bloqueado indicando o lote (quarentena e Bloquear Material) + reprovado na inspeção do lote + com terceiro
+```
+
+— a mesma conta da entrega (7.5) e da separação. Quando o bloqueado por lote e o reprovado somam mais que o bloqueado do material, a parte
+que não cabe deixa de contar no lote (fica só na conta do material). O seletor da Saída e da Perda diz quantas peças estão presas:
+*"L1 — saldo 4 — livre 2 (2 bloqueadas no lote)"*. A saída que escolhe o lote — **Saída**, **Perda** e os outros tipos de saída de
+Movimentações (também o cadastro rápido), a **devolução ao cliente** (16.7), o **retalho** com baixa do original e o **sucateamento** sem não
+conformidade — é recusada quando passa do que pode sair, também quando consome uma reserva (a reserva é do material, nunca do
+lote), depois das recusas do material (*"Saldo insuficiente…"*, *"Material bloqueado não
+pode ser utilizado"*): *"No lote L1 há 4 UN, mas só 2 podem sair: 2 UN estão bloqueadas nele (quarentena, reprovação na inspeção ou com
+terceiro); não cobre a quantidade (4). Escolha outro lote ou diminua a quantidade."* (com *"; ⟨n⟩ UN em inspeção"* quando há peça em inspeção
+no lote; *"1 UN está bloqueada"* e *"só 1 pode sair"* no singular). Lote sem peça presa: a recusa de sempre do saldo do lote. A peça separada
+numa requisição dentro do lote não entra nesta conta (a saída confere a separação no material inteiro, 10.2). No sucateamento, a recusa vem
+na segunda assinatura, que é desfeita. Na janela da devolução ao cliente, acima do livre de um lote com peça presa: *"Do lote L1 estão livres
+só 2 (2 bloqueadas no lote): devolva até 2 ou escolha outro lote."*
+
 
 **É sugestão, não imposição.** O operador pode trocar por qualquer outro lote elegível — há motivos legítimos para pegar outro, e travar isso no sistema atrapalharia mais do que ajudaria. O motor não verifica FEFO: ele valida situação, validade e saldo do lote **que foi escolhido**.
 
@@ -2187,6 +2209,17 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **A saída de uma entrega de EPI** (21-bis) não se estorna: *"Saída de entrega de EPI não pode ser estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu"*.
 - **Material inativo** → *"Material inativo não pode ser movimentado"*, para qualquer tipo de movimento: reative o material (2.11) para estornar.
 - **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
+- **Estorno da entrada de um lote com peças presas nele.** Sem a entrada, o lote não pode ficar com menos peças que as presas nele — o
+  bloqueado indicando o lote (pelos bloqueios e desbloqueios do lote; um bloqueio cujo estorno ainda está terminando conta como de pé; limitado
+  ao bloqueado do material), o reprovado na inspeção do lote (só no que o bloqueado do material ainda cobre além do bloqueio do lote: a
+  reprovação já liberada pelo Desbloquear *"Sem lote"* não conta) e o que está com terceiro (só no que o material ainda tem em terceiros). Só
+  bloqueio: *"Não é possível estornar: o lote L1 tem 4
+  UN bloqueadas e, sem esta entrada, ficaria com 0 UN — o bloqueio ficaria apontando para peças que não estão no lote. Desbloqueie 4 UN do lote
+  L1 (Desbloquear Material, escolhendo o lote L1) e depois estorne esta entrada."* Com reprovação ou terceiro: *"Não é possível estornar: o lote
+  L1 tem 3 UN presas nele (3 reprovadas na inspeção) e, sem esta entrada, ficaria com 2 UN — o lote ficaria apontando para peças que não estão
+  nele. Libere 1 UN do lote L1 (a reprovação pela não conformidade) e depois estorne esta entrada."* — cada parte com o seu caminho (o bloqueio
+  no Desbloquear Material, escolhendo o lote; a reprovação pela não conformidade; a peça com terceiro pelo retorno da remessa). Se as outras
+  entradas do lote cobrem o que está preso, o estorno passa. A entrada de uma devolução para Quarentena tem antes a recusa própria (abaixo).
 - **O estorno também respeita o material separado na caixa de requisições** (10.2). O estorno de entrada compara com o livre fora da caixa, e as duas recusas acima ganham, no fim, o trecho *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"* quando há caixa. O estorno de um **ajuste** que **reduz** o total (o ajuste tinha subido) passa pela mesma guarda do ajuste (6.2): *"Não é possível estornar: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨parcelas⟩, mínimo aceitável: ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — com ou sem localização, e também no material que permite saldo negativo (o total negativo que ele aceita não dispensa o que está retido); o estorno que aumenta o total não tem essa guarda. O estorno de um **desbloqueio** bloqueia de novo e só cabe no livre fora da caixa (que desconta o reservado): *"Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"*, com o mesmo trecho no fim quando há caixa.
 - **Estorno de uma saída que já teve devolução** (tela de Devoluções, citando aquela saída — 12.2) é recusado, em qualquer material: o estorno devolveria a quantidade inteira da saída de novo. Devolvida inteira: *"Não é possível estornar: esta saída já foi devolvida inteira (⟨d⟩ ⟨un⟩) — o estorno devolveria de novo o que já voltou."*; em parte: *"Não é possível estornar: ⟨d⟩ ⟨un⟩ desta saída já voltou pela devolução — o estorno devolveria de novo o que já voltou. Para desfazer o resto, registre a devolução dos ⟨r⟩ ⟨un⟩ que faltam."* (*"já voltaram"* com mais de uma unidade). Vale também para a devolução com destino Retrabalho. Não conta a devolução desfeita pelo livro (a entrada dela estornada — 12.3). Devolução e estorno da mesma saída no mesmo instante: só um dos dois passa.
 - **Estorno da entrada de uma devolução para Sucata** (12.6) é recusado enquanto a linha *Sucata* da mesma devolução não for estornada — a devolução para sucata entra e sai, e estornar só a entrada tiraria do estoque de novo o que já saiu pela sucata: *"Não é possível estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a sucata — estornar só a entrada tiraria do estoque de novo o que já saiu pela sucata. Estorne primeiro a sucata desta devolução e depois esta entrada."* Estornada a sucata (o material volta, como numa devolução para o estoque), a entrada estorna. Antes dessa e de qualquer outra recusa da entrada de uma devolução:
@@ -5639,9 +5672,9 @@ que se aplica aparece):
 | Pedir mais que o livre do lote | *"Saldo livre do lote L1 insuficiente para bloquear: 1 UN"* |
 
 A peça bloqueada com o lote fica no lote: para liberá-la, escolha o lote no **Desbloquear Material** (o *"Sem lote"* não a alcança), e
-quem entrega e separa já não a conta como saldo do lote (7.5). ⚠️ A **Saída** e a **Perda** da tela de
-Movimentações escolhendo o lote **não** conferem o bloqueado do lote — conferem só o do material; para não tirar a peça bloqueada,
-escolha outro lote nelas.
+quem entrega, separa ou tira escolhendo o lote (a **Saída** e a **Perda** de Movimentações, a devolução ao cliente, o retalho, o
+sucateamento) já não a conta como saldo do lote (7.5, 4.4). O estorno da entrada desse lote também não deixa o lote com menos peças que as
+bloqueadas nele (6.10).
 
 Liberar sem dizer o lote **nunca** tira de um lote: o sistema não adivinha qual peça saiu da quarentena. Dois desbloqueios do mesmo lote no
 mesmo instante não liberam mais do que o lote tem — o segundo recebe a mensagem do lote.
@@ -5652,7 +5685,7 @@ liberar **do lote da peça** no **Desbloquear Material** e, em seguida, lançar 
 **do mesmo lote**. Assim o livro mostra a entrada da devolução, o bloqueio, o desbloqueio e a baixa, todos com o mesmo lote.
 
 **Quem conta o bloqueado do lote.** A aprovação, a separação, a entrega (o **Sai de** e a escolha automática do lote) descontam o
-bloqueado do lote no lote dele (7.5); a Saída e a Perda da tela de Movimentações, não (acima). A peça reprovada na inspeção e o material em terceiros têm o lote no próprio documento (a inspeção e a
+bloqueado do lote no lote dele (7.5); a Saída e a Perda da tela de Movimentações também (4.4). A peça reprovada na inspeção e o material em terceiros têm o lote no próprio documento (a inspeção e a
 remessa) e não aparecem no campo **Lote**: a parte reprovada que ainda está bloqueada entra no *"Sem lote"*.
 
 **O bloqueio não passa do que existe e não está retido.** A quantidade a bloquear tem de caber em:

@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 264 (2026-11-26, `a5d374b9`, `347d24e6`): a Saída, a Perda e as outras portas que escolhem o lote respeitam a peça presa nele, o
+> seletor a desconta, e o estorno da entrada do lote não deixa o lote com menos que o preso (C546, C547; B1621–B1623).** Ver a seção "Etapa 264",
+> no fim. Continua 🟢.
+
 > **+ Etapa 253 (2026-11-20, `521f6651`, Fase 5 `bffd526a`): o Ajuste com lote não deixa o lote negativo (C475; B1588–B1592, C548).** O
 > AJUSTE sem localização citando o lote é recusado quando deixaria o lote negativo ou, ao descer, abaixo do que está preso nele; a baixa
 > drena as prateleiras do lote (poupando a caixa separada); o estorno tem a mesma guarda. Ver a seção "Etapa 253", no fim. Continua 🟢.
@@ -1587,8 +1591,8 @@ C547; C500 e C501 resolvidas). Itens 14 e 15 da estimativa de 18/11.
 - [x] **RN-249.11** — só material com controle por lote e sem série (Fase 2, achado 3) — `9ef32392`.
 - [x] **RN-249.20** (C501) — a aceitação da NC que esbarra no *"Sem lote"* recebe a frase própria (o motor marca a recusa M1 com `codigo`)
   — `9ef32392`.
-- [ ] **Fora (declarado):** a Saída/Perda com lote e o estorno da entrada do lote não conferem o bloqueado do lote (C546, C547 — testes prendem o
-  comportamento de hoje); a caixa separada sem lote não sai do livre do lote (B1568); o estorno do DESBLOQUEIO com lote sem a régua (C504).
+- [ ] **Fora (declarado):** ~~a Saída/Perda com lote e o estorno da entrada do lote não conferem o bloqueado do lote (C546, C547 — testes prendem o
+  comportamento de hoje)~~ *(resolvido na Etapa 264, `a5d374b9`, `347d24e6`)*; a caixa separada sem lote não sai do livre do lote (B1568); o estorno do DESBLOQUEIO com lote sem a régua (C504).
 
 Testes: `bloquearIndicandoOLote.api.test.js` (19); `InspecoesAlmoxarifado.test.js` (+7, e o (8) da 209 reescrito — mudança de regra). Continua 🟢.
 
@@ -1628,3 +1632,22 @@ Plano: `docs/superpowers/plans/2026-11-20-almoxarifado-etapa253-busca-de-entrega
   anterior); a v1 continua sem lote no AJUSTE (B1592); a tela Movimentações não mostra lote no Ajuste.
 
 Continua 🟢. Teste: `ajusteComLoteNaoNegativa.api.test.js` (18).
+
+## Etapa 264 — a Saída com lote e o estorno da entrada respeitam a peça presa no lote (2026-11-26)
+
+Plano: `docs/superpowers/plans/2026-11-26-almoxarifado-etapa264-saida-perda-e-estorno-com-lote-bloqueado.md` (RN-264.01 a .08; B1621–B1623;
+C546 e C547 resolvidos). Itens 8 e 9 da estimativa de 23/11.
+
+- [x] **RN-264.01/.02** — a Saída manual com lote (v1, v2, todo tipo de saída) recusa acima do que pode sair do lote (`situacaoDosLotes`: saldo −
+  inspeção − retido), depois das guardas do material, sob a trava; opção `confereLivreDoLote` — `a5d374b9`.
+- [x] **RN-264.03** — a devolução ao cliente, o retalho com baixa e o sucateamento comum (Fase 2, achado 1) — `a5d374b9`.
+- [x] **RN-264.05** — o seletor de lote: `bloqueado_no_lote` e o livre que o desconta; Movimentações e a janela da devolução ao cliente — `a5d374b9`.
+- [x] **RN-264.06 a .08** — o estorno da entrada com lote recusa quando o lote ficaria com menos que o preso nele (bloqueado do livro na régua
+  "que mais bloqueia" + reprovado + com terceiro — Fase 2, achado 2), dentro da seção, depois das guardas da 262 — `347d24e6`. O teto da reprovação e de terceiros (Fase 5) e a saída com reserva — `3aa15a7b`.
+- [x] Os dois testes "declarados" da 249 ([RN-249.05 entrada], [RN-249.06 saida]) **prendiam o comportamento errado** (C546/C547) e passaram a
+  provar a recusa — `347d24e6`.
+- [ ] **Fora (declarado, D (264)):** família que não cabe (a Saída na régua da entrega × o Ajuste/Bloquear nas parcelas cruas); o claim provisório
+  do estorno de um BLOQUEIO some da conta da Saída (como na entrega); o estorno do Desbloquear com lote (C504, reproduzido na Fase 5); a caixa separada no lote; material com série; saldo negativo.
+
+Testes: `saidaEEstornoComLoteBloqueado.api.test.js` (27); `bloquearIndicandoOLote.api.test.js` (19, dois reescritos); Jest `LoteSeletor` (+3),
+`MateriaisClienteDevolucaoLoteLivre` (+1). Continua 🟢.

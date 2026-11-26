@@ -92,12 +92,116 @@
 
 ## Tasks
 
-- [ ] **T1 (tronco, motor)** — RN-264.01 a .04 em `stockService.registrarMovimentacaoSemTrava` + a opção nas três rotas.
-- [ ] **T2 (tronco, estorno)** — RN-264.06 a .08 em `cancelarMovimentacao` (ramo de entrada, dentro da seção).
-- [ ] **T3 (galho, seletor + tela)** — RN-264.05: `lotService.listarLotesDoMaterial` e o rótulo de `MovimentacoesAlmoxarifado.js` (Jest).
-- [ ] **T4 (integração)** — o teste novo `saidaEEstornoComLoteBloqueado.api.test.js` (RN-264.*), atualizar `bloquearIndicandoOLote`
+- [x] **T1 (tronco, motor)** — `a5d374b9`: RN-264.01 a .04 em `stockService.registrarMovimentacaoSemTrava` + a opção nas três rotas e (Fase 2) no
+  retalho e no sucateamento comum. Fase 5: também com reserva (`3aa15a7b`).
+- [x] **T2 (tronco, estorno)** — `347d24e6`: RN-264.06 a .08 em `cancelarMovimentacao` (ramo de entrada, dentro da seção), com reprovação e
+  terceiro (Fase 2); o teto da reprovação e de terceiros (Fase 5, `3aa15a7b`).
+- [x] **T3 (galho, seletor + tela)** — `a5d374b9`: — RN-264.05: `lotService.listarLotesDoMaterial` e o rótulo de `MovimentacoesAlmoxarifado.js` (Jest).
+- [x] **T4 (integração)** — `347d24e6` (o teste foi no commit do estorno, com os dois da 249): — o teste novo `saidaEEstornoComLoteBloqueado.api.test.js` (RN-264.*), atualizar `bloquearIndicandoOLote`
   [RN-249.05 entrada, declarado] (prendia o comportamento de hoje); os arquivos de `tests/api` com lote + saída/estorno, um a um.
   Cruzamento: bloquear com lote → seletor diz livre 2 → Saída de 3 recusa → Saída de 2 passa → estorno da entrada recusa → Desbloquear →
   estorno passa.
-- [ ] **T5** Fase 2 (revisor fresco, uma passada) e Fase 5 (revisão adversarial curta, achado só com cenário reproduzido).
-- [ ] **T6** fechamento (fechar-etapa sem 7½ e 8) + Passo 7¼.
+- [x] **T5** Fase 2 (revisor fresco, uma passada) e Fase 5 (revisão adversarial curta, achado só com cenário reproduzido).
+- [x] **T6** fechamento (fechar-etapa sem 7½ e 8) + Passo 7¼.
+
+## Fase 2 (revisor fresco, 26/11; sonda `scratchpad/fase2-264-sonda.js`, pela rota e pelo serviço, sobre `8ff1e714`)
+
+1. **[importante, reproduzido]** Duas portas manuais com lote ficavam fora: o **retalho com baixa** (`scrapService.gerarRetalho`, Sobras →
+   Retalho) e o **sucateamento comum** (sem NC, `scrapDisposalService`, a baixa na 2ª assinatura) — as duas leem o mesmo seletor de lote e
+   baixavam 4 do *L1* com 2 bloqueados nele. O descartado (b) da B1621 dizia que "o sucateamento baixa peças presas" — **estava errado**: só o
+   sucateamento ligado à NC (`doBloqueado`) baixa do bloqueado. → **consertado**: as duas passam `confereLivreDoLote` (RN-264.03 revista);
+   cenários [RN-264.03 retalho] e [RN-264.03 sucateamento]; sabotagens S10 e S11.
+2. **[importante, reproduzido]** A régua do estorno (B1622) só via o bloqueado do livro; a **reprovação** da inspeção no lote (e o que está com
+   terceiro — a remessa não baixa o lote) causa o mesmo estrago com outra entrada do mesmo lote (*L1* 2 + 4, 3 reprovadas, estorno da de 4 →
+   200, *L1* 2). O descartado (a) supunha só a entrada da própria nota — **estava errado**. → **consertado**: o estorno soma as parcelas cruas
+   (bloqueado do livro + reprovado + com terceiro, a régua do Bloquear com lote da 249), com uma literal geral quando há outra parcela além do
+   bloqueio (RN-264.06 revista); cenário [RN-264.06 reprovacao]; sabotagem S12. A inspeção em curso fica fora (o estorno da nota a desfaz).
+3. **[importante, leitura]** A janela da devolução ao cliente mandaria *"… ou libere a reserva do material"* quando o livre menor vem do
+   bloqueio no lote. → **consertado**: com `bloqueado_no_lote > 0`, *"Do lote M1 estão livres só 2 (2 bloqueadas no lote): devolva até 2 ou
+   escolha outro lote."* e a frase do livre cita o lote (Jest `MateriaisClienteDevolucaoLoteLivre` [RN-264.05]).
+4. **[menor, reproduzido]** Família que não cabe (B1436): a régua da saída (a da entrega) solta a reprovação, o Ajuste com lote (253) e o
+   Bloquear (249) usam as parcelas cruas — o AJUSTE para 4 do *L1* recusa e o AJUSTE_NEGATIVO de 4 passa. → **declarado** (D (264) 1): a
+   saída fica na régua da entrega para não divergir do seletor e da entrega.
+5. **[menor, não reproduzido]** As duas réguas divergem: a saída lê o bloqueado com `cancelado = 0` (o claim provisório do estorno de um
+   BLOQUEIO, fora da trava, some da conta, como na entrega); o estorno usa o livro "que mais bloqueia" sem o corte da família. →
+   **declarado** (D (264) 2).
+6. **[menor]** O Ajuste negativo não está no formulário de Movimentações (é tipo interno; só pela API) — a recusa vale, o rótulo não precisa.
+   A recusa sem peça presa no lote é a de sempre do claim do lote (contrato: nada muda). → **conferido**, sem mudança.
+7. **[ruído]** Lote com menos saldo que a inspeção: a literal soma parcelas maiores que o saldo — fica (a frase da entrega faz igual).
+
+### RN revistas pela Fase 2
+
+- **RN-264.03 (revista):** também `scrapService.gerarRetalho` (baixa do original com lote) e a baixa do sucateamento comum
+  (`scrapDisposalService`, 2ª assinatura; a recusa desfaz a assinatura e devolve a literal da RN-264.01).
+- **RN-264.06 (revista):** `presa = min(quantidade_bloqueada, livro do lote) + reprovado do lote + com terceiro do lote`; recusa quando
+  `presa > max(0, depois) + folga`. Só bloqueio → a literal do plano. Com reprovação ou terceiro → *"Não é possível estornar: o lote ⟨L⟩ tem
+  ⟨presa⟩ ⟨un⟩ ⟨presa|presas⟩ nele (⟨N⟩ ⟨bloqueada|bloqueadas⟩; ⟨N⟩ ⟨reprovada|reprovadas⟩ na inspeção; ⟨N⟩ com terceiro) e, sem esta entrada,
+  ficaria com ⟨fica⟩ ⟨un⟩ — o lote ficaria apontando para peças que não estão nele. Libere ⟨N⟩ ⟨un⟩ do lote ⟨L⟩ (o bloqueio no Desbloquear
+  Material, escolhendo o lote ⟨L⟩; a reprovação pela não conformidade; a peça com terceiro pelo retorno da remessa) e depois estorne esta
+  entrada."* (só as parcelas e os caminhos presentes).
+
+## Fase 5 (dois revisores frescos, 26/11, sondas executadas `scratchpad/fase5a-264-a.js`, `fase5b-264-*.js`, sobre `347d24e6`)
+
+1. **[importante, reproduzido]** Reprovação já liberada pelo Desbloquear *"Sem lote"* (bloqueado 0, documento sem carimbo — C501): o estorno da
+   entrada do *L1* recusava mandando para a não conformidade, que não destrava. → **consertado** (`3aa15a7b`): a reprovação conta só no que
+   `quantidade_bloqueada − bloqueado do lote` ainda cobre, e terceiros só no que `quantidade_em_terceiros` cobre (o teto por família da B1436,
+   por parcela). Cenário [Fase 5 achado 1]; sabotagem S13.
+2. **[menor, reproduzido]** A Saída de 4 do *L1* consumindo uma **reserva manual** levava as 2 bloqueadas (a RN-264.04 tirava toda saída com
+   reserva). A reserva é do material, nunca do lote. → **consertado**: a guarda vale com reserva. Cenário [Fase 5 achado 2]; sabotagem S14.
+3. **[menor, reproduzido]** A parcela **em inspeção** da Saída e a **com terceiro** do estorno não tinham cenário (sabotagem das duas: 23/23
+   verde). → **consertado**: cenários [Fase 5 achado 3a/3b]; sabotagens S15, S16.
+4. **[importante, fora do diff, reproduzido]** O **estorno do Desbloquear** com lote bloqueia de novo sem conferir o livre do lote (C504, D (249)
+   2): bloquear 4 no *L1*, desbloquear, estornar a entrada (200, certo) e estornar o Desbloquear → 200, o bloqueio volta sobre o *L1* vazio. →
+   **declarado** (D (264) 5), com o conserto medido (~45 min) — candidato a etapa própria.
+5. **[menor, reproduzido com gancho e falha forçada]** A Saída durante o estorno de um BLOQUEIO que falha (D (264) 2). → **declarado** (já estava).
+6. **[ruído]** O estorno confere a peça presa também com saldo negativo permitido, a Saída não — declarado (D (264) 4). Autorização: as rotas
+   mudadas mantêm os gates (só a opção no 4º argumento).
+- Tentado e não quebrou: Bloquear × Saída e Bloquear × estorno (sob a trava); o claim provisório no estorno; a recusa dentro da seção devolve o
+  claim e as reservas soltas da nota; lote por código; a compensação interna; o seletor = o motor nos cenários.
+
+## Divergências do plano
+
+- O descartado (b) da B1621 dizia que "o sucateamento baixa peças presas" — **estava errado** para o sucateamento comum (Fase 2, 1).
+- O descartado (a) da B1622 supunha só a entrada da própria nota — **estava errado** (Fase 2, 2); e a régua crua da reprovação travava a
+  reprovação já liberada (Fase 5, 1).
+- A RN-264.01 excluía a saída com reserva — **errado** para a reserva manual (Fase 5, 2).
+- O teste T4 foi no commit do estorno (o arquivo cobre os dois itens); o commit da saída levou o código e a tela.
+- **CLAUDE.md:** nenhuma linha ficou errada — a guarda nova roda dentro da seção do motor (`naTravaDoMaterial`) e do estorno que a seção das
+  travas já descreve; nenhuma porta nova lê o livre para reservar.
+
+## Próxima tarefa detalhada
+
+Os itens **10 e 11** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`), nesta ordem:
+
+1. **Item 10 — Transferência de peça com número de série (C76, B1584, D (252) 3; 1h30, tela + motor).** `routes/almoxarifado/extended.js`
+   (`POST /transferencias`, ~927) e o ramo `TRANSFERENCIA` de `stockService.registrarMovimentacaoSemTrava` não leem `serie_ids`;
+   `MovimentacoesAlmoxarifado.js` (~88-98) diz que a tela não pede série na transferência; `series_almoxarifado.localizacao_id` existe
+   (`schema.js` ~1569). Contrato a congelar: `serie_ids` (array de ids *Em estoque* do material, na origem), quantidade = número de séries;
+   recusas literais para série de outra prateleira/lote/status. Atenção: o motor roda sob `naTravaDoMaterial`; o bloquear/desbloquear série
+   (`mudarStatusSerie`) pega a mesma trava (RN-10 da 118); o estorno da transferência tem de devolver o endereço das séries.
+2. **Item 11 — Saída de peça com série sai da prateleira da série (C545, D (252) 2, D (259) 3; 1h30, motor).** Molde `fatiasDaSerieSemLote`
+   (`requisitionService.js` ~2290-2310, Etapa 252) na Saída avulsa (`registrarMovimentacao`, ramo de saída); depende do item 10 (B1584: o
+   endereço da série só vale quando bate com o saldo da prateleira).
+- Motor: Fase 2 e Fase 5 com sonda executada, como nesta.
+- **O que já está pronto e não reabre:** a guarda do lote na Saída e no estorno da entrada (esta etapa).
+- Candidato fora da estimativa: o estorno do Desbloquear com lote conferir o livre do lote (C504; Fase 5 da 264, achado 4).
+
+## Verificação (medida sobre o código final, `3aa15a7b`)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **671/673 arquivos OK** — os 2 que falham são os já conhecidos de
+  proposta, de outra máquina (`propostaBilingueTemplate`, `propostaPdfExigeLogin`); o mais lento: `propostaClausulasGrava`, 83,7 s. (Sobre
+  `347d24e6`, antes da Fase 5: também 671/673, os mesmos 2.)
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`): **255/255 suítes, 3351/3351 testes**. `CI=true npx react-scripts build`: **Compiled successfully.**
+- `saidaEEstornoComLoteBloqueado` 27/27; `bloquearIndicandoOLote` 19/19. Sabotagens S1-S16 (harness `scratchpad/sab-264.sh`: âncora contada = 1,
+  cópia, md5 sabotado ≠ original e restaurado = original) e duas da tela: cada uma derruba o seu cenário pela asserção certa.
+- Primeiro boot: não se aplica (nenhuma tabela nem coluna). Nenhum clique no navegador (F (264)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (T1/T2; Fase 2 — duas portas de Sobras, a reprovação no estorno, a frase da devolução ao cliente; Fase 5 —
+  o teto da reprovação, a reserva, dois cenários).
+- Achados: Fase 2 — 3 importantes consertados, 2 menores declarados, 1 conferido, 1 ruído; Fase 5 — 1 importante consertado, 2 menores
+  consertados, 1 importante fora do diff declarado (C504), 1 menor declarado, 1 ruído.
+- Paralelismo: nenhum galho (motor e tela no mesmo contrato, pequenos); os revisores rodaram enquanto os documentos eram escritos.
+- Defeito que escapou: (preencher na etapa seguinte). Da 262/263: nenhum apontado.
