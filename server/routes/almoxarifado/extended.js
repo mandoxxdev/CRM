@@ -890,8 +890,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // aqui, e tambem so no 4o argumento (nunca lida de `exigeSerie` no body).
       // `lotePelasSeries` (Etapa 233, B1527): com o lote em branco, a saida confere o lote DAS SERIES (bloqueado, reprovado, vencido
       // para consumo) — a tela de Movimentacoes so lista a serie; o lote dela nao ia no corpo e o motor nao o olhava.
+      // `saidaPelaSerie` (Etapa 265, C545, RN-265.10): sem origem escolhida, a saida de material com serie baixa da prateleira de cada
+      // serie quando o registro dela bate com o saldo (senao, como antes). So esta porta (a tela de Movimentacoes); a entrega tem a dela.
       const result = await stockService.registrarMovimentacao(db, req.user, req.body,
-        { exigeLote: true, exigeSerie: true, lotePelasSeries: true, confereLivreDoLote: true });
+        { exigeLote: true, exigeSerie: true, lotePelasSeries: true, confereLivreDoLote: true, saidaPelaSerie: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

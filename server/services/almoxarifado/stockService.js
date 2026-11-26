@@ -1045,6 +1045,44 @@ async function seriesDaTransferencia(db, materialId, serieIds, origemId, loteId,
 }
 
 /**
+ * Etapa 265 (C545, RN-265.10/.11; B1626) — as fatias por PRATELEIRA DA SERIE da saida avulsa sem origem (a porta v2, `saidaPelaSerie`).
+ * Devolve `[{ localizacao_id, codigo, saldo_id, n }]` (prateleiras na ordem em que aparecem nas series) ou null = o claim de sempre (a
+ * padrao, depois a maior): alguma serie fora do estoque, de outro material, de outro lote que o da saida, ou sem prateleira; prateleira que
+ * nao existe ou que a saida nao pode usar (`motivoRecusaEndereco`, a mesma regra da origem: bloqueada, area especial); a linha (prateleira,
+ * lote da saida) nao cobre as series dali; ou o registro dali nao bate com o saldo (B1584, `registroDaPrateleiraBate`). Molde:
+ * `requisitionService.fatiasDaSerieSemLote` (Etapa 252), sem a guarda da separacao (B1626 c). So le; dentro da trava do material.
+ */
+async function fatiasDaSerieNaSaida(db, material, serieIds, loteId) {
+  if (!serieIds.length || new Set(serieIds).size !== serieIds.length) return null;
+  const loteDaSaida = loteId == null ? null : Number(loteId);
+  const series = await dbAll(db, `SELECT id, localizacao_id, lote_id FROM series_almoxarifado
+    WHERE material_id = ? AND status = 'EM_ESTOQUE' AND id IN (${serieIds.map(() => '?').join(',')})`, [material.id, ...serieIds]);
+  if (series.length !== serieIds.length) return null;
+  const porId = new Map(series.map((x) => [Number(x.id), x]));
+  const grupos = new Map();
+  for (const id of serieIds) {
+    const x = porId.get(Number(id));
+    if (!x || x.localizacao_id == null || (x.lote_id == null ? null : Number(x.lote_id)) !== loteDaSaida) return null;
+    const loc = Number(x.localizacao_id);
+    grupos.set(loc, (grupos.get(loc) || 0) + 1);
+  }
+  const fatias = [];
+  for (const [loc, n] of grupos) {
+    // eslint-disable-next-line no-await-in-loop
+    const lc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [loc]);
+    if (!lc || motivoRecusaEndereco(lc, material, 'origem')) return null;
+    // eslint-disable-next-line no-await-in-loop
+    const linhas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material.id, loc, loteDaSaida]);
+    if (linhas.length !== 1 || Number(linhas[0].quantidade) + EPS < n) return null;
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await registroDaPrateleiraBate(db, material.id, loc, loteDaSaida))) return null;
+    fatias.push({ localizacao_id: loc, codigo: lc.codigo, saldo_id: Number(linhas[0].id), n });
+  }
+  return fatias;
+}
+
+/**
  * Etapa 239 (C543, RN-239.01) — a saida COM LOTE e SEM ORIGEM (material sem negativo) confere o bloqueio no endereco de onde o lote
  * comeca a sair, nao na localizacao padrao: a primeira linha do lote com saldo na ordem do claim com as bloqueadas por ultimo. Se ela esta
  * em endereco bloqueado, o lote so tem saldo em endereco bloqueado -> a recusa de sempre ("Localizacao X esta bloqueada") com o codigo do
@@ -2632,7 +2670,29 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // já debitadas estão no rastreador e quem as devolve é o catch amplo (Etapa 119, C249). Aqui
       // o débito físico já teve SUCESSO quando o claim de série roda, então a reversão da(s)
       // linha(s) é responsabilidade de quem debitou.
-      if (loteIdFinal && !permiteNegativo) {
+      // Etapa 265 (C545, RN-265.10/.11; B1626): a saida avulsa (so quem declara `saidaPelaSerie`, a v2) de material com serie, SEM
+      // origem e sem saldo negativo, baixa da prateleira de cada serie (uma baixa por prateleira, guarda no WHERE) quando o registro das
+      // series serve (`fatiasDaSerieNaSaida`); senao, o claim de sempre logo abaixo. Antes a serie de B saia e a linha de A (a maior)
+      // baixava: A com peca que nao existe, B com serie sem saldo. O rastreador e o de sempre: o catch amplo devolve as linhas e o fisico,
+      // e o registro da 257 grava de onde saiu (o estorno devolve a cada prateleira).
+      const fatiasDaSerie = (opcoes.saidaPelaSerie === true && serieObrigatoria && !localizacao_origem_id && !permiteNegativo
+        && !baixandoTerceiro && !baixandoBloqueado)
+        ? await fatiasDaSerieNaSaida(db, material, serieIdsSaida, loteIdFinal) : null;
+      if (fatiasDaSerie) {
+        saldoLinhasSaidaParaReverter = [];
+        for (const f of fatiasDaSerie) {
+          // eslint-disable-next-line no-await-in-loop
+          const claimFatia = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+            SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND quantidade >= ? ${Q.FOLGA_SQL}
+            RETURNING id`, [f.n, f.saldo_id, f.n]);
+          if (!claimFatia) {
+            throw Object.assign(new Error(`O saldo da prateleira ${f.codigo} mudou durante a saída — recarregue e tente de novo`),
+              { status: 409 });
+          }
+          saldoLinhasSaidaParaReverter.push({ id: f.saldo_id, quantidade: f.n });
+        }
+      } else if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao negativa a linha do lote em
         // silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
         // MATERIAL, e o total do material (debitado direto, sem depender desta linha) continua
