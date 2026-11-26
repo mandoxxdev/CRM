@@ -706,7 +706,7 @@ async function aprovar(db, user, id, pernaNome) {
         // Como sempre neste modulo, no 4o argumento e nunca no body (stockService.js:569-607).
         // Etapa 68: `origemEstrita` so com a origem da area — o motor confere que o saldo nela cobre
         // e nao drena outros enderecos. Sem origem, nada muda (o motor baixa como sempre baixou).
-      }, { exigeLote: true, exigeSerie: true, origemEstrita: !!origemSucata });
+      }, { exigeLote: true, exigeSerie: true, origemEstrita: !!origemSucata, confereLivreDoLote: true });
     } catch (e) {
       await compensarAssinatura(db, user, id, perna, e.message);
       // Re-lanca o erro ORIGINAL do motor, sem mascarar: "Saldo insuficiente. Disponivel: 20 UN" e

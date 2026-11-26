@@ -420,12 +420,17 @@ const MateriaisClienteAlmoxarifado = () => {
                   {/* Etapa 241 (RN-241.03, .04): o livre do lote — a reserva é do material, não do lote. */}
                   {devLotes.some(livreAbaixoDoSaldo) && (
                     <small id="dev-lote-livre" style={{ display: 'block', color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre.
+                      {/* Etapa 264 (RN-264.05, B1623): com peça bloqueada no lote, o livre também a desconta. */}
+                      {devLotes.some((l) => Number(l.bloqueado_no_lote) > 1e-6)
+                        ? 'Livre é o que não está reservado nem retido no material, nem bloqueado no próprio lote (quarentena, reprovação ou com terceiro): de nenhum lote sai mais que o livre.'
+                        : 'Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre.'}
                     </small>
                   )}
                   {loteLivreNaoCobre && (
                     <small id="dev-lote-livre-nao-cobre" style={{ display: 'block', color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
-                      {`Do lote ${loteEscolhido.codigo} estão livres só ${formatarQuantidade(loteEscolhido.livre)}: devolva até ${formatarQuantidade(loteEscolhido.livre)} ou libere a reserva do material.`}
+                      {Number(loteEscolhido.bloqueado_no_lote) > 1e-6
+                        ? `Do lote ${loteEscolhido.codigo} estão livres só ${formatarQuantidade(loteEscolhido.livre)} (${formatarQuantidade(loteEscolhido.bloqueado_no_lote)} ${Number(loteEscolhido.bloqueado_no_lote) < 2 ? 'bloqueada' : 'bloqueadas'} no lote): devolva até ${formatarQuantidade(loteEscolhido.livre)} ou escolha outro lote.`
+                        : `Do lote ${loteEscolhido.codigo} estão livres só ${formatarQuantidade(loteEscolhido.livre)}: devolva até ${formatarQuantidade(loteEscolhido.livre)} ou libere a reserva do material.`}
                     </small>
                   )}
                 </div>

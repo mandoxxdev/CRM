@@ -253,3 +253,26 @@ describe('Etapa 241 — o livre do lote no seletor de Movimentações', () => {
     expect(opcaoPorTexto(/^RES/).textContent).toBe('RES — saldo 3');
   });
 });
+
+// Etapa 264 (RN-264.05, B1623): as peças bloqueadas no lote (o servidor já as desconta do livre) aparecem no rótulo — só na Saída e na
+// Perda. Singular com 1; sem bloqueada, o rótulo de antes.
+describe('Etapa 264 — as peças bloqueadas no lote no seletor de Movimentações', () => {
+  const LOTES_BLOQ = [
+    { id: 50, codigo: 'L1', data_validade: null, status: 'ATIVO', saldo: 4, livre: 2, bloqueado_no_lote: 2, livre_do_material: 6, vencido: false, elegivel: true },
+    { id: 51, codigo: 'L2', data_validade: null, status: 'ATIVO', saldo: 4, livre: 3, bloqueado_no_lote: 1, livre_do_material: 6, vencido: false, elegivel: true },
+    { id: 52, codigo: 'L3', data_validade: null, status: 'ATIVO', saldo: 4, livre: 4, bloqueado_no_lote: 0, livre_do_material: 6, vencido: false, elegivel: true },
+  ];
+  beforeEach(() => { lotesDoBanco = LOTES_BLOQ; });
+
+  test.each(['SAIDA', 'PERDA'])('[RN-264.05] em %s, o lote com peça bloqueada diz o livre e quantas estão bloqueadas', async (tipo) => {
+    await abrirComMaterialETipo(tipo);
+    expect(opcaoPorTexto(/^L1/).textContent).toBe('L1 — saldo 4 — livre 2 (2 bloqueadas no lote)');
+    expect(opcaoPorTexto(/^L2/).textContent).toBe('L2 — saldo 4 — livre 3 (1 bloqueada no lote)');
+    expect(opcaoPorTexto(/^L3/).textContent).toBe('L3 — saldo 4');
+  });
+
+  test('[RN-264.05] na Transferência, sem o livre e sem as bloqueadas', async () => {
+    await abrirComMaterialETipo('TRANSFERENCIA');
+    expect(opcaoPorTexto(/^L1/).textContent).toBe('L1 — saldo 4');
+  });
+});

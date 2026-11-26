@@ -1220,6 +1220,10 @@ const MovimentacoesAlmoxarifado = () => {
                                     Saída e na Perda: a Transferência não confere o livre no motor. */}
                                 {TIPOS_SAIDA_LOTE.includes(form.tipo) && l.livre != null && Number(l.livre) + 1e-9 < Number(l.saldo)
                                   ? ` — livre ${l.livre}` : ''}
+                                {/* Etapa 264 (RN-264.05, B1623): as peças presas no lote (quarentena, reprovação, terceiros), que o
+                                    livre já desconta — só na Saída e na Perda, onde o motor confere. */}
+                                {TIPOS_SAIDA_LOTE.includes(form.tipo) && Number(l.bloqueado_no_lote) > 1e-6
+                                  ? ` (${l.bloqueado_no_lote} ${Number(l.bloqueado_no_lote) < 2 ? 'bloqueada' : 'bloqueadas'} no lote)` : ''}
                                 {l.data_validade ? ` — vence ${l.data_validade}` : ''}
                                 {vencidoLiberado ? ' (vencido, liberado)' : l.vencido ? ' (vencido)' : ''}
                                 {l.status !== 'ATIVO' ? ` (${l.status.toLowerCase()})` : ''}

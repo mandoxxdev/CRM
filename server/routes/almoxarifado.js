@@ -1517,7 +1517,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         material_id, tipo, quantidade, motivo, referencia, observacoes,
         justificativa: motivo || null,
         ...loteCru,
-      }, { exigeLote: true, exigeSerie: true });
+      }, { exigeLote: true, exigeSerie: true, confereLivreDoLote: true });
       res.status(201).json({
         id: result.id, material_id, tipo, quantidade,
         saldo_anterior: result.saldo_anterior, saldo_posterior: result.saldo_posterior,

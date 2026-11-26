@@ -891,7 +891,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // `lotePelasSeries` (Etapa 233, B1527): com o lote em branco, a saida confere o lote DAS SERIES (bloqueado, reprovado, vencido
       // para consumo) — a tela de Movimentacoes so lista a serie; o lote dela nao ia no corpo e o motor nao o olhava.
       const result = await stockService.registrarMovimentacao(db, req.user, req.body,
-        { exigeLote: true, exigeSerie: true, lotePelasSeries: true });
+        { exigeLote: true, exigeSerie: true, lotePelasSeries: true, confereLivreDoLote: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });
@@ -994,7 +994,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         // PREFERIDA: a que nao cobria deixava o motor drenar os outros enderecos (inclusive a padrao bloqueada) e o livro gravar "saiu de A"
         // para o que saiu de B — o crítico 1 da Etapa 58 na entrega. Com a opcao: o saldo da origem (no lote da saida) tem de cobrir, senao
         // 400 "O saldo em A (2) nao cobre a quantidade (3) — a saida tiraria de outros enderecos". Sem origem a opcao nao faz nada (automatico).
-        }, { exigeLote: true, exigeSerie: true, lotePelasSeries: true, origemEstrita: true });
+        }, { exigeLote: true, exigeSerie: true, lotePelasSeries: true, origemEstrita: true, confereLivreDoLote: true });
         res.status(201).json(resultado);
       } catch (e) { handleError(res, e); }
     });

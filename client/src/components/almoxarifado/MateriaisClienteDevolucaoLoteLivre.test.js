@@ -32,7 +32,7 @@ const item = (material_id, codigo, extra) => ({
 });
 const POSICAO = {
   cliente: { id: 1, razao_social: 'Cliente Alfa LTDA' },
-  itens: [item(51, 'RESERVADO'), item(52, 'LIVRE')],
+  itens: [item(51, 'RESERVADO'), item(52, 'LIVRE'), item(53, 'BLOQLOTE', { saldo: 8, saldo_disponivel: 6 })],
   aplicacoes: [],
 };
 const lote = (id, codigo, saldo, livre, extra) => ({
@@ -46,6 +46,8 @@ const LOTES_52 = [lote(70, 'K1', 3, 3), lote(71, 'K2', 2, null, { livre_do_mater
 const rotas = {
   '/almoxarifado/materiais/51/lotes?com_saldo=1': LOTES_51,
   '/almoxarifado/materiais/52/lotes?com_saldo=1': LOTES_52,
+  // Etapa 264: L1 4 com 2 bloqueadas no lote (o livre ja as desconta), L2 4 livre.
+  '/almoxarifado/materiais/53/lotes?com_saldo=1': [lote(80, 'M1', 4, 2, { bloqueado_no_lote: 2, livre_do_material: 6 }), lote(81, 'M2', 4, 4, { bloqueado_no_lote: 0, livre_do_material: 6 })],
 };
 
 let container; let root;
@@ -148,5 +150,19 @@ describe('Etapa 241 — o livre do lote na devolução ao cliente', () => {
     expect(container.querySelector('#dev-lote-livre-nao-cobre')).toBeNull();
     expect(container.querySelector('#dev-lote')).not.toBeNull();
     expect(botaoConfirmar().disabled).toBe(false);
+  });
+});
+
+// Etapa 264 (RN-264.05, B1623; Fase 2 achado 3): com peça bloqueada no lote, as duas frases não mandam liberar uma reserva que não existe.
+describe('Etapa 264 — as peças bloqueadas no lote na devolução ao cliente', () => {
+  test('[RN-264.05] a frase do livre cita o bloqueado no lote; acima do livre, "escolha outro lote"', async () => {
+    await abrir('BLOQLOTE');
+    expect(opcao('80').textContent).toBe('M1 — saldo 4 — livre 2');
+    expect(texto('#dev-lote-livre')).toBe('Livre é o que não está reservado nem retido no material, nem bloqueado no próprio lote '
+      + '(quarentena, reprovação ou com terceiro): de nenhum lote sai mais que o livre.');
+    await escolherLote(80);
+    await preencherTudo(3);
+    expect(texto('#dev-lote-livre-nao-cobre')).toBe('Do lote M1 estão livres só 2 (2 bloqueadas no lote): devolva até 2 ou escolha outro lote.');
+    expect(botaoConfirmar().disabled).toBe(true);
   });
 });

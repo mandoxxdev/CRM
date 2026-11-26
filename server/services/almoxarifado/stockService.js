@@ -219,6 +219,27 @@ async function projecaoDoLoteNoAjuste(db, materialId, loteId, novoTotal) {
 }
 
 /**
+ * Etapa 264 (C546, RN-264.01; B1621) — a recusa da saida manual de `q` do lote `loteId` quando passa do que pode sair dele e o lote tem
+ * peca presa (retido + em inspecao > folga), ou null. A regua e a da entrega (`situacaoDosLotes.livre`); a frase, a de `fraseLivreDoLote`
+ * sem o gesto. Lote sem peca presa -> null (a recusa de sempre do claim do lote). So le; quem chama segura a trava do material.
+ */
+async function recusaDoLivreDoLoteNaSaida(db, material, loteId, q) {
+  const rdl = require('./retidoDoLote');
+  const sit = (await rdl.situacaoDosLotes(db, material.id)).get(Number(loteId));
+  if (!sit || !(sit.retido + sit.inspecao > Q.QTD_FOLGA) || Q.cabe(q, sit.livre)) return null;
+  const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+  const un = material.unidade || 'UN';
+  const um = (x) => x > Q.QTD_FOLGA && x < 2 - Q.QTD_FOLGA;
+  const parcelas = [
+    sit.retido > Q.QTD_FOLGA && `${sit.retido} ${un} ${um(sit.retido) ? 'está bloqueada' : 'estão bloqueadas'} nele `
+      + '(quarentena, reprovação na inspeção ou com terceiro)',
+    sit.inspecao > Q.QTD_FOLGA && `${sit.inspecao} ${un} em inspeção`,
+  ].filter(Boolean);
+  return `No lote ${lote ? lote.codigo : loteId} há ${sit.saldo} ${un}, mas só ${sit.livre} ${um(sit.livre) ? 'pode' : 'podem'} sair: `
+    + `${parcelas.join('; ')}; não cobre a quantidade (${Q.qtd(q)}). Escolha outro lote ou diminua a quantidade.`;
+}
+
+/**
  * Etapa 253 (RN-253.10/.14) — a recusa do ajuste (ou do estorno) que deixaria o lote negativo ou, quando REDUZ o lote, abaixo do piso.
  * O piso so vale quando o lote desce (um lote ja abaixo do piso nao trava o ajuste que o sobe). Null = pode. `estorno` muda o texto.
  */
@@ -1866,6 +1887,16 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       if (!Q.cabe(quantidade, dispSemBloqueio) && !permiteNegativo) {
         throw Object.assign(new Error('Material bloqueado não pode ser utilizado'), { status: 400 });
       }
+    }
+    // Etapa 264 (C546, RN-264.01/.02/.04; B1621): a saida MANUAL com lote respeita as pecas presas NO LOTE — a regua da entrega
+    // (`retidoDoLote.situacaoDosLotes`: saldo − em inspecao − retido, com o limite por familia B1436). Antes a guarda de cima so olhava o
+    // bloqueado do MATERIAL: a Saida de 4 do L1 com 2 bloqueados no L1 passava e o bloqueio ficava apontando para o L2. So quem declara
+    // `confereLivreDoLote` (as rotas v1, v2 e a devolucao ao cliente; os internos tem regua propria ou baixam justamente a peca presa).
+    // Depois das guardas do material (a mensagem delas nao muda), antes de qualquer efeito, dentro da trava do material.
+    if (opcoes.confereLivreDoLote === true && loteIdFinal && !permiteNegativo && !consumindoReserva && !baixandoTerceiro
+      && !baixandoBloqueado && Number(material.controle_lote) === 1 && Number(material.controle_serie) !== 1) {
+      const recusaLote = await recusaDoLivreDoLoteNaSaida(db, material, loteIdFinal, parseFloat(quantidade));
+      if (recusaLote) throw Object.assign(new Error(recusaLote), { status: 400 });
     }
     saldoPosterior = saldoAnterior - parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo) && !localizacao_destino_id) {

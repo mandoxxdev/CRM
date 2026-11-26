@@ -633,10 +633,18 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
   // (`livreParaSaida`): sem caixa, nao limita (null); com caixa, limita a fisico - caixa, sem o teto do lote (Fase 5, achado 2).
   // Etapa 242 (RN-242.01): a conta foi para `livreDoMaterialParaSaida`, que a posicao do cliente tambem le (o mesmo numero nas duas).
   const { livreDoMaterial, permiteNegativo } = await livreDoMaterialParaSaida(db, materialId);
-  const livreDoLote = (saldoPositivo) => {
+  // Etapa 264 (RN-264.05, B1623): o livre do lote na regua da saida manual (RN-264.01, `situacaoDosLotes`: saldo − em inspecao − retido) —
+  // so onde o motor confere: controle de lote, sem serie, sem saldo negativo efetivo. `bloqueado_no_lote` e o retido (0 nos outros).
+  const mat264 = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  const sitLotes = mat264 && Number(mat264.controle_lote) === 1 && Number(mat264.controle_serie) !== 1 && !permiteNegativo
+    // eslint-disable-next-line global-require
+    ? await require('./retidoDoLote').situacaoDosLotes(db, materialId) : new Map();
+  const livreDoLote = (saldoPositivo, loteId) => {
     if (livreDoMaterial == null) return null;
     if (permiteNegativo) return livreDoMaterial; // o motor nao confere a linha do lote com negativo
-    return Q.qtd(Math.max(0, Math.min(Number(saldoPositivo) || 0, livreDoMaterial)));
+    const sit = sitLotes.get(Number(loteId));
+    const presa = sit && sit.retido + sit.inspecao > Q.QTD_FOLGA;
+    return Q.qtd(Math.max(0, Math.min(Number(saldoPositivo) || 0, livreDoMaterial, presa ? sit.livre : Infinity)));
   };
 
   const hoje = diaLocal.hojeLocalISO(); // Etapa 163 (RN-163.06): a mesma regua do isVencido, lida uma vez para a lista toda
@@ -649,7 +657,8 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
         vencido,
         vencimento_liberado: liberado,
         elegivel: l.status === 'ATIVO' && (!vencido || liberado),
-        livre: livreDoLote(saldoPositivo),
+        livre: livreDoLote(saldoPositivo, l.id),
+        bloqueado_no_lote: sitLotes.has(Number(l.id)) ? sitLotes.get(Number(l.id)).retido : 0,
         livre_do_material: livreDoMaterial,
         // Etapa 33 (C42): a tela montava esta URL a partir de `certificado_arquivo` CRU, e URL
         // montada no client nao tem assinatura — o link do certificado daria 404. Quem mina a URL
