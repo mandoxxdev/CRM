@@ -1,0 +1,7 @@
+*Concluído — saída e perda com lote bloqueado e estorno da entrada do lote*
+_26/11/2026_
+
+1. Saída e perda com lote respeitam as peças bloqueadas do lote — estimado 1h15 · realizado 1h
+2. Estorno da entrada de um lote com peças bloqueadas — estimado 1h · realizado 1h
+
+*Total: estimado 2h15 · realizado 2h*
