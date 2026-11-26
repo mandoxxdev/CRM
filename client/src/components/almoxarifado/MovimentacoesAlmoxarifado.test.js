@@ -263,7 +263,9 @@ describe('MovimentacoesAlmoxarifado — TRANSFERENCIA no formulário e DEVOLUCAO
     expect(container.querySelector('#mov-lote').tagName).toBe('SELECT');
   });
 
-  test('Transferência NÃO mostra seletor de série (decisão 9: fora do escopo)', async () => {
+  // Etapa 265 (C76, B1624): a decisão 9 da Etapa 7 ("a transferência não pede série") foi REVISTA — este cenário dizia o contrário e
+  // passou a provar a regra nova (o resto em MovimentacoesTransferenciaSeries.test.js).
+  test('Transferência de material com série MOSTRA as séries a transferir (decisão 9 revista na Etapa 265)', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
       if (url === '/almoxarifado/materiais') {
@@ -277,7 +279,7 @@ describe('MovimentacoesAlmoxarifado — TRANSFERENCIA no formulário e DEVOLUCAO
     await esperarEfeitos();
 
     const rotulos = [...container.querySelectorAll('.almox-modal label')].map((l) => l.textContent);
-    expect(rotulos.some((t) => t.startsWith('Séries a '))).toBe(false);
+    expect(rotulos).toContain('Séries a transferir *');
   });
 
   // Decisão 8: transferência não checa status nem vencimento — TODOS os lotes servem.

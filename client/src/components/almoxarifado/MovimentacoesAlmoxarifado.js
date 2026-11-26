@@ -83,13 +83,16 @@ const TIPOS = [
 // SAIDA mostra: localização de origem e seleção de lote (nunca texto livre — mesma razão da
 // SAIDA: motor não inventa lote numa saída).
 //
-// Etapa 7: esta constante governa AGORA SÓ A SÉRIE (o seletor de séries a entregar/baixar e a
-// validação de cardinalidade). Antes ela dirigia quatro coisas ao mesmo tempo — lote, origem,
-// série e o rótulo "Disponível" —, e TRANSFERENCIA precisa de três delas mas NÃO da série
-// (decisão 9 do design: o claim de série só existe para entrada e saída no motor; a transferência
-// não tem caminho para mover o vínculo da série, e `serieObrigatoria` no stockService nem dispara
-// para ela). Enfiar TRANSFERENCIA aqui faria a tela exigir séries que o servidor não lê nesse
-// tipo. Por isso os três conjuntos separados abaixo.
+// Etapa 7: esta constante governa AGORA SÓ A SÉRIE DA SAÍDA/PERDA (o seletor de séries a entregar/baixar
+// e a validação de cardinalidade). Antes ela dirigia quatro coisas ao mesmo tempo — lote, origem,
+// série e o rótulo "Disponível" —, por isso os conjuntos separados abaixo.
+// ~~TRANSFERENCIA precisa de três delas mas NÃO da série (decisão 9 do design: o claim de série só
+// existe para entrada e saída no motor; a transferência não tem caminho para mover o vínculo da série).~~
+// Estava assim até a Etapa 265: a decisão 9 foi REVISTA (C76, B1624) — o servidor passou a exigir, na
+// transferência de material com série, `serie_ids` (uma por unidade, do lote da transferência, EM_ESTOQUE
+// ou BLOQUEADA), e cada série passa a constar na prateleira de destino. A transferência NÃO entra nesta
+// constante (ela lê também as BLOQUEADAS e filtra o lote de outro jeito): tem o próprio bloco
+// (`#mov-series-transferencia`, RN-265.06).
 // Etapa 9, Task 5: SUCATA saiu dos quatro conjuntos abaixo — eles só governam o FORMULÁRIO
 // (form.tipo nunca mais vale 'SUCATA', já que TIPOS_FORM não oferece mais a opção), e deixar o
 // valor morto aqui sugeriria um caminho de tela que não existe mais. O livro (badges, tipoInfo)
@@ -131,6 +134,12 @@ const loteDisponivelParaTipo = (lote, tipo) => {
 const serieImpedidaParaTipo = (serie, tipo) => {
   if (!serie || serie.lote_esta_impedido !== true || !TIPOS_SAIDA_LOTE.includes(tipo)) return false;
   return TIPOS_DESCARTE_LOTE.includes(tipo) ? serie.lote_status !== 'ATIVO' : true;
+};
+// Etapa 265 (RN-265.06, C76): a série que a lista mostra para o lote escolhido. Saída/Perda/Ajuste: lote em branco mostra todas (o
+// servidor deriva o lote). Transferência: o servidor exige a série do lote da transferência — lote em branco, só as séries SEM lote.
+const serieVisivelNoLote = (serie, tipo, loteId) => {
+  if (tipo === 'TRANSFERENCIA') return loteId ? Number(serie.lote_id) === Number(loteId) : serie.lote_id == null;
+  return !loteId || Number(serie.lote_id) === Number(loteId);
 };
 // B1530: a frase embaixo da lista, por tipo (literais congeladas no plano).
 const FRASE_SERIES_IMPEDIDAS_SAIDA = {
@@ -349,12 +358,31 @@ const MovimentacoesAlmoxarifado = () => {
     setSeriesBloqueadasAjuste([]);
     setSeriesAjusteCarregadas(false);
     setSeriesAjusteErro(false);
-    const buscaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'AJUSTE';
+    const buscaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'AJUSTE' || form.tipo === 'TRANSFERENCIA';
     if (!form.material_id || !buscaSaida || !selectedMaterial?.controle_serie) {
       setSeriesDisponiveis([]);
       return;
     }
     let cancelado = false;
+    // Etapa 265 (RN-265.06, C76): a transferência move as presentes — EM_ESTOQUE e BLOQUEADA, numa lista só. A releitura
+    // pedida pela recusa que falha mantém a lista (a regra da 246 para a Saída).
+    if (form.tipo === 'TRANSFERENCIA') {
+      Promise.all([
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`),
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=BLOQUEADA`),
+      ])
+        .then(([emEstoque, bloqueadas]) => {
+          if (cancelado) return;
+          setSeriesDisponiveis([...(emEstoque.data || []), ...(bloqueadas.data || [])]);
+        })
+        .catch(() => {
+          if (cancelado) return;
+          if (releituraAposRecusa.current === `${form.material_id}|${form.tipo}`) return;
+          setSeriesDisponiveis([]);
+        })
+        .finally(() => { if (!cancelado) releituraAposRecusa.current = null; });
+      return () => { cancelado = true; };
+    }
     if (form.tipo === 'AJUSTE') {
       setSeriesDisponiveis([]);
       Promise.all([
@@ -421,10 +449,11 @@ const MovimentacoesAlmoxarifado = () => {
   // sem essa guarda o efeito rodaria de novo a cada render mesmo sem mudança real.
   // Etapa 233 (B1528): também tira a série que o tipo não pode baixar (apagada na lista) — por isso `form.tipo` nas dependências: a
   // vencida marcada na Perda sai ao trocar para Saída. No ajuste `serieImpedidaParaTipo` é sempre falso (a marcada continua).
+  // Etapa 265 (RN-265.06): na transferência o lote em branco mostra só as séries SEM lote (`serieVisivelNoLote`).
   useEffect(() => {
     const visiveisIds = new Set(
       seriesDisponiveis
-        .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
+        .filter((s) => serieVisivelNoLote(s, form.tipo, form.lote_id))
         .filter((s) => !serieImpedidaParaTipo(s, form.tipo))
         .map((s) => s.id)
     );
@@ -578,7 +607,7 @@ const MovimentacoesAlmoxarifado = () => {
         toast.error('A quantidade de números de série informados precisa ser igual à quantidade');
         return;
       }
-      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.serie_ids.length !== Number(form.quantidade)) {
+      if ((TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'TRANSFERENCIA') && form.serie_ids.length !== Number(form.quantidade)) {
         toast.error('Selecione exatamente a quantidade de séries informada');
         return;
       }
@@ -640,6 +669,8 @@ const MovimentacoesAlmoxarifado = () => {
       // escolhida na saída.
       if (selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA') payload.series = linhasSerie(form.series);
       if (selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo)) payload.serie_ids = form.serie_ids;
+      // Etapa 265 (RN-265.06, C76): a transferência de material com série leva as séries que mudam de prateleira.
+      if (selectedMaterial?.controle_serie === 1 && form.tipo === 'TRANSFERENCIA') payload.serie_ids = form.serie_ids.map(Number);
       // Etapa 62 (RN-03): ajuste com série manda SÓ o lado da diferença — subir leva os números
       // novos, descer leva os ids das EM_ESTOQUE a baixar, zero não leva nada (o motor recusa).
       if (ajusteSerieInfo?.diferenca > 0) payload.series = linhasSerie(form.series);
@@ -676,7 +707,9 @@ const MovimentacoesAlmoxarifado = () => {
       // Etapa 246 (C538, RN-246.03): a Saída/Perda com série também relê a lista — a recusa pode ser o lote bloqueado no meio ou a
       // série levada por outra pessoa; a série de lote impedido volta apagada e o efeito da 233 a desmarca, a levada some. Só a lista
       // de séries: reler os lotes refaria a sugestão FEFO e trocaria o lote escolhido.
-      const saidaComSerie = selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo);
+      // Etapa 265 (RN-265.06): a transferência com série também (a série levada ou bloqueada por outra pessoa no meio).
+      const saidaComSerie = selectedMaterial?.controle_serie === 1
+        && (TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'TRANSFERENCIA');
       if (saidaComSerie) releituraAposRecusa.current = `${form.material_id}|${form.tipo}`;
       if (ajusteSerieInfo || saidaComSerie) setRecargaSeriesAjuste((n) => n + 1);
     } finally {
@@ -1326,6 +1359,48 @@ const MovimentacoesAlmoxarifado = () => {
                       <small id="mov-series-saida-contador">{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
+                  {/* Etapa 265 (RN-265.06, C76, B1624): a transferência de material com série escolhe as séries que mudam de prateleira —
+                      as presentes (em estoque e bloqueadas) do lote da transferência (lote em branco: só as sem lote), as da origem
+                      escolhida primeiro. */}
+                  {selectedMaterial?.controle_serie === 1 && form.tipo === 'TRANSFERENCIA' && (() => {
+                    const doLote = seriesDisponiveis.filter((s) => serieVisivelNoLote(s, form.tipo, form.lote_id));
+                    const naOrigem = (s) => !!form.localizacao_origem_id
+                      && Number(s.localizacao_id) === Number(form.localizacao_origem_id);
+                    const ordenadas = [...doLote.filter(naOrigem), ...doLote.filter((s) => !naOrigem(s))];
+                    const loteEscondido = !form.lote_id && seriesDisponiveis.some((s) => s.lote_id != null);
+                    return (
+                      <div className="almox-field almox-form-full">
+                        <label>Séries a transferir *</label>
+                        <div id="mov-series-transferencia" style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                          {ordenadas.map((s) => (
+                            <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+                              <input type="checkbox" data-serie-id={s.id} checked={form.serie_ids.includes(s.id)}
+                                onChange={(e) => {
+                                  const marcado = e.target.checked;
+                                  setForm((f) => ({
+                                    ...f,
+                                    serie_ids: marcado ? [...f.serie_ids, s.id] : f.serie_ids.filter((id) => id !== s.id),
+                                  }));
+                                }} />
+                              {s.numero}
+                              {` · ${s.localizacao_codigo || 'sem prateleira'}`}
+                              {s.status === 'BLOQUEADA' ? ' · bloqueada' : ''}
+                            </label>
+                          ))}
+                          {ordenadas.length === 0 && <small>Nenhuma série presente para transferir.</small>}
+                        </div>
+                        {loteEscondido && (
+                          <small id="mov-series-transferencia-lote" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                            Há séries em lote: escolha o lote para vê-las.
+                          </small>
+                        )}
+                        <small id="mov-series-transferencia-dica" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                          Marque as séries que estão mudando de prateleira: cada uma passa a constar no destino.
+                        </small>
+                        <small id="mov-series-transferencia-contador">{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
+                      </div>
+                    );
+                  })()}
                   {/* Etapa 62 (RN-03): ajuste de material com série. Sem endereço (o motor recusa por
                       endereço — e o AJUSTE já não mostra destino); o novo total contra as presentes
                       (EM_ESTOQUE + BLOQUEADA) diz se pede números novos, séries a baixar, ou nada. */}
