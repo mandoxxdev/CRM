@@ -472,3 +472,29 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
 function opcoes(rows) {
   return rows.filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
 }
+
+// Etapa 266 (RN-266.16, B1629): a sugestão veio sem prateleira porque as requisições à frente na Fila levaram o saldo — a janela diz isso
+// (antes ficava calada: a pré-seleção só falava com `pegar_em`). Plano: docs/superpowers/plans/2026-11-26-almoxarifado-etapa266-*.md
+describe('Etapa 266: o saldo indicado às requisições à frente', () => {
+  const INDICADO = 'Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta '
+    + "depois delas ou escolha o endereço no 'Sai de'.";
+  test('[RN-266.16] SALDO_INDICADO_A_OUTRAS -> a frase abaixo do "Sai de", nada escolhido; confirmar vai no automático', async () => {
+    requisicao = aprovada();
+    sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, null, { separavel: 5, pegar_em_aviso: 'SALDO_INDICADO_A_OUTRAS' })));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(1).value).toBe('');
+    expect(fraseDe(1).textContent).toBe(INDICADO);
+    await clicar('Confirmar Separação');
+    expect(putsSeparacao()[0][1].itens_separados[0]).toEqual({ item_id: 1, quantidade_separada: 5 });
+  });
+  test('[RN-266.16] outro aviso sem prateleira (SEM_ENDERECO_SUGERIVEL) -> a janela continua calada', async () => {
+    requisicao = aprovada();
+    sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, null, { separavel: 5, pegar_em_aviso: 'SEM_ENDERECO_SUGERIVEL' })));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(1).value).toBe('');
+    expect(fraseDe(1)).toBeNull();
+    expect(container.querySelector('#separacao-origem-1')).not.toBeNull(); // metade positiva: a janela está aberta
+  });
+});

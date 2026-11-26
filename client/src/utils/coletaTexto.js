@@ -19,6 +19,9 @@ export const fmtData = (s) => {
 
 export const FIM_JA_VEM_ESCOLHIDO = " — já vem escolhido no 'Sai de' ao separar";
 export const FIM_ESCOLHA_ESTE = " — escolha este endereço no 'Sai de' ao separar";
+// Etapa 266 (RN-266.12): a mesma frase na Fila, na janela de separação e na lista impressa.
+export const FRASE_SALDO_INDICADO_A_OUTRAS = 'Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. '
+  + "Separe esta depois delas ou escolha o endereço no 'Sai de'.";
 
 // Etapa 188 (RN-188.08 com as emendas C1, I1, M2, M5): a dica de onde pegar. Só exibe o que o servidor calculou — a tela não escolhe
 // endereço nem reordena (B821: os itens ficam na ordem do pedido; a ordem de percurso é `ordem_coleta`).
@@ -71,6 +74,9 @@ export const textoAvisoPegarEm = (it) => {
     case 'SEM_ENDERECO_SUGERIVEL':
       return 'Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial '
         + 'ou em lote bloqueado/vencido).';
+    // Etapa 266 (RN-266.12, B1629): a dica divide as prateleiras entre as requisições, na ordem da Fila — as da frente levaram o saldo.
+    case 'SALDO_INDICADO_A_OUTRAS':
+      return FRASE_SALDO_INDICADO_A_OUTRAS;
     default:
       return null;
   }

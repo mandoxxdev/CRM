@@ -148,6 +148,16 @@ describe('[RN-189.10] o conteúdo por requisição', () => {
         + 'bloqueado/vencido).',
     }]);
   });
+  test('[RN-266.16] SALDO_INDICADO_A_OUTRAS: o item sai em "Sem endereço sugerido" com a frase da tela; a requisição tem o que imprimir', () => {
+    const indicado = item({ item_id: 16, material_codigo: 'MAT-I', material_nome: 'Bucha', a_separar: 3, pegar_em_aviso: 'SALDO_INDICADO_A_OUTRAS' });
+    const rq = req({ itens: [indicado], ordem_coleta: [] });
+    expect(podeImprimirListaColeta(rq)).toBe(true);
+    expect(montarListaColetaPDF({ requisicoes: [rq] }).requisicoes[0].semEndereco).toEqual([{
+      texto: 'MAT-I — Bucha · a separar 3 PC',
+      aviso: 'Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois '
+        + "delas ou escolha o endereço no 'Sai de'.",
+    }]);
+  });
   test('"Fila carregada em …" com a hora local', () => {
     const d = montarListaColetaPDF({ requisicoes: [R], carregadaEm: new Date(2026, 9, 23, 14, 5) });
     expect(d.linhaCarregada).toBe('Fila carregada em 23/10/2026 14:05 — a sugestão vale para esse momento; recarregue a fila antes de '

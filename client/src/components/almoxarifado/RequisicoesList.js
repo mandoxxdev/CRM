@@ -27,7 +27,7 @@ import {
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
 // Etapa 189: a frase do alerta de retenção da 188 e a quantidade, as mesmas da fila (B1268: utils/coletaTexto.js, sem importar a tela).
-import { textoAlertaPegarEm, fmtQtd } from '../../utils/coletaTexto';
+import { textoAlertaPegarEm, fmtQtd, FRASE_SALDO_INDICADO_A_OUTRAS } from '../../utils/coletaTexto';
 import { situacaoDoLote } from '../../utils/situacaoDoLote';
 import './Almoxarifado.css';
 
@@ -816,7 +816,8 @@ const RequisicoesList = () => {
         novas[item.id] = valor;
         atuais[item.id] = valor;
       }
-      decididos[item.id] = { valor, pegar_em: p || null, alerta: (sug && sug.pegar_em_alerta) || null };
+      // Etapa 266 (RN-266.16): o aviso da sugestao (a janela diz quando o saldo foi indicado as requisicoes da frente).
+      decididos[item.id] = { valor, pegar_em: p || null, alerta: (sug && sug.pegar_em_alerta) || null, aviso: (sug && sug.pegar_em_aviso) || null };
     });
     if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...prev, ...novas }));
     if (Object.keys(decididos).length) setPreSelecao((prev) => ({ ...prev, ...decididos }));
@@ -2727,6 +2728,14 @@ const RequisicoesList = () => {
                     {/* Etapa 189 (RN-189.09 com I1, M3 e I3): o que a pré-seleção fez com a sugestão da fila. */}
                     {(() => {
                       const ps = preSelecao[item.id];
+                      // Etapa 266 (RN-266.16, B1629): sem prateleira porque as requisicoes da frente na Fila levaram o saldo — a janela diz isso.
+                      if (ps && !ps.pegar_em && ps.aviso === 'SALDO_INDICADO_A_OUTRAS' && !temPlanejada(item)) {
+                        return (
+                          <div id={`separacao-sugestao-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
+                            {FRASE_SALDO_INDICADO_A_OUTRAS}
+                          </div>
+                        );
+                      }
                       if (!ps || !ps.pegar_em || temPlanejada(item)) return null;
                       let frase;
                       if (ps.valor) {

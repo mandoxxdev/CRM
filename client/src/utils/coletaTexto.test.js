@@ -115,6 +115,11 @@ describe('[C462] as frases do aviso (a 188 com a regra da 196 e o lote da 197)',
       + 'endereço, em endereço bloqueado ou inativo, em área especial ou em lote bloqueado/vencido).');
     expect(textoAvisoPegarEm(item())).toBeNull();
   });
+  test('[RN-266.12] SALDO_INDICADO_A_OUTRAS: a frase literal, sem sufixo de lote', () => {
+    expect(textoAvisoPegarEm(item({ pegar_em_aviso: 'SALDO_INDICADO_A_OUTRAS', controle_lote: true, lote_separacao_codigo: 'L9' })))
+      .toBe('Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois '
+        + "delas ou escolha o endereço no 'Sai de'.");
+  });
   test('[I-a] RETENCAO_NO_MATERIAL só com pegar_em', () => {
     expect(textoAlertaPegarEm(item({ pegar_em: pegar(), pegar_em_alerta: 'RETENCAO_NO_MATERIAL' }))).toBe('Parte do saldo deste material '
       + 'está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual endereço — confira antes de pegar.');
