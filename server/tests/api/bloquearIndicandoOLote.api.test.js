@@ -307,13 +307,15 @@ process.on('exit', (code) => {
     await recusaSemGravar(comSerie, bloquear(comSerie, 1, 'x'), 'lote_id deve ser um número inteiro positivo');
   });
 
-  // Fase 2 achado 2 (DECLARADO, aviso C): a Saida avulsa com lote nao confere o bloqueado do lote (como a quarentena da 209). Este teste
-  // prende o comportamento de hoje — quando a saida passar a respeitar o lote, ele tem de mudar junto com o aviso.
-  await test('[RN-249.06 saida, declarado] bloquear 2 em L1 (L1 4, L2 4): a Saida avulsa de 4 em L1 passa (o livro continua dizendo L1 2)', async () => {
+  // Fase 2 achado 2 da 249 (era DECLARADO, aviso C546): a Saida avulsa com lote nao conferia o bloqueado do lote. Desde a Etapa 264 (RN-264.01)
+  // ela confere — este teste prendia o comportamento antigo e passou a provar a recusa (a cobertura inteira: saidaEEstornoComLoteBloqueado).
+  await test('[RN-249.06 saida, Etapa 264] bloquear 2 em L1 (L1 4, L2 4): a Saida avulsa de 4 em L1 e recusada; o L1 fica 4 e o livro L1 2', async () => {
     const { m, L1 } = await cenario();
     await ok(bloquear(m, 2, L1));
-    await ok(adm.post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'SAIDA', quantidade: 4, motivo: 'e249', justificativa: 'saida 249',
-      localizacao_origem_id: P01.id, lote_id: L1 }), 201);
+    const r = await adm.post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'SAIDA', quantidade: 4, motivo: 'e249', justificativa: 'saida 249',
+      localizacao_origem_id: P01.id, lote_id: L1 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/^No lote L1 há 4 UN, mas só 2 podem sair/.test(r.body.error), r.body.error);
     assert.deepStrictEqual((await porLote(m)).lotes, [{ lote_id: L1, codigo: 'L1', quantidade: 2 }]);
   });
 
@@ -365,13 +367,15 @@ process.on('exit', (code) => {
     assert.deepStrictEqual((await paraBloquear(m)).lotes.map((l) => l.livre), [0, 0]);
   });
 
-  // Fase 5 achado 2 (sonda p3a, DECLARADO — aviso C): o estorno da ENTRADA do lote nao confere o bloqueado do lote (como a quarentena
-  // da 209, C504). Este teste prende o comportamento de hoje; quando o estorno passar a conferir, ele muda junto com o aviso.
-  await test('[RN-249.05 entrada, declarado] bloquear 4 em L1 (L1 4, L2 4) e estornar a entrada de L1: passa; o livro continua dizendo L1 4', async () => {
+  // Fase 5 achado 2 da 249 (era DECLARADO, aviso C547): o estorno da ENTRADA do lote nao conferia o bloqueado do lote. Desde a Etapa 264
+  // (RN-264.06) ele confere — este teste prendia o comportamento antigo e passou a provar a recusa.
+  await test('[RN-249.05 entrada, Etapa 264] bloquear 4 em L1 (L1 4, L2 4) e estornar a entrada de L1: recusado; o livro continua dizendo L1 4', async () => {
     const { m, L1 } = await cenario();
     await ok(bloquear(m, 4, L1));
     const ent = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ENTRADA' AND lote_id = ?", [m.id, L1]);
-    await ok(adm.post(`${API}/movimentacoes/${ent.id}/cancelar`, { motivo: 'estorno 249 entrada' }));
+    const r = await adm.post(`${API}/movimentacoes/${ent.id}/cancelar`, { motivo: 'estorno 249 entrada' });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/^Não é possível estornar: o lote L1 tem 4 UN bloqueadas/.test(r.body.error), r.body.error);
     assert.deepStrictEqual((await porLote(m)).lotes, [{ lote_id: L1, codigo: 'L1', quantidade: 4 }]);
     assert.strictEqual(await bloqueada(m), 4);
   });

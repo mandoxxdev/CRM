@@ -3101,6 +3101,59 @@ async function recusaDaDevolucaoEmQuarentena(db, mov, dev, unidade) {
     + `${alcance} ${unidade || 'un'} e depois estorne esta entrada.`;
 }
 
+/**
+ * Etapa 264 (C547, RN-264.06/.08; B1622, revista pela Fase 2 achado 2) — a recusa do estorno da ENTRADA com lote quando, sem ela, o lote
+ * ficaria com menos pecas que as PRESAS nele, ou null. As parcelas cruas que apontam para o lote (a regua do Bloquear com lote, 249): o
+ * bloqueado do livro (BLOQUEIO/DESBLOQUEIO com o lote) na regua "que mais bloqueia" — a lição do claim provisorio da 262: o BLOQUEIO conta
+ * enquanto o estorno dele nao concluiu, o DESBLOQUEIO so com `cancelado = 0` — limitado ao total (`quantidade_bloqueada`); a reprovacao da
+ * inspecao do lote (o documento, sem carimbo) e o que esta com terceiro (a remessa nao baixa o lote). A inspecao em curso fica fora (o
+ * estorno da nota a desfaz por conta propria). O saldo do lote e a soma das linhas dele. So o bloqueio -> a literal do plano; com outra
+ * parcela -> a literal geral, com o caminho de cada uma.
+ */
+async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
+  const rdl = require('./retidoDoLote');
+  const r = await dbGet(db, `SELECT COALESCE(mq.quantidade_bloqueada, 0) AS total,
+      (SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END), 0)`)}
+        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
+          AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
+        AS no_lote,
+      ${rdl.reprovadoDoLoteSql('lq')} AS repr, ${rdl.terceirosDoLoteSql('mq', 'lq')} AS terc,
+      (SELECT COALESCE(SUM(s.quantidade), 0) FROM estoque_saldo_almoxarifado s WHERE s.material_id = mq.id AND s.lote_id = lq.id) AS saldo,
+      lq.codigo AS codigo
+    FROM materiais_almoxarifado mq JOIN lotes_almoxarifado lq ON lq.id = ? WHERE mq.id = ?`, [mov.lote_id, mov.material_id]);
+  if (!r) return null;
+  const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
+  const bloq = Q.qtd(Math.max(0, Math.min(Number(r.total) || 0, Number(r.no_lote) || 0)));
+  const repr = n(r.repr);
+  const terc = n(r.terc);
+  const presa = Q.qtd(bloq + repr + terc);
+  if (!(presa > Q.QTD_FOLGA)) return null;
+  const fica = Q.qtd(Math.max(0, (Number(r.saldo) || 0) - Number(mov.quantidade)));
+  if (Q.cabe(presa, fica)) return null;
+  const un = unidade || 'UN';
+  const L = r.codigo || mov.lote_id;
+  const um = (x) => x > Q.QTD_FOLGA && x < 2 - Q.QTD_FOLGA;
+  const tem = (x) => x > Q.QTD_FOLGA;
+  if (!tem(repr) && !tem(terc)) {
+    return `Não é possível estornar: o lote ${L} tem ${bloq} ${un} ${um(bloq) ? 'bloqueada' : 'bloqueadas'} e, sem esta entrada, ficaria com `
+      + `${fica} ${un} — o bloqueio ficaria apontando para peças que não estão no lote. Desbloqueie ${Q.qtd(bloq - fica)} ${un} do lote ${L} `
+      + `(Desbloquear Material, escolhendo o lote ${L}) e depois estorne esta entrada.`;
+  }
+  const partes = [
+    tem(bloq) && `${bloq} ${um(bloq) ? 'bloqueada' : 'bloqueadas'}`,
+    tem(repr) && `${repr} ${um(repr) ? 'reprovada' : 'reprovadas'} na inspeção`,
+    tem(terc) && `${terc} com terceiro`,
+  ].filter(Boolean);
+  const caminhos = [
+    tem(bloq) && `o bloqueio no Desbloquear Material, escolhendo o lote ${L}`,
+    tem(repr) && 'a reprovação pela não conformidade',
+    tem(terc) && 'a peça com terceiro pelo retorno da remessa',
+  ].filter(Boolean);
+  return `Não é possível estornar: o lote ${L} tem ${presa} ${un} ${um(presa) ? 'presa' : 'presas'} nele (${partes.join('; ')}) e, sem esta `
+    + `entrada, ficaria com ${fica} ${un} — o lote ficaria apontando para peças que não estão nele. Libere ${Q.qtd(presa - fica)} ${un} do `
+    + `lote ${L} (${caminhos.join('; ')}) e depois estorne esta entrada.`;
+}
+
 /** E2 da Etapa 116 (400, contrato congelado no plano). */
 function mensagemEstornoSemSerie(codigo, n) {
   return `Não é possível estornar: esta saída baixou ${n} série(s) do material ${codigo} e o controle por número de série `
@@ -3709,6 +3762,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
                 'estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro'),
               { status: 400 });
             }
+          }
+          // Etapa 264 (C547, RN-264.06/.08; B1622): a entrada de um lote com pecas bloqueadas NELE — sem ela, o lote nao pode ficar com
+          // menos que o bloqueado do lote (o livro). Antes passava: L1 4 todo bloqueado, estorno -> L1 0 e o bloqueio apontando para o L1
+          // (o total caia sobre o L2). Depois das guardas da devolucao (RN-262.01/.02 primeiro, com as mensagens delas) e da releitura das
+          // series; antes do debito (o claim volta pelo catch). Sob a trava: o Bloquear com lote pega a mesma.
+          if (mov.lote_id && !deHoje) {
+            const recusaLote = await recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, material.unidade);
+            if (recusaLote) throw Object.assign(new Error(recusaLote), { status: 400 });
           }
           const row = await dbGet(db, `UPDATE materiais_almoxarifado
             SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
