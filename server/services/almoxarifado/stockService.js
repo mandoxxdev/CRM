@@ -1041,6 +1041,21 @@ async function seriesDaTransferencia(db, materialId, serieIds, origemId, loteId,
     }
     conferidas.push({ id: Number(s.id), numero: s.numero, anterior: s.localizacao_id == null ? null : Number(s.localizacao_id) });
   }
+  // Fase 5 (revisor 1, reproduzido): a serie aceita SEM estar registrada na origem (sem prateleira, ou registro velho de outra) so pode
+  // ser uma peca da origem que nao tem serie registrada — no maximo `saldo da origem (no lote) − series presentes registradas na origem`.
+  // Sem isto, PA com saldo 1 e S1 (bate) transferia S2 sem prateleira: PA ficava saldo 0 com S1 registrada (a divergencia ia para a origem).
+  const foraDaOrigem = conferidas.filter((c) => c.anterior !== Number(origemId));
+  if (foraDaOrigem.length) {
+    const linha = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) AS q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [materialId, origemId, loteDaTransf]);
+    const registradas = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ? AND status IN ${SERIE_PRESENTE_SQL}`, [materialId, origemId, loteDaTransf]);
+    const semSerie = Math.max(0, Math.floor(Number(linha.q) - Number(registradas.n) + EPS));
+    if (foraDaOrigem.length > semSerie) {
+      throw Object.assign(new Error(`A série ${foraDaOrigem[semSerie].numero} não consta na prateleira ${codOrigem} — todas as peças de `
+        + `${codOrigem} já têm série registrada; marque as séries que estão em ${codOrigem}`), { status: 400 });
+    }
+  }
   return conferidas;
 }
 
@@ -1048,7 +1063,7 @@ async function seriesDaTransferencia(db, materialId, serieIds, origemId, loteId,
  * Etapa 265 (C545, RN-265.10/.11; B1626) — as fatias por PRATELEIRA DA SERIE da saida avulsa sem origem (a porta v2, `saidaPelaSerie`).
  * Devolve `[{ localizacao_id, codigo, saldo_id, n }]` (prateleiras na ordem em que aparecem nas series) ou null = o claim de sempre (a
  * padrao, depois a maior): alguma serie fora do estoque, de outro material, de outro lote que o da saida, ou sem prateleira; prateleira que
- * nao existe ou que a saida nao pode usar (`motivoRecusaEndereco`, a mesma regra da origem: bloqueada, area especial); a linha (prateleira,
+ * * nao existe ou que a saida nao pode usar (`motivoRecusaEndereco`, a mesma regra da origem); a linha (prateleira,
  * lote da saida) nao cobre as series dali; ou o registro dali nao bate com o saldo (B1584, `registroDaPrateleiraBate`). Molde:
  * `requisitionService.fatiasDaSerieSemLote` (Etapa 252), sem a guarda da separacao (B1626 c). So le; dentro da trava do material.
  */
@@ -1077,6 +1092,21 @@ async function fatiasDaSerieNaSaida(db, material, serieIds, loteId) {
     if (linhas.length !== 1 || Number(linhas[0].quantidade) + EPS < n) return null;
     // eslint-disable-next-line no-await-in-loop
     if (!(await registroDaPrateleiraBate(db, material.id, loc, loteDaSaida))) return null;
+    // Fase 5 (revisor 2, achado 1, reproduzido): a parte separada de uma requisicao COM ORIGEM nesta prateleira (e lote) e de quem
+    // separou — a premissa "a peca escolhida esta ali" falha quando a unica peca da prateleira foi para a caixa (B 1 separada de B; a
+    // Saida de S3 levava B a 0 e a entrega recusava "a origem da separacao (B) nao serve mais"). O saldo menos a parte guardada tem de
+    // cobrir as series dali; senao, como antes. A regua da parte (`parteOrigemSql`) e da caixa viva (`STATUS_COM_CAIXA`) da Etapa 196/198.
+    // eslint-disable-next-line global-require
+    const { parteOrigemSql } = require('./requisitionService'); // lazy: requisitionService requer este modulo
+    // eslint-disable-next-line global-require
+    const { STATUS_COM_CAIXA } = require('./requisitionStateMachine');
+    // eslint-disable-next-line no-await-in-loop
+    const guardada = await dbGet(db, `SELECT COALESCE(SUM(${parteOrigemSql('ir')}), 0) AS q
+      FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+      WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
+        AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${STATUS_COM_CAIXA.map(() => '?').join(',')})`,
+    [material.id, loc, loteDaSaida, ...STATUS_COM_CAIXA]);
+    if (Number(linhas[0].quantidade) - Number(guardada.q) + EPS < n) return null;
     fatias.push({ localizacao_id: loc, codigo: lc.codigo, saldo_id: Number(linhas[0].id), n });
   }
   return fatias;
@@ -2676,7 +2706,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // baixava: A com peca que nao existe, B com serie sem saldo. O rastreador e o de sempre: o catch amplo devolve as linhas e o fisico,
       // e o registro da 257 grava de onde saiu (o estorno devolve a cada prateleira).
       const fatiasDaSerie = (opcoes.saidaPelaSerie === true && serieObrigatoria && !localizacao_origem_id && !permiteNegativo
-        && !baixandoTerceiro && !baixandoBloqueado)
+        && !baixandoTerceiro && !baixandoBloqueado && ['SAIDA', 'PERDA'].includes(tipo))
         ? await fatiasDaSerieNaSaida(db, material, serieIdsSaida, loteIdFinal) : null;
       if (fatiasDaSerie) {
         saldoLinhasSaidaParaReverter = [];

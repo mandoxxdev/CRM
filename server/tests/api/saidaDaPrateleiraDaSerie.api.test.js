@@ -108,6 +108,45 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: ['SS-A=3'], series: ['SS-A=3'] });
   });
 
+  await test('[RN-265.10 Fase 5] duas series na mesma prateleira (S5, S6 em B): uma baixa de 2 em B; o estorno devolve 2', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['1', '2', '3']); await entrar(m, B.id, ['5', '6', '7']);
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = 4 WHERE material_id = ? AND localizacao_id = ?', [m.id, A.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 7 WHERE id = ?', [m.id]);
+    await entrar(m, P.id, ['9']); // fisico 8; A 4 (3 series, bate), B 3, P 1
+    await sair(m, ['5', '6']);
+    assert.deepStrictEqual((await retrato(m)).linhas, ['SS-A=4', 'SS-B=1', 'SS-P=1']);
+    assert.strictEqual(Number((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [m.id])).q), 6);
+    assert.strictEqual((await estornar((await ultima(m, 'SAIDA')).id)).status, 200);
+    assert.deepStrictEqual((await retrato(m)).linhas, ['SS-A=4', 'SS-B=3', 'SS-P=1']);
+  });
+
+  await test('[RN-265.11 f Fase 5] a peca de B esta separada (origem B) para uma requisicao -> como hoje, e a entrega dela sai', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['1', '2']); await entrar(m, B.id, ['3']);
+    const R = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES (?, 1, 'Sol', 'APROVADO')`, [`REQ-E265S-${++seq}`])).lastID;
+    const it = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+      quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,1,0,0,0)`, [R, m.id])).lastID;
+    const sep = await request(app).put(`${API}/requisicoes/${R}/separacao`).send({ itens_separados: [{ item_id: it, quantidade_separada: 1,
+      localizacao_origem_id: B.id }] });
+    assert.strictEqual(sep.status, 200, JSON.stringify(sep.body));
+    await sair(m, ['3']);
+    assert.deepStrictEqual((await retrato(m)).linhas, ['SS-A=1', 'SS-B=1']);
+    const ent = await request(app).put(`${API}/requisicoes/${R}/entregar`).send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 1,
+      serie_ids: [await sid(m, '1')] }] });
+    assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
+  });
+
+  await test('[RN-265.11 g Fase 5] Ajuste negativo pela v2 (fora do formulario) -> como hoje', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['1', '2']); await entrar(m, B.id, ['3']);
+    const r = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m.id, tipo: 'AJUSTE_NEGATIVO', quantidade: 1,
+      motivo: 'x', justificativa: 'x', serie_ids: [await sid(m, '3')] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.deepStrictEqual((await retrato(m)).linhas, ['SS-A=1', 'SS-B=1']);
+  });
+
   await test('[RN-265.12] o estorno da Saida devolve a cada prateleira o que saiu dela', async () => {
     const m = await material();
     await entrar(m, A.id, ['1', '2']); await entrar(m, B.id, ['3']);
@@ -184,6 +223,9 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), antes);
     const fis = await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     assert.strictEqual(Number(fis.q), 3);
+    // controle (Fase 5, achado 3): sem o gatilho, a mesma saida baixa B — o cenario passa pelo caminho novo
+    await sair(m, ['3']);
+    assert.deepStrictEqual((await retrato(m)).linhas, ['SS-A=2']);
   });
 
   await test('[RN-265.13] integracao: transfere S1 de A para B, sai S1 sem origem (baixa B), estorna a saida e a transferencia', async () => {

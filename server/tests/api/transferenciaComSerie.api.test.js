@@ -202,6 +202,26 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: ['TT-A=1', 'TT-B=1', 'TT-C=1'], series: ['1@TT-B', '2@TT-A', '3@TT-C'] });
   });
 
+  await test('[RN-265.03 Fase 5] a origem ja tem serie para cada peca: serie sem prateleira ou de registro velho -> recusa literal', async () => {
+    const m = await material();
+    await entrar(m, A.id, ['1']); // A: saldo 1, S1 (bate)
+    await entrar(m, C.id, ['2', '3']);
+    await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = NULL WHERE id = ?', [await sid(m, '2')]); // S2 sem prateleira
+    // C: saldo 2 com S3 registrada so -> registro de C nao "sobra"; deixa C com mais series do que saldo para o caso do registro velho
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = 1 WHERE material_id = ? AND localizacao_id = ?', [m.id, C.id]);
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, 1)`, [m.id, P.id]);
+    await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = ? WHERE id = ?', [C.id, await sid(m, '2')]); // C: saldo 1, S2+S3 (nao bate)
+    const antes = await retrato(m);
+    await recusa(await transferir(m, A.id, B.id, [await sid(m, '2')]), 400,
+      `A série ${m.nome}-2 não consta na prateleira TT-A — todas as peças de TT-A já têm série registrada; marque as séries que estão em TT-A`, m, antes);
+    await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = NULL WHERE id = ?', [await sid(m, '2')]);
+    const antes2 = await retrato(m);
+    await recusa(await transferir(m, A.id, B.id, [await sid(m, '2')]), 400,
+      `A série ${m.nome}-2 não consta na prateleira TT-A — todas as peças de TT-A já têm série registrada; marque as séries que estão em TT-A`, m, antes2);
+    // controle: a serie da origem passa
+    assert.strictEqual((await transferir(m, A.id, B.id, [await sid(m, '1')])).status, 201);
+  });
+
   await test('[RN-265.04] o livro falha -> linhas e series voltam (nada fica trocado)', async () => {
     const m = await material();
     await entrar(m, A.id, ['1', '2']);
