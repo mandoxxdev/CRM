@@ -160,3 +160,25 @@ Os itens **12 e 13** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativ
    pura — teste de unidade + a rota da Fila.
 - **O que já está pronto e não reabre:** a transferência com série e a Saída pela prateleira da série (esta etapa).
 - Candidatos fora da estimativa: conferir as séries na origem escolhida (D (265) 1); o estorno do Desbloquear com lote (C504).
+
+## Verificação (medida sobre o código final, `30070e78`; os documentos não mudam código)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **673/675 arquivos OK** — os 2 que falham são os já conhecidos de
+  proposta, de outra máquina (`propostaBilingueTemplate`, `propostaPdfExigeLogin`); o mais lento: `propostaClausulasGrava`, 85,5 s.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, sobre `2ddb325d` — a tela não mudou depois): **256/256 suítes, 3363/3363 testes**. `CI=true npx react-scripts
+  build`: **Compiled successfully.**
+- `transferenciaComSerie` 18/18; `saidaDaPrateleiraDaSerie` 15/15; `MovimentacoesTransferenciaSeries` 12/12. Sabotagens S1-S14 e S20-S30
+  (harness `scratchpad/sab-265.sh`: âncora contada = 1, cópia, md5 sabotado ≠ original e restaurado = original) e seis da tela: cada uma
+  derruba o cenário certo, menos S27 (linha cobre), redundante com o registro que bate — ficou como defesa.
+- Primeiro boot: a tabela nova é `CREATE TABLE IF NOT EXISTS` no `initSchema` (o harness cria o banco do zero em cada arquivo). Nenhum clique
+  no navegador (F (265)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2 — o estorno à origem, a frase do lote, o filtro da tela; Fase 5 — a origem com série para cada
+  peça, a separação na prateleira da série, o Ajuste negativo, os cenários).
+- Achados: Fase 2 — 2 importantes consertados, 1 importante fora do diff declarado, 3 menores; Fase 5 — 2 importantes e 1 menor consertados,
+  1 lacuna de teste consertada, 1 ruído (comentário).
+- Paralelismo: 1 galho (a tela) em paralelo com a T2, sem retrabalho; os revisores rodaram enquanto os documentos eram escritos.
+- Defeito que escapou: (preencher na etapa seguinte). Da 264: nenhum apontado.
