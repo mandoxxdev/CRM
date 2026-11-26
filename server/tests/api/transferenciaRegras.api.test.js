@@ -161,7 +161,9 @@ async function cenario(db, { controlado = true, comLote = true } = {}) {
   // DECISAO 9: serie na transferencia esta fora do escopo, e isso vale DE GRACA porque
   // `serieObrigatoria` (stockService) tambem exige tiposEntrada||tiposSaida. Este teste registra
   // o fato: quem estender o if do exigeLote NAO pode copiar a mesma mudanca para o exigeSerie.
-  await test('transferencia de material com controle de serie nao exige series (decisao 9)', async () => {
+  // Etapa 265 (C76, B1624): a decisao 9 da Etapa 7 ("a transferencia nao exige serie") foi REVISTA — o saldo mudava de prateleira e as
+  // series ficavam na antiga. Este cenario dizia o contrario e passou a provar a regra nova (o resto em transferenciaComSerie.api.test.js).
+  await test('transferencia de material com controle de serie EXIGE as series (decisao 9 revista na Etapa 265)', async () => {
     seq += 1;
     const mat = (await dbRun(db,
       `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, controle_serie)
@@ -173,8 +175,8 @@ async function cenario(db, { controlado = true, comLote = true } = {}) {
 
     const res = await request(app).post('/api/almoxarifado/transferencias')
       .send({ material_id: mat, quantidade: 2, localizacao_origem_id: origem, localizacao_destino_id: destino });
-    assert.strictEqual(res.status, 201,
-      `a transferencia passou a exigir serie — a decisao 9 diz o contrario: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0');
   });
 
   await close();

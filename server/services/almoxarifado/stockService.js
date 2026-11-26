@@ -975,6 +975,75 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
   if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
 }
 
+// Etapa 265: "presente" e a regua de `seriesService` (STATUS_PRESENTES) — a serie bloqueada tambem ocupa a prateleira.
+const SERIE_PRESENTE_SQL = "('EM_ESTOQUE','BLOQUEADA')";
+
+/**
+ * Etapa 265 (B1584 levada ao motor; RN-265.03, RN-265.10) — o endereco gravado nas series de uma prateleira so vale quando BATE com o
+ * saldo dali: series PRESENTES do lote na prateleira <= saldo da linha (prateleira, lote). A transferencia de antes desta etapa movia o
+ * saldo e deixava a serie (C76): com mais series presentes do que saldo, o registro nao diz onde a peca esta. So le; dentro da trava.
+ */
+async function registroDaPrateleiraBate(db, materialId, locId, loteId) {
+  const linha = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) AS q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [materialId, locId, loteId == null ? null : loteId]);
+  const n = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+    WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ? AND status IN ${SERIE_PRESENTE_SQL}`,
+  [materialId, locId, loteId == null ? null : loteId]);
+  return Number(n.n) <= Number(linha.q) + EPS;
+}
+
+/**
+ * Etapa 265 (C76, RN-265.02/.03; B1624) — as series de uma TRANSFERENCIA, conferidas antes de qualquer efeito (dentro da trava do
+ * material: o bloquear/desbloquear serie e a regularizacao pegam a mesma). Na ordem da lista, a recusa e a da primeira que falha.
+ * Presente = em estoque ou bloqueada (mover a peca bloqueada para a quarentena e legitimo — decisao 8 da Etapa 7, a do lote). O lote da
+ * serie tem de ser o da transferencia (sem lote so na sem lote). Endereco: na origem ou sem prateleira -> aceita; em outra prateleira
+ * cujo registro bate com o saldo -> recusa; que nao bate (registro velho) -> aceita. Devolve [{ id, numero, anterior }].
+ */
+async function seriesDaTransferencia(db, materialId, serieIds, origemId, loteId, { controleLote = false } = {}) {
+  if (new Set(serieIds).size !== serieIds.length) {
+    throw Object.assign(new Error('serie_ids repetidos na lista informada'), { status: 400 });
+  }
+  const origem = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [origemId]);
+  const codOrigem = origem ? origem.codigo : String(origemId);
+  const loteDaTransf = loteId == null ? null : Number(loteId);
+  const conferidas = [];
+  for (const id of serieIds) {
+    // eslint-disable-next-line no-await-in-loop
+    const s = await dbGet(db, `SELECT s.id, s.numero, s.material_id, s.status, s.lote_id, s.localizacao_id, lt.codigo AS lote_codigo,
+        lc.codigo AS loc_codigo
+      FROM series_almoxarifado s LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
+      LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id WHERE s.id = ?`, [id]);
+    if (!s) throw Object.assign(new Error(`serie id ${id} nao existe`), { status: 400 });
+    if (Number(s.material_id) !== Number(materialId)) {
+      throw Object.assign(new Error(`serie ${s.numero} nao pertence a este material`), { status: 400 });
+    }
+    if (!['EM_ESTOQUE', 'BLOQUEADA'].includes(s.status)) {
+      throw Object.assign(new Error(`A série ${s.numero} não está no estoque (situação ${s.status}) — só a peça presente muda de prateleira`),
+        { status: 400 });
+    }
+    const loteDaSerie = s.lote_id == null ? null : Number(s.lote_id);
+    if (loteDaSerie !== loteDaTransf) {
+      if (loteDaSerie == null) {
+        // Fase 2 (menor): no material com controle de lote o lote em branco e recusado pelo `exigeLote` — a frase nao manda deixar em branco
+        throw Object.assign(new Error(controleLote
+          ? `A série ${s.numero} não tem lote, e o material exige lote na transferência — ela não muda de prateleira por aqui`
+          : `A série ${s.numero} não tem lote — deixe o lote em branco na transferência`), { status: 400 });
+      }
+      const cod = s.lote_codigo || `#${loteDaSerie}`;
+      throw Object.assign(new Error(`A série ${s.numero} é do lote ${cod} — escolha o lote ${cod} na transferência`), { status: 400 });
+    }
+    // eslint-disable-next-line no-await-in-loop
+    if (s.localizacao_id != null && Number(s.localizacao_id) !== Number(origemId)
+        && await registroDaPrateleiraBate(db, materialId, s.localizacao_id, loteDaSerie)) {
+      const cod = s.loc_codigo || `#${s.localizacao_id}`;
+      throw Object.assign(new Error(`A série ${s.numero} está na prateleira ${cod}, não na origem ${codOrigem} — marque as séries que `
+        + `estão em ${codOrigem}`), { status: 400 });
+    }
+    conferidas.push({ id: Number(s.id), numero: s.numero, anterior: s.localizacao_id == null ? null : Number(s.localizacao_id) });
+  }
+  return conferidas;
+}
+
 /**
  * Etapa 239 (C543, RN-239.01) — a saida COM LOTE e SEM ORIGEM (material sem negativo) confere o bloqueio no endereco de onde o lote
  * comeca a sair, nao na localizacao padrao: a primeira linha do lote com saldo na ordem do claim com as bloqueadas por ultimo. Se ela esta
@@ -1620,10 +1689,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // controle_lote continuava transferindo sem dizer de qual lote saiu. Medido: com a rota ja
   // declarando exigeLote e esta condicao ainda sem TRANSFERENCIA, o erro que voltava era
   // "Saldo insuficiente na localizacao de origem" (a linha lote_id NULL nao existe), um 400 que
-  // enganava — parecia guarda funcionando e nao era. NAO copiar esta mudanca para o
-  // `serieObrigatoria` mais abaixo: serie na transferencia esta declarada FORA de escopo
-  // (decisao 9 do design da Etapa 7) justamente porque o claim de serie so existe para entrada
-  // e saida, e a transferencia nao tem caminho no motor para mover o vinculo da serie.
+  // enganava — parecia guarda funcionando e nao era. ~~NAO copiar esta mudanca para o `serieObrigatoria` mais abaixo: serie na
+  // transferencia esta FORA de escopo (decisao 9 da Etapa 7)~~ — revisto na Etapa 265 (C76, B1624): a transferencia passou a ter o
+  // caminho no motor para mover a serie (`seriesDaTransferencia`), e o `serieObrigatoria` vale para ela tambem.
   if (opcoes.exigeLote && material.controle_lote && !loteIdFinal
       && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo) || tipo === 'TRANSFERENCIA')) {
     throw Object.assign(
@@ -1642,8 +1710,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     ? params.series.map((s) => String(s).trim()).filter(Boolean) : [];
   const serieIdsSaida = Array.isArray(params.serie_ids)
     ? params.serie_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+  // Etapa 265 (C76, RN-265.01): a TRANSFERENCIA tambem — uma serie por unidade, em `serie_ids` (a contagem abaixo usa `serieIdsSaida`).
   const serieObrigatoria = !!(opcoes.exigeSerie && material.controle_serie
-    && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo)));
+    && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo) || tipo === 'TRANSFERENCIA'));
   if (serieObrigatoria) {
     if (!Number.isInteger(Number(quantidade))) {
       const e = new Error('material com controle de serie exige quantidade inteira');
@@ -1822,6 +1891,13 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // Guardamos o DELTA aplicado (com sinal), e não o valor anterior, porque o pool é agregado por
   // material: restaurar o valor lido no topo apagaria o que outra operação fez no intervalo.
   let retencaoAplicada = null;
+  // Etapa 265 (C76, RN-265.04): o que a TRANSFERENCIA aplicou, para o catch amplo devolver. `transferenciaLinhas`: o delta de volta em
+  // cada linha de saldo (as UPDATEs da transferencia rodam ANTES do try — ate esta etapa o catch nao as conhecia: livro falhando deixava o
+  // saldo trocado de prateleira sem movimento). `seriesTransferidas`: as series conferidas (antes de qualquer efeito); `seriesMovidas`:
+  // as que ja mudaram de prateleira (o catch as devolve; depois do livro, o registro da B1625).
+  let transferenciaLinhas = [];
+  let seriesTransferidas = [];
+  let seriesMovidas = [];
 
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
@@ -1930,6 +2006,11 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     if (!localizacao_origem_id || !localizacao_destino_id) {
       throw Object.assign(new Error('Transferência requer origem e destino'), { status: 400 });
     }
+    // Etapa 265 (C76, RN-265.02/.03): as series, antes de qualquer efeito (a contagem ja foi conferida pelo `serieObrigatoria`)
+    if (serieObrigatoria) {
+      seriesTransferidas = await seriesDaTransferencia(db, material_id, serieIdsSaida, localizacao_origem_id, loteIdFinal,
+        { controleLote: Number(material.controle_lote) === 1 });
+    }
     // loteIdFinal (Etapa 6, Task 3): se a transferência citar um lote (`lote`/`lote_id`), move a
     // linha DAQUELE lote entre localizações — sem citar lote, loteIdFinal é null e o comportamento
     // é o de sempre (saldo sem lote).
@@ -1946,9 +2027,11 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     if (!claimOrigem) {
       throw Object.assign(new Error('Saldo insuficiente na localização de origem'), { status: 400 });
     }
+    transferenciaLinhas = [{ id: saldoOrigem.id, quantidade: parseFloat(quantidade) }]; // Etapa 265: o catch amplo devolve
     const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
     await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [quantidade, saldoDestino.id]);
+    transferenciaLinhas.push({ id: saldoDestino.id, quantidade: -parseFloat(quantidade) });
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'BLOQUEIO') {
     if (opcoes.bloqueioAvulso === true) {
@@ -2656,6 +2739,22 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     }
   }
 
+  // Etapa 265 (C76, RN-265.04): depois de o saldo mudar de prateleira, cada serie conferida passa a constar no destino. Guarda no WHERE
+  // com o que foi conferido (material, presente, lote, prateleira de antes): dentro da trava nada a muda no meio, mas, se mudar, 409 e o
+  // catch amplo devolve as series ja movidas e as linhas.
+  if (tipo === 'TRANSFERENCIA') {
+    for (const s of seriesTransferidas) {
+      // eslint-disable-next-line no-await-in-loop
+      const movida = await dbGet(db, `UPDATE series_almoxarifado SET localizacao_id = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND material_id = ? AND status IN ${SERIE_PRESENTE_SQL} AND lote_id IS ? AND localizacao_id IS ?
+        RETURNING id`, [localizacao_destino_id, s.id, material_id, loteIdFinal || null, s.anterior]);
+      if (!movida) {
+        throw Object.assign(new Error(`A série ${s.numero} mudou durante a transferência — recarregue e tente de novo`), { status: 409 });
+      }
+      seriesMovidas.push(s);
+    }
+  }
+
   result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
@@ -2712,6 +2811,19 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     }
     if (seriesClaim.length > 0) {
       await seriesService.desfazerSaida(db, seriesClaim);
+    }
+    // Etapa 265 (C76, RN-265.04): a TRANSFERENCIA — as series de volta a prateleira de antes, depois as linhas (consumindo os
+    // rastreadores: o que ja voltou sai da lista).
+    while (seriesMovidas.length) {
+      const s = seriesMovidas[seriesMovidas.length - 1];
+      await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [s.anterior, s.id]);
+      seriesMovidas.pop();
+    }
+    while (transferenciaLinhas.length) {
+      const l = transferenciaLinhas[transferenciaLinhas.length - 1];
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+      transferenciaLinhas.pop();
     }
     for (const l of saldoLinhasSaidaParaReverter) {
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
@@ -2796,6 +2908,17 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       baixadasParaRegistrar.flatMap((d) => [result.lastID, d.id, Q.qtd(d.quantidade)]));
     } catch (e) {
       console.warn(`[almoxarifado] linhas baixadas da movimentacao ${result.lastID} (${tipo}) nao registradas (o estorno devolve numa linha so): ${e.message}`);
+    }
+  }
+  // Etapa 265 (C76, B1625): de onde e para onde cada serie da TRANSFERENCIA foi — o estorno a devolve. Depois do livro (precisa do id),
+  // dentro da secao do material, NAO-FATAL como o registro de cima: sem ele, o estorno faz o de antes (so o saldo volta).
+  if (seriesMovidas.length > 0) {
+    try {
+      await dbRun(db, `INSERT INTO transferencia_series_almoxarifado (movimentacao_id, serie_id, localizacao_anterior_id, localizacao_nova_id)
+        VALUES ${seriesMovidas.map(() => '(?, ?, ?, ?)').join(', ')}`,
+      seriesMovidas.flatMap((s) => [result.lastID, s.id, s.anterior, Number(localizacao_destino_id)]));
+    } catch (e) {
+      console.warn(`[almoxarifado] series da transferencia ${result.lastID} nao registradas (o estorno nao as devolve): ${e.message}`);
     }
   }
   // Vínculo série → movimentação de SAÍDA (Etapa 6b, Task 4): mesmo raciocínio e mesma janela que
@@ -3621,6 +3744,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // 4), AJUSTE com localizacao 7 -> 5 (e de novo: 3), transferencia com as linhas trocadas (preso). Medido.
   let compensarBloqueada = null; // delta a somar em quantidade_bloqueada (BLOQUEIO: +q; DESBLOQUEIO: -q)
   let compensarLinhasPorId = null; // [{ id, quantidade }] — TRANSFERENCIA: o delta de volta em cada linha, pelo id
+  let compensarSeriesTransferencia = null; // Etapa 265 (RN-265.05): [{ serie_id, localizacao_nova_id }] — as series que ja voltaram
   // Etapa 117 (C235, RN-06): o desfazer dos efeitos de serie e saldo numa funcao so, chamada de dentro da secao do ramo de
   // saida (sob a trava) ou do catch de fora (os outros ramos). Idempotente: zera os rastreadores ao terminar — o catch de
   // fora, chamado depois do de dentro, nao desfaz em dobro. A ordem e a do fix round 1 da 6b (comentario no catch).
@@ -3663,6 +3787,16 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     if (compensarSyncLocalizacaoPadrao) {
       await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
       compensarSyncLocalizacaoPadrao = null;
+    }
+    if (compensarSeriesTransferencia) {
+      // Etapa 265 (RN-265.05): as series que ja voltaram para a origem vao de novo para o destino (antes das linhas, o inverso da ordem)
+      while (compensarSeriesTransferencia.length) {
+        const s = compensarSeriesTransferencia[compensarSeriesTransferencia.length - 1];
+        await dbRun(db, 'UPDATE series_almoxarifado SET localizacao_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [s.localizacao_nova_id, s.serie_id]);
+        compensarSeriesTransferencia.pop();
+      }
+      compensarSeriesTransferencia = null;
     }
     if (compensarLinhasPorId) {
       while (compensarLinhasPorId.length) {
@@ -4169,11 +4303,42 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           if (!Q.cabe(mov.quantidade, destino.quantidade)) {
             throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
           }
+          // Etapa 265 (C76, RN-265.05; B1625): as series que esta transferencia mudou de prateleira tem de estar presentes no destino —
+          // senao a peca ja saiu ou foi para outro lugar e devolver o saldo deixaria a origem com peca que nao esta la. Lido sob a trava
+          // (o bloquear/desbloquear serie e a saida pegam a mesma), antes de qualquer efeito. Sem registro (transferencia antiga, ou o
+          // registro que falhou): como antes, so o saldo volta.
+          const seriesDaTransf = await dbAll(db, `SELECT ts.serie_id, ts.localizacao_anterior_id, ts.localizacao_nova_id, s.numero, s.status,
+              s.localizacao_id, lc.codigo AS nova_codigo
+            FROM transferencia_series_almoxarifado ts LEFT JOIN series_almoxarifado s ON s.id = ts.serie_id
+            LEFT JOIN localizacoes_almoxarifado lc ON lc.id = ts.localizacao_nova_id
+            WHERE ts.movimentacao_id = ? ORDER BY ts.id`, [mov.id]);
+          for (const x of seriesDaTransf) {
+            if (!x.numero || !['EM_ESTOQUE', 'BLOQUEADA'].includes(x.status) || Number(x.localizacao_id) !== Number(x.localizacao_nova_id)
+                || x.localizacao_id == null) {
+              throw Object.assign(new Error(`Não é possível estornar: a série ${x.numero || `#${x.serie_id}`} não está mais na prateleira `
+                + `${x.nova_codigo || `#${x.localizacao_nova_id}`} (saiu ou mudou de lugar depois da transferência)`), { status: 400 });
+            }
+          }
           await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, destino.id]);
           // Etapa 118 (C238, RN-05): cada linha entra no desfazer logo depois de mudar.
           compensarLinhasPorId = [{ id: destino.id, quantidade: mov.quantidade }];
           await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, origem.id]);
           compensarLinhasPorId.push({ id: origem.id, quantidade: -mov.quantidade });
+          // Etapa 265 (RN-265.05): cada serie volta a ORIGEM da transferencia, junto com o saldo (guarda no WHERE com o conferido acima).
+          // Fase 2 (achado B): nao a `localizacao_anterior_id` — a transferencia aceita a serie sem prateleira ou com registro velho (B1624)
+          // e afirma que ela estava na origem; devolve-la ao registro velho repunha a divergencia com o saldo de volta na origem. A coluna
+          // fica como historico.
+          compensarSeriesTransferencia = [];
+          for (const x of seriesDaTransf) {
+            // eslint-disable-next-line no-await-in-loop
+            const voltou = await dbGet(db, `UPDATE series_almoxarifado SET localizacao_id = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND localizacao_id = ? AND status IN ${SERIE_PRESENTE_SQL} RETURNING id`,
+            [mov.localizacao_origem_id, x.serie_id, x.localizacao_nova_id]);
+            if (!voltou) {
+              throw Object.assign(new Error(`A série ${x.numero} mudou durante o estorno — recarregue e tente de novo`), { status: 409 });
+            }
+            compensarSeriesTransferencia.push(x);
+          }
         } else if (mov.tipo === 'BLOQUEIO') {
           // Guarda condicional em vez de MAX(0,...) — mesma correção do ramo DESBLOQUEIO de
           // registrarMovimentacao (achado do review final). Com a saturação, estornar um BLOQUEIO

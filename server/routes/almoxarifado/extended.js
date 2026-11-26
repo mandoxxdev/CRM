@@ -932,8 +932,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // cliente. A transferencia TEM onde informar o lote (o formulario de Movimentacoes mostra
       // o seletor de lote quando o tipo e TRANSFERENCIA), logo a exigencia vale aqui — e precisa
       // valer TAMBEM nesta rota, senao ela vira um bypass da guarda da rota v2.
+      // Etapa 265 (C76, RN-265.01): `exigeSerie` tambem — a transferencia de material com serie pede uma serie por unidade e muda a
+      // prateleira de cada uma (sem isto esta rota seria o bypass da guarda da v2, a mesma razao do `exigeLote`).
       const result = await stockService.registrarMovimentacao(db, req.user,
-        { ...req.body, tipo: 'TRANSFERENCIA' }, { exigeLote: true });
+        { ...req.body, tipo: 'TRANSFERENCIA' }, { exigeLote: true, exigeSerie: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

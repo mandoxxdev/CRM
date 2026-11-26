@@ -191,9 +191,10 @@ process.on('exit', (code) => {
   await test('[RN-252.21 d] depois de transferir 2 de B para A, B tem 4 series e linha 2 -> o endereco da serie nao vale: como hoje', async () => {
     const m = await material();
     await entrar(m, A.id, ['A1', 'A2', 'A3']); await entrar(m, B.id, ['B1', 'B2']);
-    const t = await request(app).post(`${API}/transferencias`).send({ material_id: m.id, quantidade: 2, localizacao_origem_id: B.id,
-      localizacao_destino_id: A.id, motivo: 't252' });
-    assert.ok(t.status === 200 || t.status === 201, JSON.stringify(t.body));
+    // Etapa 265 (C76): a transferencia passou a mover as series (e a pedir quais) — o registro velho que este cenario precisa e o de uma
+    // transferencia de ANTES da 265 (o saldo vai de B para A e as series ficam em B), feito direto nas linhas.
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - 2 WHERE material_id = ? AND localizacao_id = ? AND lote_id IS NULL', [m.id, B.id]);
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + 2 WHERE material_id = ? AND localizacao_id = ? AND lote_id IS NULL', [m.id, A.id]);
     await entrar(m, B.id, ['B3', 'B4']);
     assert.deepStrictEqual([await retrato(m), await seriesPorEndereco(m)],
       [{ linhas: ['TS-A=5', 'TS-B=2'], fisico: 7 }, ['TS-A=3', 'TS-B=4']], 'premissa: a serie ficou em B');

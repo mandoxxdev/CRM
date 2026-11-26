@@ -1617,6 +1617,20 @@ async function initSchemaUmaExecucao(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_ajuste_linhas_drenadas_mov
     ON ajuste_linhas_drenadas_almoxarifado (movimentacao_id)`);
 
+  // Etapa 265 (C76, B1625): as series que uma TRANSFERENCIA mudou de prateleira — de onde e para onde. O estorno da transferencia le
+  // esta tabela e devolve cada serie a prateleira de onde veio (recusa se ela nao esta mais no destino). Gravada depois do livro e
+  // nao-fatal (como a de cima): sem linha aqui, o estorno faz o de antes (so o saldo volta). Tabela nova, sem ALTER.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS transferencia_series_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    movimentacao_id INTEGER NOT NULL,
+    serie_id INTEGER NOT NULL,
+    localizacao_anterior_id INTEGER,
+    localizacao_nova_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_transferencia_series_mov
+    ON transferencia_series_almoxarifado (movimentacao_id)`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',

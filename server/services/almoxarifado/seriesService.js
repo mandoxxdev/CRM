@@ -39,7 +39,7 @@ async function listarSeriesDoMaterial(db, materialId, { status } = {}) {
   // recusaria pelo lote das series). Sem lote: falsos e status null.
   const hoje = diaLocal.hojeLocalISO();
   const rows = await dbAll(db, `
-    SELECT s.*, lt.codigo AS lote_codigo, loc.descricao AS localizacao_descricao,
+    SELECT s.*, lt.codigo AS lote_codigo, loc.descricao AS localizacao_descricao, loc.codigo AS localizacao_codigo,
            lt.status AS lote_status, lt.data_validade AS lote_validade,
            CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteImpedidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_esta_impedido,
            CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteVencidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_vencido_sem_liberacao,
