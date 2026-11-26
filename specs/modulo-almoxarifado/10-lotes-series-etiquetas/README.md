@@ -1,5 +1,10 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 265 (2026-11-26, `c2db75d4`, `7a7c8a71`, `2ddb325d`, Fase 5 `30070e78`): o endereço da série passa a acompanhar a peça — a
+> Transferência pede as séries e muda a prateleira de cada uma (o estorno as devolve), e a Saída de peça com série sem origem sai da prateleira
+> da série quando o registro dela bate com o saldo (C76, C545; B1624–B1626).** Ver "Etapa 265" no fim e a feature 11. A seção "As cinco flags" e
+> a pendência da 6b que diziam que o `localizacao_id` da série é só informativo valiam até a 265: ele passou a ser lido pela Saída sem origem
+> (e já era pela entrega, Etapa 252).
 > **+ Etapa 264 (2026-11-26, `a5d374b9`, `347d24e6`): a Saída, a Perda e as outras portas que escolhem o lote respeitam a peça presa nele, o
 > seletor a desconta, e o estorno da entrada do lote não deixa o lote com menos que o preso (C546, C547; B1621–B1623).** Ver a seção "Etapa 264",
 > no fim. Continua 🟢.
@@ -1651,3 +1656,13 @@ C546 e C547 resolvidos). Itens 8 e 9 da estimativa de 23/11.
 
 Testes: `saidaEEstornoComLoteBloqueado.api.test.js` (27); `bloquearIndicandoOLote.api.test.js` (19, dois reescritos); Jest `LoteSeletor` (+3),
 `MateriaisClienteDevolucaoLoteLivre` (+1). Continua 🟢.
+
+## Etapa 265 (2026-11-26) — a série acompanha a peça entre prateleiras (C76, C545)
+
+- [x] Transferência de material com série: uma série por unidade; cada série passa a constar no destino; o estorno a devolve à origem —
+  `c2db75d4` (Fase 5: as séries de fora da origem só até as peças da origem sem série registrada — `30070e78`). Detalhe na feature 11.
+- [x] RN-265.10/.11 — Saída e Perda pela v2, sem origem, sem saldo negativo: uma baixa por prateleira da série quando todas têm prateleira
+  usável, a linha (menos a parte separada com origem ali) cobre e o registro bate com o saldo (presentes, bloqueadas inclusive) —
+  `7a7c8a71`, Fase 5 `30070e78`. Senão, como antes.
+- [x] RN-265.12 — o estorno da Saída devolve a cada prateleira (registro da 257) — provado em `saidaDaPrateleiraDaSerie.api.test.js`.
+- [ ] Conferir as séries na origem escolhida (Saída, entrega, devolução ao cliente) — fora, **D (265)** 1.

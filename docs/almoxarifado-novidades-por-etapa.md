@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-26):** **Etapa 264 fechada** (**a Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o
+> **Onde o desenvolvimento está (2026-11-26):** **Etapa 265 fechada** (**a Transferência de peça com número de série pede as séries e muda a
+> prateleira de cada uma, e a Saída de peça com série sem origem sai da prateleira da série** — itens 10 e 11 da estimativa de 23/11 (**C545** resolvido
+> para a Saída sem origem; a transferência da **C76**); decisões **B1624** a **B1626**; limitação **D (265)**; verificação **F (265)**; sem consulta
+> antes do deploy). **Próxima:** os itens 12 e 13 da estimativa de 23/11.
+> Antes: **Etapa 264 fechada** (**a Saída e a Perda com lote respeitam as peças bloqueadas do lote, e o
 > estorno da entrada também** — itens 8 e 9 da estimativa de 23/11 (**C546** e **C547** resolvidos); decisões **B1621** a **B1623**; limitação
 > **D (264)**; verificação **F (264)**; sem consulta antes do deploy). **Próxima:** os itens 10 e 11 da estimativa de 23/11.
 > Antes: **Etapa 263 fechada** (**a foto do fornecedor na ficha e Aplicação, Especificações Técnicas e
@@ -4902,7 +4906,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15679,6 +15683,39 @@ cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
 sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
 
+**B1626 (NOVA, da Etapa 265; decisão do agente) — a Saída de peça com série sem origem sai da prateleira da série, só pela tela de
+Movimentações e só quando o registro da série serve.** **Escolhido:** na Saída e na Perda de Movimentações (e na mesma porta pela integração),
+sem origem escolhida e em material que não permite saldo negativo, a baixa sai da prateleira em que cada série consta, uma baixa por prateleira
+— quando todas as séries têm prateleira, a prateleira pode ser usada na saída (não bloqueada, aceita o material), o saldo dela cobre as séries
+dali e o registro dela **bate** com o saldo (séries presentes, a bloqueada inclusive, no máximo o saldo — a régua da **B1584**). Senão, como
+antes (a padrão, depois a de mais saldo). **Descartado:** (a) valer para a entrega — a **B1583** escolheu sair pela série só quando outro item
+separou na prateleira de sempre; mudar toda entrega de peça com série sem medir é regressão provável; (b) recusar quando a prateleira da série
+não serve — a saída de hoje continua possível e a recusa travaria o material com registro antigo; (c) ignorar a separação de outra requisição
+na prateleira da série (a primeira versão: "a peça escolhida está ali de verdade") — a revisão final mostrou que, quando a única peça da
+prateleira está separada, a Saída a levava e a entrega da requisição era recusada; a parte separada com origem ali é descontada (não cobrindo,
+como antes). Só **Saída** e **Perda** (o Ajuste negativo pela integração fica como antes — revisão final). A entrega conta só as séries **em estoque** no registro (Etapa 252); esta régua conta também as bloqueadas (a bloqueada ocupa a
+prateleira) — as duas podem discordar numa prateleira com série bloqueada (**D (265)** 4). **Reversível** (é uma opção da porta). `7a7c8a71`.
+
+**B1625 (NOVA, da Etapa 265; decisão do agente; revista pela revisão do plano) — cada transferência guarda as séries que moveu, e o estorno as
+devolve à origem.** **Escolhido:** o movimento registra de onde e para onde cada série foi; o **Estornar** confere que cada série ainda está
+presente no destino (senão recusa) e devolve saldo e séries à **origem da transferência**. O registro é gravado depois do movimento e, se
+falhar, o movimento vale e o estorno faz o de antes (só o saldo) — a mesma regra dos registros das Etapas 256/257. **Descartado:** (a) devolver
+cada série ao endereço que ela tinha antes (a primeira versão do plano) — a transferência aceita a série sem prateleira ou com registro velho
+e afirma que ela estava na origem; devolvê-la ao registro velho repunha a divergência com o saldo de volta na origem (revisão do plano, achado
+B); (b) guardar a origem na própria série (não aguenta duas transferências seguidas). **Reversível.** `c2db75d4`.
+
+**B1624 (NOVA, da Etapa 265; decisão do agente; revê a decisão 9 da Etapa 7) — a transferência de material com série pede as séries.**
+**Escolhido:** uma série por unidade (pela tela e pela integração), cada uma do material, **presente** — em estoque **ou bloqueada** (levar a
+peça bloqueada para a quarentena é legítimo, como o lote bloqueado da decisão 8) — e do lote da transferência (série sem lote só com o lote em
+branco; a tela mostra, com o lote em branco, só as séries sem lote). **Endereço:** a série registrada na origem ou sem prateleira é aceita; a
+registrada em **outra** prateleira é recusada quando o registro de lá bate com o saldo, e aceita quando não bate (o registro é velho — as
+transferências de antes desta etapa deixavam a série para trás) — e, de fora da origem, só até o número de peças da origem sem série
+registrada (revisão final: sem isso a divergência ia para a origem). **Descartado:** (a) só séries registradas na origem — o registro velho
+prenderia a peça para sempre; (b) aceitar qualquer prateleira — a tela deixaria levar a série que está de verdade em outra prateleira; (c) só
+em estoque — a peça bloqueada não iria para a quarentena; (d) descobrir o lote pelas séries com o lote em branco (como a Saída faz desde a
+Etapa 234) — mais código para um caso raro; a tela filtra pelo lote. A decisão 9 da Etapa 7 ("série na transferência fora de escopo") **fica
+revista**: o teste que a provava passou a provar a regra nova. **Reversível.** `c2db75d4`, `2ddb325d`.
+
 **B1623 (NOVA, da Etapa 264; decisão do agente) — o seletor de lote desconta e diz as peças bloqueadas no lote.** **Escolhido:** a lista de
 lotes do material passa a trazer quantas peças estão presas em cada lote (a mesma conta da B1621) e o *livre* as desconta; Movimentações
 (Saída e Perda) escreve *"(2 bloqueadas no lote)"* e a janela da devolução ao cliente troca *"ou libere a reserva do material"* por *"ou
@@ -17044,7 +17081,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 76. **NOVO, da Etapa 56 — a saída de material com SÉRIE não confere de qual endereço cada série sai.** Com a origem
     conferida pela etiqueta, o saldo sai do endereço conferido, mas a escolha das séries não olha o endereço: uma série
     registrada em B pode sair numa saída "conferida em A". É anterior a esta etapa (a série nunca foi presa ao
-    endereço); a conferência só tornou isso visível.
+    endereço); a conferência só tornou isso visível. *(**Etapa 265** — `c2db75d4`, `2ddb325d`: a **transferência** passou a
+    mover a série para a prateleira de destino (os outros documentos citavam a C76 também para isto — **B1624**); e a Saída **sem** origem sai da
+    prateleira da série (**B1626**). Continua aberto o que este item diz: com a origem escolhida ou conferida, a série marcada não é conferida
+    na origem — **D (265)** 1.)*
 
 77. **NOVO, da Etapa 56 — a etiqueta confere pelo CÓDIGO, não pela identidade do endereço.** Se o **Mover** trocar o
     código de um endereço (**C75**) e depois **outro** endereço receber o código antigo, a etiqueta velha do primeiro
@@ -20301,7 +20341,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Lote *L1* com a série *S1* em *X* (bloqueada) e *S2* em *A* (livre); saída de *S1* sem origem: passa (o lote tem prateleira livre) e
      baixa a linha de *A* — fica *X* com 1 sem série e *A* com 0 enquanto *S2* diz estar em *A* (sonda da Fase 5). A série sai certa; o
      endereço do saldo fica trocado. Antes da 239 a ordem da baixa também não olhava a série (dava certo ou errado conforme a quantidade de
-     cada linha). **O que fazer:** na saída de peça com série, escolher a origem (a prateleira da série).
+     cada linha). **O que fazer:** na saída de peça com série, escolher a origem (a prateleira da série). *(**Resolvido na Etapa 265 para a
+     Saída e a Perda de Movimentações sem origem** — `7a7c8a71`: a baixa sai da prateleira de cada série quando o registro dela bate com o
+     saldo (**B1626**). Com a origem escolhida, a entrega e a devolução ao cliente: como antes — **D (265)** 1.)*
 546. **NOVO (da Etapa 249, revisão do plano; já era assim com a quarentena da Etapa 209) — a Saída e a Perda escolhendo o lote não conferem o
      bloqueado do lote.** Com *L1* 4, 2 bloqueados em *L1* e *L2* 4, a **Saída** de 4 do *L1* na tela de Movimentações passa (confere o bloqueado
      do material, não o do lote); o *L1* fica com 0 e o bloqueado continua dizendo *L1 2* — na prática a peça bloqueada passou a ser do *L2*.
@@ -21721,6 +21763,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(265) A transferência com série e a Saída pela prateleira da série, o que ficou de fora.** (1) Com a **origem escolhida** (Saída,
+  Perda, a entrega com **Sai de**, a devolução ao cliente), o sistema não confere se as séries marcadas estão nela — sai da origem, como antes
+  (**C76**, **C545** parte 2, **D (240)** 1). (2) A **entrega** de requisição sem guarda no caminho continua saindo da linha de sempre (**B1583**),
+  e a exclusão dela devolve as séries a essas prateleiras (Etapa 259) — o registro da série pode voltar a não bater com o saldo, e o estorno de
+  uma transferência anterior daquela série passa a ser recusado (*"… não está mais na prateleira …"*); o caminho é uma Transferência nova
+  (revisão do plano, achado C). (3) As transferências feitas **antes** desta etapa não são corrigidas: o registro velho das séries fica até a
+  peça mudar de novo; as duas portas novas o reconhecem pela régua da **B1584** (mais séries registradas na prateleira do que saldo). (4) A
+  régua "o registro bate com o saldo" conta as séries bloqueadas aqui e não conta na entrega (Etapa 252): numa prateleira com série bloqueada as
+  duas podem decidir diferente (**B1626**). (5) Material com controle por lote e série **sem lote** (legado): a transferência a recusa e a Saída
+  também (o lote é exigido) — o caminho é regularizar a série. (6) O vínculo série → transferência não aparece na tela (só o estorno o usa); a aba
+  **Séries** mostra a prateleira de agora.
 - **(264) A Saída com lote e o estorno da entrada respeitando a peça presa, o que ficou de fora.** (1) Quando os bloqueios por lote e as
   reprovações somam mais que o bloqueado do material, a Saída usa a conta da entrega — que nesse caso deixa de contar a reprovação no lote — e
   o Ajuste com lote e o Bloquear usam a conta crua: o Ajuste para 4 do *L1* é recusado e o Ajuste negativo de 4 do mesmo lote passa (só pela
@@ -21823,7 +21876,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   endereço no histórico de movimentações; só o registro da troca o diz (**B1581**). *(**Resolvido na Etapa 261** — `caff2759`, `334752a7`:
   a linha da Saída na tela Movimentações diz *"Saiu de: A 3 · B 3"* — **B1615**; a linha do histórico continua sem endereço gravado.)* (2) A peça com série sem separação de outro item no
   caminho continua saindo da linha de sempre (a padrão, depois a maior) — o saldo da prateleira e as séries dela podem não bater, como antes
-  (**B1583**). (3) Depois de uma transferência, o endereço gravado na série não é usado (**B1584**). (4) Material com lote e série: a parte
+  (**B1583**). (3) Depois de uma transferência, o endereço gravado na série não é usado (**B1584**). *(**Etapa 265** — `c2db75d4`: a transferência passou a
+  mover a série, então o endereço volta a valer para as transferências novas; o registro velho continua reconhecido pela B1584 — **D (265)** 3.)* (4) Material com lote e série: a parte
   automática continua saindo do lote das séries, sem endereço. (5) A peça com série escolhida na própria prateleira que outro item separou
   continua levando a parte dele (a peça escolhida está lá) — o outro item é recusado depois com *"não serve mais"*.
 - **(251) O entregável dividido pelo lote e o lote da separação, o que ficou de fora.** (1) A divisão supõe a parte separada saindo da
@@ -23418,6 +23472,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(265) Nenhum clique foi dado.** A transferência, o estorno e a Saída pela prateleira da série foram provados pela rota real (v2,
+`/transferencias`, **Estornar**), com o bloquear série real e o livro forçado a falhar; a lista de séries da Transferência, pela tela com a
+lista simulada. Vale 5 minutos: o roteiro da Etapa 265 no guia (a lista *"Séries a transferir"*, a série na prateleira nova na aba **Séries**, e a
+Saída sem origem baixando a prateleira da série).
 
 **(264) Nenhum clique foi dado.** As recusas foram provadas pela rota real (Saída v1 e v2, devolução ao cliente, Estornar) e pelo serviço
 (retalho, sucateamento), com o Bloquear e o Desbloquear reais e duas corridas de 15 rodadas; o seletor e a janela da devolução, pela tela com a
@@ -31177,7 +31236,7 @@ Três perguntas que, até esta etapa, o sistema **não conseguia responder**:
 - *"Aquele lote reprovado foi devolvido, sucateado, ou aceito sob desvio?"*
 - *"Quantas pendências de qualidade estão abertas sem decisão há mais de uma semana?"*
 
-Agora existe o documento: **NC-XXXXXXXXXXXXXXXX**, com número único, o fato congelado do jeito que
+Agora existe o documento: **NC-XXXXXXXXXXXXXX**, com número único, o fato congelado do jeito que
 foi observado, a decisão, quem decidiu, a justificativa, a trilha de auditoria e os anexos (laudo,
 foto, e-mail do fornecedor). E uma **tela própria**, no menu do almoxarifado: **Não Conformidades**.
 
@@ -45076,12 +45135,78 @@ caminho (o bloqueio no Desbloquear Material; a reprovação pela não conformida
   reprovação) e o Ajuste com lote usa a conta crua — podem dizer coisas diferentes (**D (264)** 1).
 - Um estorno de bloqueio ainda terminando no mesmo instante de uma Saída do lote (**D (264)** 2).
 
+## Etapa 265 — A transferência de peça com número de série e a Saída que sai da prateleira da série (2026-11-26)
+
+Dois pedidos da semana sobre o **endereço da peça com número de série**. **(1)** A **Transferência** entre prateleiras de um material com
+número de série mudava o saldo de lugar, mas as séries continuavam dizendo que estavam na prateleira antiga — ninguém perguntava quais peças
+estavam mudando. Agora a tela pede as séries que mudam de lugar e cada uma passa a constar na prateleira de destino; o **Estornar** da
+transferência as devolve. **(2)** Na **Saída** de uma peça com série sem escolher de onde sai, a série saía certa, mas o saldo era baixado da
+prateleira padrão ou da de mais saldo — a prateleira da série ficava com saldo de peça que já saiu e a outra perdia uma peça que continua lá.
+Agora a baixa sai da prateleira em que cada série está. Decisões do agente: **B1624** a **B1626**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Transferência de material com série: só a quantidade; as séries continuam na prateleira antiga | A tela lista as séries (com a prateleira de cada uma) e pede uma por unidade; cada série marcada passa a constar no destino |
+| Transferência sem séries de material com série → passa | Recusada: *"material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0"* |
+| **Estornar** a transferência → o saldo volta; as séries ficam onde estavam | O saldo e as séries voltam para a origem; se uma série já saiu do destino, o estorno é recusado |
+| Saída de *S3* (em *B*) sem escolher a origem, com *A* 2 e *B* 1 → baixa *A*: *A* 1 com 2 séries, *B* 1 sem série | Baixa *B*: *A* 2 com as 2 séries dela, *B* 0 |
+
+### As regras, com o cenário exato
+
+Preparação: administrador; um material com número de série (sem controle por lote) e duas prateleiras *A* e *B*. **Movimentações → Nova** →
+Entrada de 3 em *A* com as séries *S1*, *S2*, *S3*.
+
+**1. A tela da Transferência (RN-265.06, B1624).** **Movimentações → Nova** → Transferência, o material, origem *A*, destino *B*, quantidade 1.
+Aparece **"Séries a transferir \*"** com *"S1 · A"*, *"S2 · A"*, *"S3 · A"* (as da origem escolhida primeiro; a bloqueada com *"· bloqueada"*;
+sem prateleira, *"· sem prateleira"*), a frase *"Marque as séries que estão mudando de prateleira: cada uma passa a constar no destino."* e o
+contador *"0/1 série(s) selecionada(s)"*. Salvar sem marcar → *"Selecione exatamente a quantidade de séries informada"* (nada é enviado).
+Com o lote em branco, só as séries sem lote aparecem; havendo séries em lote: *"Há séries em lote: escolha o lote para vê-las."*.
+
+**2. A transferência (RN-265.01 a .04).** Marque *S1* e salve → passa; *A* fica 2, *B* 1, e a aba **Séries** de **Lotes e Séries** mostra *S1* em
+*B*. Pela integração (a mesma porta da tela), sem séries → *"material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas
+0"*. A série que já saiu → *"A série S3 não está no estoque (situação ENTREGUE) — só a peça presente muda de prateleira"*. Série de outro lote →
+*"A série S1 é do lote L1 — escolha o lote L1 na transferência"*; série sem lote numa transferência com lote → *"A série S1 não tem lote — deixe o
+lote em branco na transferência"* (no material com controle por lote: *"A série S1 não tem lote, e o material exige lote na transferência — ela
+não muda de prateleira por aqui"*). A série **bloqueada** muda de prateleira e continua bloqueada.
+
+**3. A série registrada em outra prateleira (RN-265.03, B1624).** Com *S4* registrada em *B* (e o saldo de *B* batendo com as séries de lá),
+transferir *S4* de *A* para outra prateleira → *"A série S4 está na prateleira B, não na origem A — marque as séries que estão em A"*. Se o
+registro de *B* não bate com o saldo (mais séries registradas lá do que peças — o que as transferências antigas deixaram), a série é aceita e
+passa a constar no destino — mas só até o número de peças da origem que não têm série registrada: com *A* tendo uma série
+para cada peça, a série sem prateleira (ou de outra prateleira) é recusada com *"A série S2 não consta na prateleira A — todas as peças de A já
+têm série registrada; marque as séries que estão em A"*.
+
+**4. O estorno da transferência (RN-265.05, B1625).** **Estornar** a transferência do item 2 → o saldo volta para *A* e *S1* também. Se *S1* já
+saiu de *B* (uma Saída, ou outra transferência) → *"Não é possível estornar: a série S1 não está mais na prateleira B (saiu ou mudou de lugar
+depois da transferência)"*; nada muda. Transferência feita antes desta etapa: o estorno faz o de antes (só o saldo volta).
+
+**5. A Saída sai da prateleira da série (RN-265.10 a .12, B1626).** Entrada de *S5* em *B*. Saída de *S5* **sem** escolher a origem → baixa
+*B* (não a maior). Com séries de duas prateleiras na mesma saída, uma baixa em cada uma; o histórico diz *"Saiu de: A 1 · B 1"* e o **Estornar**
+devolve a cada uma. Quando a prateleira da série não serve (sem prateleira, bloqueada, registro que não bate com o saldo, ou a peça
+dali está separada para uma requisição) ou a origem foi escolhida, a saída sai como antes (a padrão, depois a de mais saldo).
+
+### O que esta etapa NÃO cobre
+
+- A **entrega** de requisição (e a devolução ao cliente) continua com a régua dela: a peça com série só sai pela prateleira da série quando
+  outro item separou na prateleira de sempre (**B1583**); e, escolhida a origem, o sistema ainda não confere se as séries marcadas estão nela
+  (**C545** parte 2, **D (265)** 1).
+- A entrega que sai como antes pode deixar o registro da série fora do saldo de novo (**D (265)** 2).
+- As transferências feitas antes desta etapa não são corrigidas: o registro velho das séries fica até a peça mudar (**D (265)** 3).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 265 entregue (2026-11-26):** **a Transferência de material com número de série pede as séries e muda a prateleira de cada uma (o
+  Estornar as devolve), e a Saída de peça com série sem origem sai da prateleira da série** (itens 10 e 11 da estimativa de 23/11). Commits
+  `06db5594` (plano), `c2db75d4` (transferência), `7a7c8a71` (saída), `2ddb325d` (tela), Fase 5 `30070e78` e o fechamento. **O que é seu:** as
+  **B1624** a **B1626** (reversíveis; a B1624 revê a decisão 9 da Etapa 7); a limitação **(265)** em D e a verificação **(265)** em F. Sem consulta
+  antes do deploy. **Próxima:** os itens 12 e 13 da estimativa de 23/11 (fim do plano da 265).
 
 - **Etapa 264 entregue (2026-11-26):** **a Saída e a Perda com lote (e a devolução ao cliente, o retalho e o sucateamento comum) respeitam as
   peças presas no lote, o seletor as desconta, e o estorno da entrada não deixa o lote com menos que o preso** (itens 8 e 9 da estimativa de

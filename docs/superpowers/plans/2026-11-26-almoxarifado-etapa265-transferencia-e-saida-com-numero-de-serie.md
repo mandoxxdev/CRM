@@ -99,14 +99,64 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco)** — motor: RN-265.01..05 (+ schema, `/transferencias` com `exigeSerie`, `localizacao_codigo` na listagem). Teste
+- [x] **T1 (tronco)** — `c2db75d4` — motor: RN-265.01..05 (+ schema, `/transferencias` com `exigeSerie`, `localizacao_codigo` na listagem). Teste
   `server/tests/api/transferenciaComSerie.api.test.js` (cenários pela rota v2 e pela `/transferencias`; o desfazer com o livro falhando).
-- [ ] **T2 (tronco, depois da T1)** — motor: RN-265.10..12 (+ `saidaPelaSerie` na v2). Teste `server/tests/api/saidaDaPrateleiraDaSerie.api.test.js`
+- [x] **T2 (tronco, depois da T1)** — `7a7c8a71` — motor: RN-265.10..12 (+ `saidaPelaSerie` na v2). Teste `server/tests/api/saidaDaPrateleiraDaSerie.api.test.js`
   com a **RN-265.13** (integração: transferência → saída → estornos, pela rota) e um cenário pelo **serviço** (`registrarMovimentacao` sem a
   opção → como hoje).
-- [ ] **T3 (galho, contra o contrato)** — tela RN-265.06. Teste `client/src/components/almoxarifado/MovimentacoesTransferenciaSeries.test.js`.
-- [ ] **T4** — Fase 5, documentos (`fechar-etapa`), suítes.
+- [x] **T3 (galho, contra o contrato; um executor em paralelo com a T2)** — `2ddb325d` — tela RN-265.06. Teste `client/src/components/almoxarifado/MovimentacoesTransferenciaSeries.test.js`.
+- [x] **T4** — Fase 5 `30070e78`; fechamento — Fase 5, documentos (`fechar-etapa`), suítes.
+
+
+## Fase 2 (revisor fresco, uma passada, sobre o plano `06db5594`)
+
+- **(A) importante** — com o lote em branco a tela mostraria séries de lote que o servidor recusa. → **consertado na tela** (T3): lote em branco
+  mostra só as sem lote, com *"Há séries em lote: escolha o lote para vê-las."* (B1624 d: não derivar o lote no motor).
+- **(B) importante** — o estorno devolvia cada série ao `localizacao_anterior_id` (NULL ou registro velho) com o saldo voltando à origem. →
+  **consertado**: volta à **origem** do movimento; a coluna fica como histórico (B1625 a).
+- **(C) importante, fora do diff** — a entrega que sai como antes e a exclusão dela podem deixar o registro fora do saldo de novo e prender o
+  estorno de uma transferência anterior. → **declarado** (D (265) 2).
+- **menores:** frase da série sem lote no material com controle de lote (→ frase própria); "presente" = em estoque ou bloqueada (→ explícito);
+  régua da entrega (só em estoque) × desta (presentes) (→ D (265) 4).
+
+## Fase 5 (dois revisores frescos, sondas `scratchpad/f5a-265-*.js`, `f5b-265-*.js`, sobre `7a7c8a71`)
+
+1. **[importante, reproduzido]** Transferência de série sem prateleira/registro velho com a origem já com série para cada peça: PA saldo 1
+   com S1, transferir S2 → PA saldo 0 com S1 registrada. → **consertado** (`30070e78`): de fora da origem, só até `saldo − séries presentes
+   registradas` na origem; recusa *"A série X não consta na prateleira A — todas as peças de A já têm série registrada; marque as séries que
+   estão em A"*. Sabotagem S14.
+2. **[importante, reproduzido]** A Saída da série levava a única peça da prateleira separada (com origem) para uma requisição e a entrega
+   recusava *"a origem da separação (PB) não serve mais"* — a premissa da B1626 c falhava. → **consertado**: a fatia desconta a parte separada
+   (`parteOrigemSql` + caixa viva); não cobrindo, como antes. Sabotagem S29.
+3. **[menor, reproduzido]** O Ajuste negativo pela v2 também mudava. → **consertado**: só Saída e Perda. Sabotagem S30.
+4. **[importante, testes]** Nenhuma fatia com n ≥ 2; o cenário do livro falhando passava com a opção desligada. → cenários novos e controle
+   no mesmo cenário; sabotagem S28 (baixa 1 em vez de n) agora cai.
+- Tentado e não quebrou: falhas forçadas no meio (livro, 2ª série, estorno), duas transferências da mesma série ao mesmo tempo, origem =
+  destino, `serie_ids` em texto, lote por código, série bloqueada, estorno da entrada depois da transferência, reserva, Perda, lote derivado,
+  histórico da 261, autorização (gates mantidos; a opção só do 4º argumento).
+
+## Divergências do plano
+
+- RN-265.05 dizia "volta à prateleira de onde veio" — **errado** para a série sem prateleira/registro velho (Fase 2 B): volta à origem.
+- RN-265.03 aceitava qualquer série de registro velho — faltava o limite das peças sem série na origem (Fase 5, 1).
+- B1626 c ("não descontar a separação") — **errado** quando a única peça da prateleira está separada (Fase 5, 2).
+- RN-265.10 valia para "todo tipo de saída do formulário"; o código pegava também o Ajuste negativo da v2 — limitado a Saída e Perda.
+- Testes antigos que provavam a decisão 9 (transferenciaRegras, MovimentacoesAlmoxarifado.test) e o cenário RN-252.21 d (que usava a
+  transferência para criar registro velho) foram reescritos — a decisão foi revista.
+- **CLAUDE.md:** nenhuma linha ficou errada — tudo roda dentro da seção do motor/estorno (`naTravaDoMaterial`); nenhuma porta nova lê o livre
+  para reservar; o bloquear série já pegava a mesma trava.
 
 ## Próxima tarefa detalhada
 
-(preencher no fechamento)
+Os itens **12 e 13** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`):
+
+1. **Item 12 — Entrega confere o lote das séries antes de começar (C486; 1h15, motor).** `requisitionService.entregarRequisicao`
+   (~2414, ~2543): o item com série fica fora da conferência de lote impedido feita antes da 1ª baixa; o motor só recusa na baixa daquele
+   item, depois de outros itens já terem saído. Conferir, antes de qualquer baixa (dentro das duas travas da entrega), o lote de cada série
+   marcada pela régua `loteImpedido` (bloqueado, reprovado, vencido sem liberação) e recusar com a frase da 232/233. Atenção: a entrega roda
+   sob a trava por requisição e, por dentro, a por material (`comTravaDaRequisicao`).
+2. **Item 13 — Dica da Fila não manda duas requisições ao mesmo lugar (D (250) 4, B1255, C449; 1h15, leitura).** `sugestaoDeColeta.js`
+   (RN-188.03): os irmãos da mesma requisição descontam o sugerido; entre requisições, não. Descontar na ordem de urgência da Fila. Função
+   pura — teste de unidade + a rota da Fila.
+- **O que já está pronto e não reabre:** a transferência com série e a Saída pela prateleira da série (esta etapa).
+- Candidatos fora da estimativa: conferir as séries na origem escolhida (D (265) 1); o estorno do Desbloquear com lote (C504).

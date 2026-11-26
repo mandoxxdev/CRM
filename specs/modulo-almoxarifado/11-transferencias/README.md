@@ -4,7 +4,8 @@
 > (dentro de Movimentações), exige lote em material controlado e está declarada em `REGRAS_VINCULO`.
 > O fluxo "em trânsito" foi **CORTADO por decisão do cliente** — não é pendência, ver abaixo. ·
 > **Spec original:** seção 15
-> **Última atualização:** 2026-08-12 — Etapa 7: `exigeLote` alcançando o ramo próprio do motor
+> **Última atualização:**  2026-11-26 — **Etapa 265 (C76; B1624, B1625): a transferência de material com número de série pede as séries e muda a prateleira de cada uma; o estorno as devolve** (`c2db75d4` motor, `2ddb325d` tela). A decisão 9 abaixo (série fora de escopo) **estava certa até a Etapa 265 e foi revista** — ver "Etapa 265" no fim.
+> Antes: 2026-08-12 — Etapa 7: `exigeLote` alcançando o ramo próprio do motor
 > (`5a1e188`), `TRANSFERENCIA: { vinculo: 'nenhum' }` (`5a1e188`) e o tipo no formulário de
 > Movimentações com origem, destino e seletor de lote (`f8a3e34`, badge corrigido em `d117dc2`)
 > Antes: 2026-08-11 — auditoria de cauda: registrado que a TRANSFERENCIA move a linha do lote (Etapa 6) e nomeadas duas lacunas: rota sem `exigeLote` e tipo fora de `REGRAS_VINCULO`
@@ -59,8 +60,9 @@ outro assunto: tem documento, prazo e propriedade diferente. Se a Etapa 8 trouxe
 resultado concluiria errado que a guarda funcionava. Foi preciso citar `TRANSFERENCIA`
 explicitamente na condição do `if` (`5a1e188`).
 
-A mesma mudança **não** foi feita em `serieObrigatoria`, de propósito — é o que torna a decisão 9
-(série fora de escopo) verdadeira sem código, e há teste que registra o fato.
+~~A mesma mudança **não** foi feita em `serieObrigatoria`, de propósito — é o que torna a decisão 9
+(série fora de escopo) verdadeira sem código, e há teste que registra o fato.~~ **Revisto na Etapa 265 (B1624):** `serieObrigatoria`
+passou a valer para `TRANSFERENCIA` e o teste da decisão 9 passou a provar a regra nova (`c2db75d4`).
 
 ## Checklist
 
@@ -93,7 +95,8 @@ dois continuam desabilitados.
 
 ## Fora de escopo, declarado com o motivo
 
-- **Série na transferência (decisão 9 da Etapa 7).** As séries guardam `localizacao_id`, mas movê-lo
+- ~~**Série na transferência (decisão 9 da Etapa 7).**~~ **Saiu do "fora de escopo" na Etapa 265 (B1624, `c2db75d4`) — o texto abaixo
+  descreve como era:** As séries guardam `localizacao_id`, mas movê-lo
   exigiria um seletor de séries na transferência e um caminho novo no motor — o **claim de série só
   existe para entrada e saída**. O `localizacao_id` da série é **informativo**; o saldo real vive em
   `estoque_saldo_almoxarifado`, que a transferência move corretamente. Consequência prática: depois
@@ -119,7 +122,7 @@ tabela**: elas testavam a máquina de estados cortada. Não foram esquecidas —
 | Lote **vencido** pode ser transferido (decisão 8, intenção) | `transferencia de lote vencido e permitida (decisao 8)` — mesmo arquivo | ✅ `5a1e188` |
 | Transferência não exige vínculo nem justificativa, e `REGRAS_VINCULO.TRANSFERENCIA` está declarada | `transferencia nao exige vinculo nem justificativa (decisao 5)` — mesmo arquivo | ✅ `5a1e188` |
 | Material **sem** controle de lote continua transferindo sem lote (controle positivo da guarda) | `[controle positivo] material SEM controle de lote continua transferindo sem lote` — mesmo arquivo | ✅ `5a1e188` |
-| Material com `controle_serie` **não** exige séries na transferência (decisão 9) | `transferencia de material com controle de serie nao exige series (decisao 9)` — mesmo arquivo | ✅ `5a1e188` |
+| ~~Material com `controle_serie` **não** exige séries na transferência (decisão 9)~~ — **revista na Etapa 265**: exige uma série por unidade | `transferencia de material com controle de serie EXIGE as series (decisao 9 revista na Etapa 265)` — mesmo arquivo; o resto em `transferenciaComSerie.api.test.js` (RN-265.01..05) | ✅ `c2db75d4` |
 | Transferência instantânea origem→destino continua atômica | `Transferência entre locais` — `tests/almoxarifado.test.js` (serviço) | ✅ pré-existente |
 
 **Testes de tela** (`MovimentacoesAlmoxarifado.test.js`, `f8a3e34`): `Transferência é opção do
@@ -133,3 +136,23 @@ no payload`.
 
 - 03 (motor) · 02 (localizações/multi-almoxarifado).
 - 06 (aprovação) **deixou de ser dependência** com o corte do trânsito.
+
+## Etapa 265 (2026-11-26) — a transferência leva as séries (C76; B1624, B1625)
+
+A decisão 9 da Etapa 7 deixava a série fora: o saldo mudava de prateleira e as séries continuavam registradas na antiga — e o endereço da
+série passou a ser lido por outras regras (a entrega pela prateleira da série, Etapa 252; a Saída sem origem, nesta etapa). Plano:
+`docs/superpowers/plans/2026-11-26-almoxarifado-etapa265-transferencia-e-saida-com-numero-de-serie.md`.
+
+- [x] RN-265.01 — material com série: quantidade inteira e uma série por unidade, na v2 e na `/transferencias` (que passou a declarar
+  `exigeSerie`) — `c2db75d4`.
+- [x] RN-265.02 — cada série do material, presente (em estoque **ou bloqueada**) e do lote da transferência; literais no plano — `c2db75d4`.
+- [x] RN-265.03 — série registrada em outra prateleira: recusada quando o registro de lá bate com o saldo; aceita quando não bate (B1584) —
+  `c2db75d4`; Fase 5 (`30070e78`): de fora da origem, só até as peças da origem sem série registrada (*"A série X não consta na
+  prateleira A — todas as peças de A já têm série registrada; marque as séries que estão em A"*).
+- [x] RN-265.04 — cada série passa a constar no destino; o movimento guarda as séries (`transferencia_series_almoxarifado`, não-fatal); o
+  livro falhando devolve linhas **e** séries (as linhas da transferência não eram devolvidas pelo catch amplo até aqui) — `c2db75d4`.
+- [x] RN-265.05 — o estorno devolve saldo e séries à **origem**; série que não está mais no destino → recusa; sem registro → como antes —
+  `c2db75d4`.
+- [x] RN-265.06 — tela: **"Séries a transferir \*"** em Movimentações (em estoque e bloqueadas, com a prateleira; as da origem primeiro; lote
+  em branco só as sem lote) — `2ddb325d`.
+- Fora (declarado em **D (265)**): conferir as séries na origem da Saída/entrega com origem escolhida; corrigir os registros velhos.
