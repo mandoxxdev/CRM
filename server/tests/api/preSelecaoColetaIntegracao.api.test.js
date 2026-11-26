@@ -274,14 +274,22 @@ process.on('exit', (code) => {
   // desconta o separado pendente da PROPRIA requisicao no par (regra da Etapa 59), entao aceita o endereco ja comprometido por R1.
   // A entrega de R2 recusa com a literal da planejada e nada de estoque se perde: a falha e segura. O controle e o automatico de antes
   // da 189: a entrega de R2 passava e deixava a linha sem lote -4 na padrao (pior).
+  // Etapa 266 (RN-266.10/13, B1628): a Fila e a janela passaram a dividir o par entre as requisicoes — R1 e R2 abertas juntas ja nao
+  // recebem o mesmo par (R2, atras, recebe XP-01/L2). A sugestao VELHA continua possivel: a janela de R2 aberta quando R2 estava sozinha
+  // na fila, e R1 (urgente) criada depois. Antes da 266 este arranjo abria as duas janelas juntas e as duas recebiam XB-01/L1.
   const duasJanelas = async () => {
     const m = await material({ lote: true });
     await entrar(m, B01.id, 6, 'L1'); await entrar(m, P01.id, 9, 'L2');
     await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
-    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
-    const s1 = (await sugestao(r1.R)).itens[0].pegar_em; const s2 = (await sugestao(r2.R)).itens[0].pegar_em;
+    const r2 = await req([[m.id, 4]]);
+    const s2 = (await sugestao(r2.R)).itens[0].pegar_em; // R2 sozinha na fila
+    const r1 = await req([[m.id, 4]]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET urgencia = 'URGENTE' WHERE id = ?", [r1.R]);
+    const s1 = (await sugestao(r1.R)).itens[0].pegar_em;
+    const s2agora = (await sugestao(r2.R)).itens[0].pegar_em;
     assert.deepStrictEqual([s1.localizacao_codigo, s1.lote_codigo, s1.cobre, s2.localizacao_codigo, s2.lote_codigo, s2.cobre],
-      ['XB-01', 'L1', true, 'XB-01', 'L1', true], 'premissa: as duas janelas recebem o mesmo par');
+      ['XB-01', 'L1', true, 'XB-01', 'L1', true], 'premissa: a janela velha de R2 e a de R1 com o mesmo par');
+    assert.deepStrictEqual([s2agora.localizacao_codigo, s2agora.lote_codigo], ['XP-01', 'L2'], 'Etapa 266: reaberta, a de R2 ja divide');
     const a = await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: s1.localizacao_id, lote_id: s1.lote_id }]);
     assert.strictEqual(a.status, 200, JSON.stringify(a.body));
     return { m, r1, r2, s2 };

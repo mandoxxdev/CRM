@@ -413,7 +413,9 @@ process.on('exit', (code) => {
   });
 
   // ---------------------------------------------------------------- T3: RN-198.09, o caso do item ponta a ponta
-  // As duas janelas abrem com a MESMA sugestao XB-01/L1 (6 cobre 4 de cada). R1 separa; R2 confirma a sugestao velha -> recusa NA
+  // Etapa 266 (B1628): a janela de R2 foi aberta quando R2 estava SOZINHA na fila (XB-01/L1); depois R1 (urgente) entra na frente e a
+  // dela tambem e XB-01/L1 — antes da 266 as duas abriam juntas com o mesmo par; agora, juntas, R2 ja receberia XP-01/L2.
+  // As duas janelas ficam com a MESMA sugestao XB-01/L1 (6 cobre 4 de cada). R1 separa; R2 confirma a sugestao velha -> recusa NA
   // SEPARACAO (C1). Reaberta a janela, a sugestao de R2 aponta XP-01/L2 (cobre); R2 separa de la; as duas entregam.
   // A tela chama PUT .../separacao (RequisicoesList, emenda 7 da Fase 2) — a mesma handleSeparacao do /separar.
   const sugestao = async (R) => {
@@ -421,6 +423,7 @@ process.on('exit', (code) => {
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     return r.body.itens[0].pegar_em;
   };
+  const urgente = (R) => dbRun(db, "UPDATE requisicoes_almoxarifado SET urgencia = 'URGENTE' WHERE id = ?", [R]);
   const doSugerido = (item, q, s) => ({ item_id: item, quantidade_separada: q, localizacao_origem_id: s.localizacao_id, lote_id: s.lote_id });
   const fimDoCaso = async (m, L1, L2, r1, r2) => {
     assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
@@ -436,8 +439,8 @@ process.on('exit', (code) => {
 
   await test('[T3 rota, RN-198.09] sugestao velha: R2 recusa NA SEPARACAO (C1); reaberta, XP-01/L2; R2 separa de la; as duas entregam', async () => {
     const { m, L1, L2 } = await cenario();
-    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
-    const s1 = await sugestao(r1.R); const s2 = await sugestao(r2.R);
+    const r2 = await req([[m.id, 4]]); const s2 = await sugestao(r2.R); // R2 sozinha na fila
+    const r1 = await req([[m.id, 4]]); await urgente(r1.R); const s1 = await sugestao(r1.R);
     assert.deepStrictEqual([s1.localizacao_codigo, s1.lote_codigo, s1.cobre, s2.localizacao_codigo, s2.lote_codigo, s2.cobre],
       ['XB-01', 'L1', true, 'XB-01', 'L1', true], 'premissa: as duas janelas recebem o mesmo par');
     const a = await separacao(r1.R, [doSugerido(r1.ids[0], 4, s1)]);
@@ -465,9 +468,9 @@ process.on('exit', (code) => {
 
   await test('[T3 servico, RN-198.09] o mesmo pelo servico: separarRequisicao recusa a velha, aceita a atual; entregarRequisicao das duas', async () => {
     const { m, L1, L2 } = await cenario();
-    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
     const pega = async (R) => (await requisitionService.sugestaoDeColetaDaRequisicao(db, ALMOX, R)).itens[0].pegar_em;
-    const s1 = await pega(r1.R); const s2 = await pega(r2.R);
+    const r2 = await req([[m.id, 4]]); const s2 = await pega(r2.R); // R2 sozinha na fila (Etapa 266)
+    const r1 = await req([[m.id, 4]]); await urgente(r1.R); const s1 = await pega(r1.R);
     assert.deepStrictEqual([s1.localizacao_codigo, s2.localizacao_codigo], ['XB-01', 'XB-01']);
     await requisitionService.separarRequisicao(db, r1.R, [doSugerido(r1.ids[0], 4, s1)], ALMOX);
     let erro = null;

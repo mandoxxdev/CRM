@@ -33,6 +33,8 @@ const AVISO = Object.freeze({
   // Fase 5 (M-d): a planejada existe mas nao pode mais ser dica (endereco bloqueado/inativo, area especial, lote bloqueado/vencido)
   // — "o resto nao cabe la" enganava (o saldo pode estar la; o endereco e que nao serve).
   PLANEJADA_INDISPONIVEL: 'PLANEJADA_INDISPONIVEL',
+  // Etapa 266 (RN-266.12, B1629): o item teria par sem o que foi indicado as requisicoes da frente na Fila, e nao tem com ele.
+  SALDO_INDICADO_A_OUTRAS: 'SALDO_INDICADO_A_OUTRAS',
 });
 // Fase 5 (I-a): alerta que convive com o aviso (campo proprio, pegar_em_alerta). A retencao (bloqueado, em inspecao, em terceiros) e
 // do MATERIAL, nao do endereco (schema.js, comentario da estoque_saldo_almoxarifado): com retencao > 0 o sistema nao sabe se o
@@ -117,9 +119,12 @@ function candidatoSugerivel(linha, { arvore, material, hojeISO }) {
  *  - seriesPorLote: Map(chaveLote -> series EM_ESTOQUE), so dos materiais com serie;
  *  - lotePreso: Map(chaveLote -> livre do lote), so dos lotes com peca presa de material com controle por lote e sem serie (Etapa 250);
  *  - hojeISO: o dia (lotService.isVencido).
+ *  - jaIndicado (Etapa 266, RN-266.10, B1628): opcional { porPar: Map(chavePar -> q), porLote: Map(chaveLote -> q) } — o sugerido as
+ *    requisicoes ANTERIORES na ordem da Fila; desconta como o dos irmaos (no par, no teto das series e no do lote preso), exceto na planejada
+ *    (RN-266.15). MUTADO ao fim: soma o sugerido desta requisicao (quem chama passa o mesmo objeto, na ordem da Fila). Ausente = so os irmaos.
  * Saida: { porItem: Map(item_id -> { pegar_em, pegar_em_aviso }), ordem_coleta: [...] }.
  */
-function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, lotePreso, hojeISO }) {
+function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, lotePreso, hojeISO, jaIndicado }) {
   const planejado = planejadoPorPar || new Map();
   const series = seriesPorLote || new Map();
   const presos = lotePreso || new Map();
@@ -137,20 +142,24 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
   }
   const sugeridoPorPar = new Map(); // o consumo dos irmaos desta requisicao
   const sugeridoPorLote = new Map();
+  const outras = jaIndicado || { porPar: new Map(), porLote: new Map() }; // Etapa 266 (RN-266.10): o indicado as requisicoes da frente
+  const dasOutras = (mapa, k, comOutras) => (comOutras ? num(mapa && mapa.get(k)) : 0);
 
-  const livreDe = (mat, linha) => {
+  // Etapa 266: `comOutras` false = sem o indicado as requisicoes da frente (a planejada, RN-266.15; e a pergunta da RN-266.12).
+  const livreDe = (mat, linha, comOutras = true) => {
     const kp = chavePar(linha.material_id ?? mat.id, linha.localizacao_id, linha.lote_id);
-    let livre = num(linha.quantidade) - num(planejado.get(kp)) - num(sugeridoPorPar.get(kp));
+    let livre = num(linha.quantidade) - num(planejado.get(kp)) - num(sugeridoPorPar.get(kp)) - dasOutras(outras.porPar, kp, comOutras);
     if (mat && Number(mat.controle_serie) === 1) {
       const kl = chaveLote(linha.material_id ?? mat.id, linha.lote_id);
-      const teto = num(series.get(kl)) - num(planejadoPorLote.get(kl)) - num(sugeridoPorLote.get(kl));
+      const teto = num(series.get(kl)) - num(planejadoPorLote.get(kl)) - num(sugeridoPorLote.get(kl)) - dasOutras(outras.porLote, kl, comOutras);
       livre = Math.min(livre, teto);
     }
     // Etapa 250 (C517, RN-250.10..13): lote com peca presa — o teto e o livre do lote (situacaoDosLotes) menos o planejado de todos os
     // pares do lote e o sugerido aos irmaos nele (o mesmo desconto das series, I3; a separacao confere o lote assim, B1444).
     const klp = chaveLote(linha.material_id ?? mat.id, linha.lote_id);
     if (linha.lote_id !== null && linha.lote_id !== undefined && presos.has(klp)) {
-      livre = Math.min(livre, num(presos.get(klp)) - num(planejadoPorLote.get(klp)) - num(sugeridoPorLote.get(klp)));
+      livre = Math.min(livre, num(presos.get(klp)) - num(planejadoPorLote.get(klp)) - num(sugeridoPorLote.get(klp))
+        - dasOutras(outras.porLote, klp, comOutras));
     }
     return Q.qtd(Math.max(0, livre));
   };
@@ -205,7 +214,8 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
       // Fase 5 (M-d): sem linha de saldo, o endereco ainda pode estar bloqueado/inativo/em area especial — confere so o endereco.
       const sugerivel = linha ? candidatoSugerivel(linha, ctx)
         : candidatoSugerivel({ localizacao_id: it.origem_separacao_id, lote_id: null }, ctx);
-      const livre = linha && sugerivel ? livreDe(mat, linha) : 0;
+      // Etapa 266 (RN-266.15): a planejada nao desconta o indicado as da frente — "o resto nao cabe la" seria falso.
+      const livre = linha && sugerivel ? livreDe(mat, linha, false) : 0;
       if (!sugerivel) {
         aviso = AVISO.PLANEJADA_INDISPONIVEL;
       } else if (livre > EPS) {
@@ -215,12 +225,14 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
         aviso = AVISO.PLANEJADA_NAO_COBRE;
       }
     } else {
-      const cands = linhas.filter((l) => candidatoSugerivel(l, ctx))
+      const sugeriveis = linhas.filter((l) => candidatoSugerivel(l, ctx));
+      const cands = sugeriveis
         .map((l) => ({ linha: l, livre: livreDe(mat, l) }))
         .filter((c) => c.livre > EPS)
         .sort(ordem(mat));
       if (!cands.length) {
-        aviso = AVISO.SEM_ENDERECO_SUGERIVEL;
+        // Etapa 266 (RN-266.12, B1629): sem as da frente (os irmaos continuam descontando) haveria par -> o saldo foi indicado a elas.
+        aviso = sugeriveis.some((l) => livreDe(mat, l, false) > EPS) ? AVISO.SALDO_INDICADO_A_OUTRAS : AVISO.SEM_ENDERECO_SUGERIVEL;
       } else {
         escolha = cands.find((c) => c.livre + EPS >= separavel) || null;
         if (!escolha) {
@@ -240,6 +252,12 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
       paradas.push({ pos, it, pegarEm });
     }
   });
+
+  // Etapa 266 (RN-266.10): o sugerido desta requisicao passa a descontar para as de tras na Fila.
+  if (jaIndicado) {
+    for (const [k, q] of sugeridoPorPar) jaIndicado.porPar.set(k, num(jaIndicado.porPar.get(k)) + q);
+    for (const [k, q] of sugeridoPorLote) jaIndicado.porLote.set(k, num(jaIndicado.porLote.get(k)) + q);
+  }
 
   // RN-188.06: pelo percurso do endereco sugerido; empate pela ordem do pedido, depois lote_id.
   paradas.sort((a, b) => {

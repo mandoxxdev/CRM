@@ -1213,6 +1213,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
     const t = await tetoDaEntregaPeloLote(db, i, await origemDaSeparacaoNaoServe(db, i, lotePresoDaFila));
     if (t !== null) tetosLote.set(i.id, t);
   }
+  const coletaPendente = new Map(); // Etapa 266: requisicao -> o que a dica precisa, calculada depois da ordem
   const fila = [];
   for (const r of reqs) {
     const doReq = itens.filter((i) => i.requisicao_id === r.id);
@@ -1302,21 +1303,16 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
     if (!etapas.length) continue;
     // Etapa 188 (T2): a dica de onde pegar e a ordem de coleta. So ACRESCENTA — `linhas` continua na ordem do pedido (B821).
     // Emenda M4: com a alcada de valor barrando, nada de "Pegar em" (o separar recusaria).
-    const coleta = bloqueioValor ? null : sugestaoDeColeta.sugerirColeta({
+    // Etapa 266 (RN-266.10, B1628): calculada DEPOIS de ordenar a fila (abaixo), na ordem dela — o que foi indicado as requisicoes da
+    // frente desconta para as de tras. Antes cada requisicao via as prateleiras inteiras e duas do mesmo material recebiam a mesma.
+    const itensDaColeta = bloqueioValor ? null : {
       itens: doReq.map((i) => ({
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, separavel: divididos.get(i.id) || 0,
         origem_separacao_id: i.origem_separacao_id, lote_separacao_id: i.lote_separacao_id,
         // Etapa 196: a parte da origem (so serve ao "> 0" de sugestaoDeColeta; com origem, parte > 0 sse caixa > 0 — NO-OP declarado).
         separado_pendente: parteDaOrigem(i),
       })),
-      ...dadosColeta,
-    });
-    for (const l of linhas) {
-      const s = coleta && coleta.porItem.get(l.item_id);
-      l.pegar_em = s ? s.pegar_em : null;
-      l.pegar_em_aviso = s ? s.pegar_em_aviso : null;
-      l.pegar_em_alerta = sugestaoDeColeta.alertaDeRetencao(l.pegar_em, dadosColeta.material.get(Number(l.material_id)));
-    }
+    };
     const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
       .map((s) => ({ id: s.usuario_id, nome: s.usuario_nome }));
     fila.push({
@@ -1328,17 +1324,31 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
       posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
         && !quemSeparou.some((s) => Number(s.id) === Number(user?.id)),
       itens: linhas.filter((l) => l.a_separar > 1e-9 || l.a_entregar > 1e-9),
-      ordem_coleta: coleta ? coleta.ordem_coleta : [],
+      ordem_coleta: [],
     });
+    coletaPendente.set(r.id, { itensDaColeta, linhas });
   }
   // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
   fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel)) || compararPrioridade(a, b));
+  // Etapa 266 (RN-266.10/11): a dica na ordem da Fila, com um acumulador so (`jaIndicado`, mutado por sugerirColeta).
+  const jaIndicado = { porPar: new Map(), porLote: new Map() };
+  for (const f of fila) {
+    const { itensDaColeta, linhas } = coletaPendente.get(f.id);
+    const coleta = itensDaColeta ? sugestaoDeColeta.sugerirColeta({ ...itensDaColeta, ...dadosColeta, jaIndicado }) : null;
+    for (const l of linhas) {
+      const s = coleta && coleta.porItem.get(l.item_id);
+      l.pegar_em = s ? s.pegar_em : null;
+      l.pegar_em_aviso = s ? s.pegar_em_aviso : null;
+      l.pegar_em_alerta = sugestaoDeColeta.alertaDeRetencao(l.pegar_em, dadosColeta.material.get(Number(l.material_id)));
+    }
+    f.ordem_coleta = coleta ? coleta.ordem_coleta : [];
+  }
   return fila;
 }
 
 /**
  * Etapa 189 (T1, RN-189.01; B1260): a sugestao de coleta de UMA requisicao — o recorte que a fila devolve para ela, pelo mesmo codigo
- * (listarFilaSeparacao filtrada pelo id). A janela de separacao le isto para pre-selecionar o "Sai de". So leitura, sem trava.
+ * (listarFilaSeparacao; desde a Etapa 266 a fila inteira, RN-266.13). A janela de separacao le isto para pre-selecionar o "Sai de". So leitura, sem trava.
  * Requisicao ativa fora da fila (sem etapa) -> itens [] e ordem_coleta []. Inexistente, inativa ou id nao inteiro -> 404.
  */
 async function sugestaoDeColetaDaRequisicao(db, user, requisicaoId) {
@@ -1348,7 +1358,9 @@ async function sugestaoDeColetaDaRequisicao(db, user, requisicaoId) {
   const id = Number(requisicaoId);
   const r = await dbGet(db, 'SELECT id FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1', [id]);
   if (!r) throw naoAchou();
-  const fila = await listarFilaSeparacao(db, user, { requisicaoId: id });
+  // Etapa 266 (RN-266.13, B1630): a fila INTEIRA — a dica de uma requisicao depende das que estao na frente dela (RN-266.10). A RN-189.01
+  // ("por requisicao, so as linhas dela e os dados globais") deixou de valer; o filtro `requisicaoId` continua aceito e nao e mais usado aqui.
+  const fila = await listarFilaSeparacao(db, user);
   const daReq = fila.find((f) => Number(f.id) === id);
   if (!daReq) return { requisicao_id: id, itens: [], ordem_coleta: [] };
   return {

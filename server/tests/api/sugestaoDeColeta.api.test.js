@@ -38,7 +38,7 @@ const linha = (localizacao_id, quantidade, lote = null) => ({
   lote_validade: lote ? (lote.validade || null) : null, lote_vencimento_liberado_em: lote ? (lote.liberado || null) : null,
 });
 const item = (item_id, separavel, extra = {}) => ({ item_id, material_id: MAT, material_codigo: 'MAT-9', separavel, ...extra });
-function rodar({ itens, linhas, planejado = [], material = {}, arvore = arvoreBase(), series = null }) {
+function rodar({ itens, linhas, planejado = [], material = {}, arvore = arvoreBase(), series = null, jaIndicado, presos = null }) {
   const planejadoPorPar = new Map(planejado.map(([loc, lote, q]) => [sc.chavePar(MAT, loc, lote), q]));
   return sc.sugerirColeta({
     itens,
@@ -48,6 +48,8 @@ function rodar({ itens, linhas, planejado = [], material = {}, arvore = arvoreBa
     material: new Map([[MAT, { id: MAT, localizacao_padrao_id: null, proprietario_cliente_id: null, controle_serie: 0, ...material }]]),
     seriesPorLote: series ? new Map(series.map(([lote, n]) => [sc.chaveLote(MAT, lote), n])) : new Map(),
     hojeISO: HOJE,
+    ...(presos ? { lotePreso: new Map(presos.map(([lote, n]) => [sc.chaveLote(MAT, lote), n])) } : {}),
+    ...(jaIndicado ? { jaIndicado } : {}),
   });
 }
 const de = (r, id) => r.porItem.get(id);
@@ -310,6 +312,77 @@ test('[RN-188.06] ordem_coleta pelo caminho, empate pela ordem do pedido; itens 
   assert.deepStrictEqual(r.ordem_coleta[0], { item_id: 2, material_codigo: 'M2', localizacao_id: 10, localizacao_codigo: 'A-01',
     caminho: 'ALM1 / A-01', lote_codigo: null, quantidade_sugerida: 2 });
   assert.strictEqual(r.porItem.get(4).pegar_em, null);
+});
+
+// ── Etapa 266 (RN-266.10/12/15, B1628/B1629): o indicado as requisicoes da frente na Fila desconta para as de tras ─────────────────────
+// Plano: docs/superpowers/plans/2026-11-26-almoxarifado-etapa266-entrega-confere-lote-e-dica-da-fila.md
+const novoIndicado = () => ({ porPar: new Map(), porLote: new Map() });
+const onde = (s) => (s.pegar_em ? [s.pegar_em.localizacao_codigo, s.pegar_em.quantidade_sugerida, s.pegar_em.quantidade_no_endereco] : null);
+
+test('[RN-266.10] A-01 3 e B-02 3: a 1a requisicao A-01 3, a 2a (mesmo acumulador) B-02 3; sem o acumulador as duas A-01', () => {
+  const linhas = [linha(10, 3), linha(21, 3)];
+  const ja = novoIndicado();
+  const r1 = rodar({ itens: [item(1, 3)], linhas, jaIndicado: ja });
+  assert.deepStrictEqual(onde(de(r1, 1)), ['A-01', 3, 3]);
+  assert.strictEqual(ja.porPar.get(sc.chavePar(MAT, 10, null)), 3, 'o acumulador recebeu o sugerido da 1a');
+  const r2 = rodar({ itens: [item(2, 3)], linhas, jaIndicado: ja });
+  assert.deepStrictEqual(onde(de(r2, 2)), ['B-02', 3, 3]);
+  assert.strictEqual(de(r2, 2).pegar_em_aviso, null);
+  assert.deepStrictEqual(r2.ordem_coleta.map((p) => p.localizacao_codigo), ['B-02']);
+  assert.strictEqual(ja.porPar.get(sc.chavePar(MAT, 21, null)), 3, 'e o da 2a');
+  assert.deepStrictEqual(onde(de(rodar({ itens: [item(2, 3)], linhas }), 2)), ['A-01', 3, 3], 'controle: sem acumulador, como antes');
+});
+test('[RN-266.10] A-01 3 e B-02 1: a 2a recebe o que sobra — B-02 1, NENHUM_ENDERECO_COBRE', () => {
+  const linhas = [linha(10, 3), linha(21, 1)];
+  const ja = novoIndicado();
+  rodar({ itens: [item(1, 3)], linhas, jaIndicado: ja });
+  const s = de(rodar({ itens: [item(2, 3)], linhas, jaIndicado: ja }), 2);
+  assert.deepStrictEqual(onde(s), ['B-02', 1, 1]);
+  assert.strictEqual(s.pegar_em_aviso, 'NENHUM_ENDERECO_COBRE');
+});
+test('[RN-266.12] so A-01 3: a 2a fica sem par, SALDO_INDICADO_A_OUTRAS; o irmao da mesma requisicao continua SEM_ENDERECO_SUGERIVEL', () => {
+  const linhas = [linha(10, 3)];
+  const ja = novoIndicado();
+  rodar({ itens: [item(1, 3)], linhas, jaIndicado: ja });
+  const s = de(rodar({ itens: [item(2, 3)], linhas, jaIndicado: ja }), 2);
+  assert.deepStrictEqual([s.pegar_em, s.pegar_em_aviso], [null, 'SALDO_INDICADO_A_OUTRAS']);
+  // o irmao (mesma requisicao) que ficou sem nada: nao foi "indicado as da frente" — o aviso de sempre.
+  const irmaos = rodar({ itens: [item(3, 3), item(4, 3)], linhas, jaIndicado: novoIndicado() });
+  assert.deepStrictEqual(onde(de(irmaos, 3)), ['A-01', 3, 3]);
+  assert.deepStrictEqual([de(irmaos, 4).pegar_em, de(irmaos, 4).pegar_em_aviso], [null, 'SEM_ENDERECO_SUGERIVEL']);
+  // sem par sugerivel nenhum (so em BLQ): SEM_ENDERECO_SUGERIVEL, mesmo com o acumulador cheio.
+  const blq = de(rodar({ itens: [item(5, 1)], linhas: [linha(70, 3)], jaIndicado: ja }), 5);
+  assert.strictEqual(blq.pegar_em_aviso, 'SEM_ENDERECO_SUGERIVEL');
+});
+test('[RN-266.15] a planejada nao desconta o indicado as da frente (o "resto nao cabe la" seria falso)', () => {
+  // A-01 5, 1 planejado (o separado pendente deste item); a da frente recebeu A-01 3. A planejada ve 5 - 1 = 4 e cobre 2.
+  const ja = novoIndicado();
+  ja.porPar.set(sc.chavePar(MAT, 10, null), 3);
+  const s = de(rodar({ itens: [item(1, 2, { origem_separacao_id: 10, lote_separacao_id: null, separado_pendente: 1 })],
+    linhas: [linha(10, 5)], planejado: [[10, null, 1]], jaIndicado: ja }), 1);
+  assert.deepStrictEqual([s.pegar_em.localizacao_codigo, s.pegar_em.quantidade_sugerida, s.pegar_em_aviso], ['A-01', 2, null]);
+});
+test('[RN-266.10] material com serie: o teto do LOTE desconta o indicado a da frente (L1 com 2 series em A-01 e B-01 -> a 2a vai a L2)', () => {
+  const L1 = { id: 1, codigo: 'L1', validade: '2026-11-30' }; const L2 = { id: 2, codigo: 'L2', validade: '2026-12-30' };
+  const linhas = [linha(10, 2, L1), linha(20, 2, L1), linha(30, 2, L2)];
+  const series = [[1, 2], [2, 2]];
+  const ja = novoIndicado();
+  assert.deepStrictEqual(onde(de(rodar({ itens: [item(1, 2)], linhas, series, material: { controle_serie: 1 }, jaIndicado: ja }), 1)),
+    ['A-01', 2, 2]);
+  const s = de(rodar({ itens: [item(2, 2)], linhas, series, material: { controle_serie: 1 }, jaIndicado: ja }), 2);
+  assert.deepStrictEqual([s.pegar_em.localizacao_codigo, s.pegar_em.lote_codigo], ['C-01', 'L2']);
+  const sem = de(rodar({ itens: [item(2, 2)], linhas, series, material: { controle_serie: 1 }, jaIndicado: (() => {
+    const j = novoIndicado(); j.porPar.set(sc.chavePar(MAT, 10, 1), 2); return j; })() }), 2);
+  assert.deepStrictEqual([sem.pegar_em.localizacao_codigo, sem.pegar_em.lote_codigo], ['B-01', 'L1'], 'controle: so o par, sem o lote -> B-01/L1');
+});
+test('[RN-266.10] lote com peca presa: o livre do lote desconta o indicado a da frente', () => {
+  const L1 = { id: 1, codigo: 'L1', validade: '2026-11-30' }; const L2 = { id: 2, codigo: 'L2', validade: '2026-12-30' };
+  const linhas = [linha(10, 3, L1), linha(20, 3, L1), linha(30, 3, L2)];
+  const presos = [[1, 3]]; // L1: 6 na prateleira, 3 livres
+  const ja = novoIndicado();
+  assert.deepStrictEqual(onde(de(rodar({ itens: [item(1, 3)], linhas, presos, jaIndicado: ja }), 1)), ['A-01', 3, 3]);
+  const s = de(rodar({ itens: [item(2, 3)], linhas, presos, jaIndicado: ja }), 2);
+  assert.deepStrictEqual([s.pegar_em.localizacao_codigo, s.pegar_em.lote_codigo], ['C-01', 'L2']);
 });
 
 console.log(`\n${passed} passaram, ${failed} falharam\n`);
