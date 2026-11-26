@@ -62,19 +62,27 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
   série escolhida está em lote bloqueado, reprovado ou vencido sem liberação — automático, um clique ou prateleira escolhida; material com e
   sem controle de lote; o item da série antes ou depois dos outros → 400 com a literal do motor prefixada pelo nome do material (*"⟨material⟩:
   Lote L2 esta bloqueado e nao pode ser utilizado"*, *"… esta reprovado …"*, *"⟨material⟩: Lote L2 vencido em ⟨AAAA-MM-DD⟩ nao pode sair
-  para consumo. …"*) e **nada sai**: nenhum item entregue, nenhuma movimentação nova, saldos e séries como antes. Vencimento liberado → 200.
+  para consumo. …"*); com a origem planejada da separação **no** lote que ficou impedido, o um clique leva o envelope da planejada com a
+  frase do motor dentro (*"⟨material⟩: a origem da separação (P266) não serve mais (Lote L2 esta bloqueado e nao pode ser utilizado) —
+  entregue escolhendo de onde sai"*, Fase 2) — e **nada sai**: nenhum item entregue, nenhuma movimentação nova, saldos e séries como antes. Vencimento liberado → 200.
 - **RN-266.10 (B1628)** Na Fila (`GET /fila-separacao`), o *"Pegar em"* de cada item desconta do livre de cada par (prateleira, lote) — e do
   teto das séries e do lote com peça presa — o que foi sugerido aos itens das requisições **anteriores na ordem da Fila** e aos irmãos
   anteriores da mesma requisição. Cenário: *SA-01* 3, *SB-01* 3, R2 URGENTE 3 e R1 NORMAL 3 → R2 *"Pegar em SA-01 · 3"*, R1 *"Pegar em SB-01 ·
   3"*; separar as duas pela dica → 200 e 200.
 - **RN-266.11** A ordem é a da Fila: R1 e R2 com a mesma urgência → a de data de necessidade mais cedo primeiro (depois criação, número
   interno). Requisição sem dica (alçada de valor; sem separável) não desconta nada.
-- **RN-266.12 (B1629)** Item sem planejada, com pelo menos um par sugerível de livre > 0 **sem** o desconto das requisições anteriores, e
+- **RN-266.12 (B1629)** Item sem planejada, com pelo menos um par sugerível de livre > 0 **sem** o desconto das requisições anteriores
+  (mantido o desconto dos irmãos da mesma requisição — Fase 2), e
   nenhum **com** ele → `pegar_em: null`, `pegar_em_aviso: 'SALDO_INDICADO_A_OUTRAS'`; a tela mostra *"Sem endereço livre agora: o saldo das
   prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha o endereço no 'Sai de'."* Sem par
   sugerível nenhum → `SEM_ENDERECO_SUGERIVEL` como hoje. Desconto parcial → `NENHUM_ENDERECO_COBRE` / o par com o que sobra, como hoje.
 - **RN-266.13 (B1630)** `GET /requisicoes/:id/sugestao-coleta` devolve, para cada item, o mesmo `pegar_em`/`pegar_em_aviso` que a Fila mostra
   para a requisição (a fila inteira lida). Requisição fora da fila → `itens: []` como hoje; 404 como hoje.
+- **RN-266.15 (Fase 2)** A planejada (RN-188.01a) **não** desconta o indicado às requisições da frente — a frase dela (*"o resto não cabe lá"*)
+  seria falsa: a prateleira foi indicada a outra, não está cheia. Fica como hoje.
+- **RN-266.16 (Fase 2)** A janela de separação, no item sem planejada cuja sugestão veio sem prateleira com `SALDO_INDICADO_A_OUTRAS`, mostra a
+  frase da RN-266.12 (`#separacao-sugestao-<item>`) — antes ficava calada. A lista de coleta impressa mostra a mesma frase em "Sem endereço
+  sugerido" (sem código novo; um caso no teste dela).
 - **RN-266.14 (integração, cruza Fila → janela → separação)** No cenário da RN-266.10, a janela de R1 devolve *SB-01*; separar R2 e depois R1
   pelo `pegar_em` de cada uma → 200 e 200; a Fila de novo: as duas em ENTREGAR, sem dica.
 
@@ -89,13 +97,15 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (independente; só teste)** — RN-266.01: `server/tests/api/entregaConfereLoteDasSeries.api.test.js`. Controle positivo: sabotar a
+- [x] **T1 (independente; só teste)** — `b681741c` (23/23; sabotagens: guarda de status 15 caem, de vencimento 7, derivação do lote 22; a
+  prateleira de verdade entrou no arranjo — sem ela o saldo nascia sem endereço e "escolher a prateleira" não escolhia nada) — RN-266.01: `server/tests/api/entregaConfereLoteDasSeries.api.test.js`. Controle positivo: sabotar a
   guarda de status de `checarOrigemItem` e a derivação `loteId = loteSeries` → os cenários caem (item 1 sai antes da recusa).
 - [ ] **T2 (tronco)** — RN-266.10..13: `sugestaoDeColeta.js` (`jaIndicado`, aviso novo) + `requisitionService.listarFilaSeparacao` (a dica
   depois de ordenar a fila, um acumulador) + `sugestaoDeColetaDaRequisicao` (fila inteira). Testes: unidade em
   `server/tests/api/sugestaoDeColeta.api.test.js` (função pura) e rota em `server/tests/api/dicaDaFilaDivideAsPrateleiras.api.test.js`, com
   a **RN-266.14** (integração Fila → janela → separação pela rota) e um cenário pelo **serviço** (`listarFilaSeparacao`).
-- [ ] **T3 (galho, contra o contrato)** — a frase da RN-266.12 em `coletaTexto.js` + `coletaTexto.test.js`.
+- [ ] **T3 (galho, contra o contrato)** — a frase da RN-266.12 em `coletaTexto.js` + `coletaTexto.test.js`, a janela (RN-266.16, `RequisicoesList.js`)
+  e um caso em `listaColetaPdf.test.js`.
 - [ ] **T4** — Fase 5, documentos (`fechar-etapa`), suítes.
 
 ## Pontos de atenção
@@ -104,3 +114,16 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
 - Testes antigos que tenham duas requisições do mesmo material na fila podem mudar de prateleira esperada — se mudarem, é a regra nova;
   conferir caso a caso que a expectativa antiga era a dica que levava à recusa.
 - A lista de coleta impressa e o PDF da Fila leem a mesma fila — mudam junto (sem código).
+
+## Fase 2 (revisor fresco, uma passada, sobre o plano `9b4d0e65`)
+
+- **(1) importante** — a mensagem do "um clique" com a planejada **no** lote impedido é o envelope da planejada, não a frase pura. → RN-266.01
+  corrigida e cenário próprio no T1 (a sonda da Fase 0 rodava sem prateleira: a separação não gravava planejada com lote).
+- **(2) importante** — T1 e T2 sabotam/editam o mesmo arquivo. → executados em série (o T1 commitado antes do T2), sem worktree.
+- **menores:** a janela ficava calada com o aviso novo (→ RN-266.16); a lista impressa sem teste (→ caso no T3); a planejada com
+  `PLANEJADA_NAO_COBRE` falso (→ RN-266.15: não desconta); RN-266.12 ambígua quanto aos irmãos (→ explícito); o acumulador tem de entrar nos
+  dois tetos por lote (séries e lote com peça presa — no T2); o controle positivo do T1 tem de cair com o item da série **depois** (→ o comum
+  sai de prateleira escolhida, a passada 0, e cai: S1 15, S3 7, S2 22); a da frente com `NENHUM_ENDERECO_COBRE` só indica o que cobre — se o
+  resto for separado de outra prateleira, a dica da de trás pode ser recusada (dica; vai para os pontos de atenção e D).
+- **Refutação tentada, não achou:** nenhum caminho da entrega em que a série de lote impedido só é recusada na baixa (planejada sem lote,
+  K1, caso (c), `origem_automatica`, controle de lote 0); a corrida do status do lote está sob a trava do material desde a 220.
