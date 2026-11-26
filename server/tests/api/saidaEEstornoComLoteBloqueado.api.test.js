@@ -291,6 +291,54 @@ const ESTORNO_LIT = (L, bloq, fica, n) => `Não é possível estornar: o lote ${
       + 'conformidade) e depois estorne esta entrada.');
   });
 
+  // ---------------------------------------------------------------- Fase 5
+  const reprovarNoLote = async (m, L, q) => {
+    const rec = await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero, status, nota_fiscal) VALUES (?,?,?)', [`REC-264R-${m.id}`, 'RECEBIDO', 'NF-264R']);
+    const it = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, lote) VALUES (?,?,?,?,?,?)`, [rec.lastID, m.id, q, q, L, 'L1']);
+    await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado (recebimento_item_id, conforme, quantidade_aprovada, quantidade_reprovada,
+      responsavel_id, responsavel_nome) VALUES (?,?,?,?,?,?)`, [it.lastID, 0, 0, q, 9, 'Q']);
+  };
+  await test('[Fase 5 achado 1] reprovacao ja liberada pelo "Sem lote" (bloqueado 0, documento sem carimbo): o estorno da entrada do L1 passa', async () => {
+    const m = await material();
+    await entrar(m, 2, 'L1');
+    const e4 = await entrar(m, 4, 'L1');
+    await entrar(m, 4, 'L2');
+    const L1 = await loteId(m, 'L1');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 3 WHERE id = ?', [m.id]);
+    await reprovarNoLote(m, L1, 3);
+    await ok(desbloquear(m, 3, undefined));
+    assert.strictEqual(Number((await foto(m)).mat.b), 0);
+    await ok(estornar(e4));
+  });
+  await test('[Fase 5 achado 2] a Saida de 4 do L1 consumindo uma reserva manual tambem respeita as 2 bloqueadas do L1', async () => {
+    const { m, L1 } = await cenario();
+    await ok(bloquear(m, 2, L1));
+    const rv = await ok(post(`${API}/reservas`, { material_id: m.id, quantidade: 4, motivo: 'reserva 264' }), 201);
+    const rid = rv.body.id || (await dbGet(db, 'SELECT MAX(id) AS id FROM reservas_material_almoxarifado WHERE material_id = ?', [m.id])).id;
+    await recusa(m, saida(m, 4, { lote_id: L1, reserva_id: rid }), SAIDA_LIT('L1', 4, 2, 4, BLOQ(2)));
+  });
+  await test('[Fase 5 achado 3a] L1 com 3 em inspecao: a Saida de 4 do L1 -> "só 1 pode sair: 3 UN em inspeção"', async () => {
+    const { m, L1 } = await cenario();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 3 WHERE id = ?', [m.id]);
+    const rec = await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero, status, nota_fiscal) VALUES (?,?,?)', [`REC-264I-${m.id}`, 'RECEBIDO', 'NF-264I']);
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, lote, quantidade_em_inspecao) VALUES (?,?,?,?,?,?,?)`, [rec.lastID, m.id, 3, 3, L1, 'L1', 3]);
+    await recusa(m, saida(m, 4, { lote_id: L1 }), SAIDA_LIT('L1', 4, 1, 4, '3 UN em inspeção'));
+  });
+  await test('[Fase 5 achado 3b] L1 4 + 2 com 3 com terceiro: estornar a de 4 -> 400 "3 com terceiro … o retorno da remessa"', async () => {
+    const m = await material();
+    const e4 = await entrar(m, 4, 'L1');
+    await entrar(m, 2, 'L1');
+    const L1 = await loteId(m, 'L1');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 3 WHERE id = ?', [m.id]);
+    await dbRun(db, `INSERT INTO itens_remessa_terceiro_almoxarifado (remessa_id, material_id, quantidade, quantidade_retornada, lote_id, enviado_em)
+      VALUES (999, ?, 3, 0, ?, CURRENT_TIMESTAMP)`, [m.id, L1]);
+    await recusa(m, estornar(e4), 'Não é possível estornar: o lote L1 tem 3 UN presas nele (3 com terceiro) e, sem esta entrada, ficaria com '
+      + '2 UN — o lote ficaria apontando para peças que não estão nele. Libere 1 UN do lote L1 (a peça com terceiro pelo retorno da remessa) '
+      + 'e depois estorne esta entrada.');
+  });
+
   // ---------------------------------------------------------------- T4 integracao
   await test('[T4 fluxo] bloquear 2 no L1 -> seletor livre 2 -> Saida 3 recusa -> Saida 2 passa -> estorno da entrada recusa -> Desbloquear, estorno da Saida -> o da entrada passa', async () => {
     const { m, e1, L1 } = await cenario();

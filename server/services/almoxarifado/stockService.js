@@ -1893,7 +1893,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     // bloqueado do MATERIAL: a Saida de 4 do L1 com 2 bloqueados no L1 passava e o bloqueio ficava apontando para o L2. So quem declara
     // `confereLivreDoLote` (as rotas v1, v2 e a devolucao ao cliente; os internos tem regua propria ou baixam justamente a peca presa).
     // Depois das guardas do material (a mensagem delas nao muda), antes de qualquer efeito, dentro da trava do material.
-    if (opcoes.confereLivreDoLote === true && loteIdFinal && !permiteNegativo && !consumindoReserva && !baixandoTerceiro
+    // Fase 5 da 264 (achado 2): vale tambem para a saida que consome reserva — a reserva e do material, nunca do lote (C526); sem isto a
+    // Saida de 4 do L1 citando uma reserva manual levava as 2 bloqueadas do L1.
+    if (opcoes.confereLivreDoLote === true && loteIdFinal && !permiteNegativo && !baixandoTerceiro
       && !baixandoBloqueado && Number(material.controle_lote) === 1 && Number(material.controle_serie) !== 1) {
       const recusaLote = await recusaDoLivreDoLoteNaSaida(db, material, loteIdFinal, parseFloat(quantidade));
       if (recusaLote) throw Object.assign(new Error(recusaLote), { status: 400 });
@@ -3113,6 +3115,7 @@ async function recusaDaDevolucaoEmQuarentena(db, mov, dev, unidade) {
 async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
   const rdl = require('./retidoDoLote');
   const r = await dbGet(db, `SELECT COALESCE(mq.quantidade_bloqueada, 0) AS total,
+      COALESCE(mq.quantidade_em_terceiros, 0) AS em_terceiros,
       (SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END), 0)`)}
         FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
           AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
@@ -3124,8 +3127,11 @@ async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
   if (!r) return null;
   const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
   const bloq = Q.qtd(Math.max(0, Math.min(Number(r.total) || 0, Number(r.no_lote) || 0)));
-  const repr = n(r.repr);
-  const terc = n(r.terc);
+  // Fase 5 da 264 (achado 1): a reprovacao so conta no que o bloqueado do material ainda cobre depois do bloqueio do lote (a reprovacao ja
+  // liberada pelo "Sem lote" deixa o documento sem carimbo — C501 — e mandaria para uma NC que nao destrava); terceiros, no que o material
+  // ainda tem em terceiros. O mesmo teto por familia de `lotesComRetidoSql` (B1436), aplicado por parcela.
+  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, (Number(r.total) || 0) - bloq)));
+  const terc = Q.qtd(Math.min(n(r.terc), n(r.em_terceiros)));
   const presa = Q.qtd(bloq + repr + terc);
   if (!(presa > Q.QTD_FOLGA)) return null;
   const fica = Q.qtd(Math.max(0, (Number(r.saldo) || 0) - Number(mov.quantidade)));
