@@ -4,7 +4,7 @@ Pedido (print da Nova proposta): "Ficou otimo, agora queria melhorar essa pagina
 
 | # | Tarefa | Execucao estimada | Regua horas.js | Informado | Etapa/plano | Regua usada | Execucao medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Reorganizar a tela da proposta | 1h30 | tela grande sem motor (so layout) | 1h30 | — | Compras: alteracao de cadastro (~1h a 1h30) | — | — | — |
+| 1 | Reorganizar a tela da proposta | 1h30 | tela grande sem motor (so layout) | 1h30 | — | Compras: alteracao de cadastro (~1h a 1h30) | ~13min | 15min | 9f826f3, d55a763 |
 
 Medido antes: PropostaForm.js tem 5 secoes (Dados gerais com 9 campos + 3 dicas; Cliente de fora do Brasil, sempre aberta, com 5 campos e
 paragrafo; Pipeline e dashboard com 8 campos + 2 dicas; Itens; PDF). Os itens vinham depois de 3 secoes. So layout: mesmo estado, mesmo
@@ -12,3 +12,5 @@ payload (montarPayloadProposta).
 
 Medir no fechamento:
 `node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-27 --ate 2026-11-27 --grupos "Tela da proposta=tela da proposta|proposta mais limpa"`
+
+Fechamento: horas.js a32b12e ~6min + 9f826f3 ~7min + d55a763 ~0min. A estimativa (1h30) ficou alta: era so layout, sem servidor nem regra. Regua: tela grande so de layout ~30 min.

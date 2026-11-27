@@ -1,0 +1,7 @@
+*Concluído — tela de cadastro da proposta mais limpa*
+_27/11/2026_
+
+1. Tela da proposta reorganizada, com menos informação à vista — estimado 1h30 · realizado 15min
+
+*Total: estimado 1h30 · realizado 15min*
+_Junto, no celular: os botões Salvar e Catálogo de produtos da proposta, que estavam invisíveis, voltaram a aparecer._
