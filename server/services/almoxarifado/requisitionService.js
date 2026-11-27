@@ -3179,43 +3179,61 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   if (conferidasNoLote.length) {
     const lotePreso = memoLotesComPecaPresa(db);
     const fica = parteQueFicaPorItem();
-    const jaNoLote = new Map();
+    // Etapa 272 (C555, RN-272.07..09): duas passadas. A 1a e a de sempre (`jaPedido` = o que os itens ANTERIORES pedem do lote) e decide
+    // quem recebe a recusa (B1447: a mao, nao a planejada). Mas o `guardado` soma a guarda que FICA de TODAS as outras pecas — com a 1a
+    // passada so, a mesma entrega passava ou nao conforme a ordem (o item de antes nao via o que o de depois pede; o de depois nao via guarda
+    // do de antes): no C555, 5 saiam e a caixa de 2 ficava num lote com 5 livres. A 2a passada (so se a 1a passou) confere cada item com
+    // `jaPedido` = o que TODOS os outros pedem do lote — a conta da janela (B1636). Sem guarda que fica de outro item, a 2a nunca recusa (a
+    // soma de todos e a da ultima conferencia da 1a). A guarda que fica do proprio item continua fora (B1446).
+    const totalNoLote = new Map();
     for (const c of conferidasNoLote) {
       const k = `${c.item.material_id}|${c.loteId}`;
-      const jaPedido = Q.qtd(jaNoLote.get(k) || 0);
-      jaNoLote.set(k, jaPedido + num(c.qtdComOrigem));
-      // eslint-disable-next-line no-await-in-loop
-      // Etapa 267 (C471, B1633, RN-267.11): o SO LOTE (sem endereco) confere o lote tambem sem peca presa — o motor escolhe a prateleira
-      // do lote e, sem esta conta, levava a parte que outra requisicao separou ali. So quando ha guarda no lote (abaixo); sem ela, como hoje.
-      const soLote = !c.origemId;
-      const sit = await lotePreso(c.item.material_id, c.loteId, { mesmoSemPeca: soLote });
-      if (!sit) continue;
-      const presa = sit.retido + sit.inspecao > Q.QTD_FOLGA;
-      // eslint-disable-next-line no-await-in-loop
-      const proprias = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
-        WHERE ir.requisicao_id = ? AND ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ?
-          AND ir.id <> ?`, [requisicaoId, c.item.material_id, c.loteId, c.item.id]);
-      // Fase 5 (revisao da regra, reproduzido): a guarda que fica do PROPRIO item nao entra — e a caixa dele mesmo; a proxima entrega
-      // dele confere o lote de novo (B1446). Com ela, entregar 1 de uma caixa de 3 com 2 livres no lote era recusado ("so 0").
-      const ficaPropria = proprias.reduce((acc, g) => acc + guardaQueConta(g, new Map(), fica), 0);
-      // eslint-disable-next-line no-await-in-loop
-      const guardado = Q.qtd((await guardadoNoLoteDeOutras(db, c.item.material_id, c.loteId, requisicaoId)) + ficaPropria);
-      if (!presa && guardado <= Q.QTD_FOLGA) continue; // Etapa 267: so lote sem peca presa e sem guarda — nenhuma conferencia nova
-      const podeSair = Q.qtd(Math.max(0, sit.livre - guardado - jaPedido));
-      if (podeSair + Q.QTD_FOLGA >= num(c.qtdComOrigem)) continue;
-      // eslint-disable-next-line no-await-in-loop
-      const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]);
-      const frase = fraseLivreDoLote({ gesto: 'entrega', lote: lote.codigo, saldo: sit.saldo, podeSair, retido: sit.retido,
-        inspecao: sit.inspecao, guardado, jaPedido, qty: c.qtdComOrigem, unidade: c.item.unidade });
-      let msg = `${c.item.material_nome}: ${frase}. Escolha outro lote ou deixe "Qualquer endereço (automático)"`;
-      if (c.planejada) { // B1446: o envelope de hoje da planejada que nao serve mais (o caminho da B1389)
+      totalNoLote.set(k, Q.qtd((totalNoLote.get(k) || 0) + num(c.qtdComOrigem)));
+    }
+    // Fase 2 (achado 3): na 2a passada, quem NAO sai da propria caixa no lote vem primeiro — o item que tira exatamente a caixa dele nao e o
+    // culpado do excesso (o envelope "a origem da separacao nao serve mais" mentiria e escolher a caixa a mao recusaria de novo; B1447).
+    const daPropriaCaixa = (c) => !!c.origemId && Number(c.item.origem_separacao_id) === Number(c.origemId)
+      && c.item.lote_separacao_id != null && Number(c.item.lote_separacao_id) === Number(c.loteId);
+    const ordemDaSegunda = [...conferidasNoLote.filter((c) => !daPropriaCaixa(c)), ...conferidasNoLote.filter(daPropriaCaixa)];
+    for (const passada of [1, 2]) {
+      const jaNoLote = new Map();
+      for (const c of (passada === 1 ? conferidasNoLote : ordemDaSegunda)) {
+        const k = `${c.item.material_id}|${c.loteId}`;
+        const jaPedido = passada === 1 ? Q.qtd(jaNoLote.get(k) || 0) : Q.qtd(Math.max(0, totalNoLote.get(k) - num(c.qtdComOrigem)));
+        jaNoLote.set(k, Q.qtd((jaNoLote.get(k) || 0) + num(c.qtdComOrigem)));
         // eslint-disable-next-line no-await-in-loop
-        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [c.origemId]);
-        msg = `${c.item.material_nome}: a origem da separação (${loc ? loc.codigo : c.origemId}) não serve mais (${frase}) — entregue escolhendo de onde sai`;
+        // Etapa 267 (C471, B1633, RN-267.11): o SO LOTE (sem endereco) confere o lote tambem sem peca presa — o motor escolhe a prateleira
+        // do lote e, sem esta conta, levava a parte que outra requisicao separou ali. So quando ha guarda no lote (abaixo); sem ela, como hoje.
+        const soLote = !c.origemId;
+        const sit = await lotePreso(c.item.material_id, c.loteId, { mesmoSemPeca: soLote });
+        if (!sit) continue;
+        const presa = sit.retido + sit.inspecao > Q.QTD_FOLGA;
+        // eslint-disable-next-line no-await-in-loop
+        const proprias = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
+          WHERE ir.requisicao_id = ? AND ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ?
+            AND ir.id <> ?`, [requisicaoId, c.item.material_id, c.loteId, c.item.id]);
+        // Fase 5 (revisao da regra, reproduzido): a guarda que fica do PROPRIO item nao entra — e a caixa dele mesmo; a proxima entrega
+        // dele confere o lote de novo (B1446). Com ela, entregar 1 de uma caixa de 3 com 2 livres no lote era recusado ("so 0").
+        const ficaPropria = proprias.reduce((acc, g) => acc + guardaQueConta(g, new Map(), fica), 0);
+        // eslint-disable-next-line no-await-in-loop
+        const guardado = Q.qtd((await guardadoNoLoteDeOutras(db, c.item.material_id, c.loteId, requisicaoId)) + ficaPropria);
+        if (!presa && guardado <= Q.QTD_FOLGA) continue; // Etapa 267: so lote sem peca presa e sem guarda — nenhuma conferencia nova
+        const podeSair = Q.qtd(Math.max(0, sit.livre - guardado - jaPedido));
+        if (podeSair + Q.QTD_FOLGA >= num(c.qtdComOrigem)) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]);
+        const frase = fraseLivreDoLote({ gesto: 'entrega', lote: lote.codigo, saldo: sit.saldo, podeSair, retido: sit.retido,
+          inspecao: sit.inspecao, guardado, jaPedido, qty: c.qtdComOrigem, unidade: c.item.unidade });
+        let msg = `${c.item.material_nome}: ${frase}. Escolha outro lote ou deixe "Qualquer endereço (automático)"`;
+        if (c.planejada) { // B1446: o envelope de hoje da planejada que nao serve mais (o caminho da B1389)
+          // eslint-disable-next-line no-await-in-loop
+          const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [c.origemId]);
+          msg = `${c.item.material_nome}: a origem da separação (${loc ? loc.codigo : c.origemId}) não serve mais (${frase}) — entregue escolhendo de onde sai`;
+        }
+        const err = new Error(msg);
+        err.status = 400;
+        throw err;
       }
-      const err = new Error(msg);
-      err.status = 400;
-      throw err;
     }
   }
 
