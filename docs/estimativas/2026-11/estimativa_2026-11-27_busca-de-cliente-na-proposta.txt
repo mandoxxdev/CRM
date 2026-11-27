@@ -1,0 +1,9 @@
+*Planejamento — escolher o cliente na proposta*
+_27/11/2026_
+
+*1. Busca do cliente ao criar ou editar a proposta*
+Hoje o cliente é escolhido numa lista com todos os clientes cadastrados, que só dá para rolar, e a tela carrega todos eles ao abrir. Passa a ser um campo de busca: digita-se parte do nome, do nome fantasia ou do CNPJ e aparecem os clientes que batem, com cidade e estado para diferenciar, escolhidos pelo mouse ou pelo teclado. A tela também abre mais rápido, porque não carrega mais a lista inteira.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
