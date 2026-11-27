@@ -183,3 +183,22 @@ O item **18** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-
   `min(parte, caixa − q)` no servidor), usa a menor que pode ser.
 - O campo de quantidade fica livre (B1637); a descida só no `onChange` do **Sai de**.
 - O botão de um clique não abre a janela e não é tocado.
+
+## Verificação (medida sobre o código final, `1a2dfc81`/`0ac0fd70`; os documentos não mudam código)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **677/679 arquivos OK** — os 2 que falham são os já conhecidos de
+  proposta, de outra máquina (`propostaBilingueTemplate` 7/1, `propostaPdfExigeLogin` 3/1); o mais lento: `propostaClausulasGrava`, 79,9 s.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`): **258/258 suítes, 3386/3386 testes**. `CI=true npx react-scripts build`: **Compiled successfully.**
+- `saiDeComLoteParteSemLote` 10/10; `entregaSaiDeRespeitaSeparado` 26/26; `RequisicoesEntregaLimiteDaOrigem` 9/9; o subconjunto de
+  entrega/lote/separação/requisição/fila (156 arquivos) verde. Sabotagens: 3 no servidor, 8 na tela (âncora contada = 1, cópia, md5 sabotado ≠
+  original e restaurado = original).
+- Nenhum clique no navegador (F (268)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 1 (Fase 2 — a peça sem lote escolhendo o lote, B1638, e o teto da própria origem).
+- Achados: Fase 2 — 1 importante reproduzido e consertado, 4 menores absorvidos, 3 registrados; Fase 5 — 1 médio reproduzido, de antes da etapa
+  (C555), registrado e não consertado; nenhum ruído.
+- Paralelismo: T1 e T2 em série (um executor); as revisões rodaram enquanto o código e os documentos andavam.
+- Defeito que escapou: (preencher na etapa seguinte). Da 267: nenhum apontado.

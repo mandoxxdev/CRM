@@ -1,0 +1,7 @@
+*Concluído — "Sai de" com lote e limite da janela de entrega*
+_26/11/2026_
+
+1. "Sai de" com lote desconta o que está separado sem lote — estimado 1h15 · realizado 30 min
+2. Janela de entrega limita a quantidade de outra prateleira — estimado 45 min · realizado 30 min
+
+*Total: estimado 2h · realizado 1h*
