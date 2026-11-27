@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — Semana de 22/11 a 28/11/2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa; --tela:#2f80ed; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  td:last-child, th:last-child { white-space:nowrap; }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figure.estreita img { width:auto; max-width:100%; }
+  figure.alta img { width:auto; max-width:100%; max-height:620px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } tr { break-inside:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } figure.alta img { max-height:150mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 22/11 a 28/11/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">O sistema ganhou um visual novo em todas as telas, a proposta passou a poder sair em português e inglês ou espanhol,
+  em dólar ou euro, o fornecedor ganhou foto na ficha e o cadastro de material ficou mais enxuto. No almoxarifado, a Fila de separação
+  passou a dividir as prateleiras entre as requisições, a separação passou a guardar quando a peça vem de duas prateleiras, e a
+  transferência de peça com número de série e a saída de lote com peças bloqueadas ficaram mais claras; por baixo, a entrega passou a
+  conferir tudo antes de dar baixa em qualquer material. No total, 28h15 de trabalho, mais da metade no cuidado com prateleiras, lotes
+  e números de série do almoxarifado.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Visual novo em todas as telas</h3>
+    <p><span class="rotulo">Onde:</span> em todo o sistema, no computador e no celular.</p>
+    <p><span class="rotulo">Antes:</span> cada tela tinha um estilo: títulos de tamanhos diferentes, cores fortes, botões de vários
+    formatos. Na tela de Produtos os nomes dos grupos sumiam sobre a foto, e em algumas tabelas o botão de editar aparecia como um
+    quadradinho cinza.</p>
+    <p><span class="rotulo">Agora:</span> fundo claro, uma cor só para as ações e o mesmo espaçamento em todos os módulos. O menu lateral
+    ganhou ícones coloridos e a marca da GMP no rodapé. Os números dos painéis contam até o valor ao abrir, e as telas entram em sequência,
+    com movimento suave. O painel do Comercial abre no ano corrente ("Ano 2026") e recomeça sozinho no ano que vem. No celular, o
+    aplicativo ficou mais limpo, com cartões maiores e filtros numa linha.</p>
+    <figure><img src="prints/visual-novo-painel.png" alt="Painel do Comercial com o visual novo, o valor aprovado em destaque e o ano 2026"><figcaption>O painel do Comercial no visual novo, já mostrando o ano corrente.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Proposta para cliente de fora do Brasil</h3>
+    <p><span class="rotulo">Onde:</span> <b>Comercial → Propostas</b>, editar uma proposta, seção <b>Cliente de fora do Brasil</b>.</p>
+    <p><span class="rotulo">Antes:</span> a proposta só saía em português e em reais. Para um cliente do Peru, por exemplo, era preciso
+    traduzir e converter à mão, fora do sistema.</p>
+    <p><span class="rotulo">Agora:</span> escolhe-se o idioma (português com inglês ou com espanhol), a moeda (real, dólar ou euro), o
+    incoterm e o local de entrega. O documento sai em duas colunas, português à esquerda e a outra língua à direita, e o texto escrito em
+    português é traduzido sozinho, com o negrito no lugar e a tradução podendo ser corrigida. Os valores continuam digitados em reais: a
+    cotação do dia do Banco Central vem preenchida, e o documento mostra o valor convertido. A lista de propostas e o painel mostram a
+    moeda certa, com o valor em reais embaixo. Uma cláusula avisa que vale a versão em português.</p>
+    <figure><img src="prints/proposta-fora-do-brasil.png" alt="Seção Cliente de fora do Brasil com espanhol, dólar, cotação 5,7446, FOB e Porto de Santos"><figcaption>Proposta em português e espanhol, em dólar, com a cotação do Banco Central e o incoterm.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Foto do fornecedor e cadastro de material mais enxuto</h3>
+    <p><span class="rotulo">Onde:</span> <b>Compras → Fornecedores</b> (lápis de um fornecedor) e <b>Compras → Materiais</b>.</p>
+    <p><span class="rotulo">Antes:</span> a foto do fornecedor só aparecia e só se trocava na tela de fornecedores homologados. O cadastro
+    de material tinha três campos que ninguém usava: Descrição, Aplicação e Especificações Técnicas.</p>
+    <p><span class="rotulo">Agora:</span> a ficha do fornecedor tem a seção <b>Foto</b>, com <b>Trocar foto</b> e <b>Tirar foto</b>; a
+    mesma foto aparece em uma tela e na outra. Os três campos saíram do cadastro de material. Quem já tinha texto num deles continua vendo o
+    texto, marcado "campo retirado — só leitura", e salvar não o apaga.</p>
+    <figure><img src="prints/fornecedor-foto.png" alt="Seção Foto na ficha do fornecedor com a imagem e os botões Trocar foto e Tirar foto"><figcaption>A foto na ficha do fornecedor.</figcaption></figure>
+    <figure class="estreita"><img src="prints/material-campo-retirado.png" alt="Cadastro de material com Aplicação marcada como campo retirado, só leitura, e Observações Gerais"><figcaption>No material que já tinha a Aplicação preenchida, o texto fica só para leitura.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>A Fila de separação não manda duas requisições à mesma prateleira</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Fila de separação</b>, na linha "Pegar em" de cada requisição.</p>
+    <p><span class="rotulo">Antes:</span> com 3 rolamentos numa prateleira e 3 em outra, duas requisições de 3 recebiam a mesma dica de
+    onde pegar. O almoxarife separava a primeira, voltava à mesma prateleira para a segunda e a separação era recusada.</p>
+    <p><span class="rotulo">Agora:</span> a dica divide o que há em cada prateleira entre as requisições, na ordem de urgência: a
+    urgente vai à primeira prateleira e a normal à segunda. Quando o saldo já foi todo indicado às requisições da frente, a tela diz isso
+    em vez de mandar a uma prateleira vazia. A Fila também passou a <b>agrupar</b> por setor ou por projeto.</p>
+    <figure><img src="prints/fila-pegar-em-urgente.png" alt="Requisição urgente com Pegar em A-01-P2, 3 PC"><img src="prints/fila-pegar-em-normal.png" alt="Requisição normal com Pegar em B-01-P3, 3 PC" style="margin-top:8px"><figcaption>O mesmo rolamento em duas requisições: a urgente pega em A-01-P2 e a normal em B-01-P3.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Separar parte de uma prateleira e parte de outra</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Requisições</b>, detalhe da requisição.</p>
+    <p><span class="rotulo">Antes:</span> quando a peça era separada em duas vezes, 3 de uma prateleira e 2 de outra, o sistema só
+    guardava a primeira. Na entrega, as outras 2 saíam pela regra automática, às vezes de uma terceira prateleira, e o saldo das
+    prateleiras deixava de bater com o galpão.</p>
+    <p><span class="rotulo">Agora:</span> o detalhe mostra as duas ("separado de A-01-P1 (3 PC) · B-01-P1 (2 PC)") e a entrega tira cada
+    parte de onde foi pega. As frases da janela de separação e de entrega explicam isso.</p>
+    <figure class="estreita"><img src="prints/requisicao-separado-de-duas.png" alt="Detalhe da requisição com separado de A-01-P1 (3 PC) e B-01-P1 (2 PC)"><figcaption>Parafuso separado de duas prateleiras: as duas ficam anotadas.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Transferência de peça com número de série e saída de lote com peças bloqueadas</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Movimentações → Nova Movimentação</b>.</p>
+    <p><span class="rotulo">Antes:</span> ao transferir um inversor com número de série de uma prateleira para outra, o saldo mudava de
+    lugar, mas o número de série continuava dizendo que a peça estava na prateleira antiga. Na saída, a lista de lotes mostrava "saldo 4"
+    mesmo com 2 dessas peças bloqueadas, e a saída de 4 passava levando a peça bloqueada.</p>
+    <p><span class="rotulo">Agora:</span> a transferência lista as séries de cada prateleira e pede quais estão mudando de lugar; cada
+    série marcada passa a constar no destino, e desfazer a transferência leva as séries de volta. Na saída, o lote aparece como "saldo 4 —
+    livre 2 (2 bloqueadas no lote)", e a saída ou a perda de mais que o livre é recusada com a explicação.</p>
+    <figure class="alta"><img src="prints/transferencia-series.png" alt="Janela de transferência pedindo as séries a transferir, com uma marcada"><figcaption>A transferência pede as séries que mudam de prateleira (1/1 selecionada).</figcaption></figure>
+    <figure class="estreita"><img src="prints/saida-lote-livre.png" alt="Lista de lotes com L2611-07 saldo 4, livre 2, 2 bloqueadas no lote"><figcaption>Na saída, o lote diz quantas peças estão livres e quantas estão bloqueadas.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as informações. Quando ele erra, o erro
+  aparece depois, em forma de estoque que não bate ou de material que some. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>A entrega confere tudo antes de dar baixa em qualquer material</h3>
+    <p><span class="rotulo">O problema:</span> numa requisição com dois materiais, o primeiro saía do estoque e só depois o sistema
+    descobria que o segundo não podia sair (a prateleira dele estava bloqueada, ou o lote estava em inspeção, ou a peça estava separada
+    para outra requisição). A entrega parava no meio, com metade baixada. Em outros casos a peça saía "sem lote" e o relatório de saldo por
+    lote ficava negativo.</p>
+    <p><span class="rotulo">O que foi feito:</span> a entrega passou a conferir todos os itens antes de tirar qualquer peça, e a dizer o
+    motivo da recusa ("3 em inspeção só saem depois de decidida a inspeção", "o resto do lote está separado para outra requisição"). A
+    janela de entrega limita a quantidade ao que pode sair da prateleira escolhida, a lista "Sai de" se atualiza sozinha depois de uma
+    recusa, e a tela da requisição e a Fila mostram como "a entregar" só o que a entrega aceita. A entrega de dois itens do mesmo lote dá
+    o mesmo resultado em qualquer ordem.</p>
+    <p><span class="rotulo">O que isso evita:</span> entrega pela metade, peça de outra requisição levada por engano e saldo por lote
+    negativo. É como o caixa conferir se todos os produtos têm preço antes de começar a passar a compra.</p>
+  </div>
+
+  <div class="item">
+    <h3>Peças bloqueadas e reprovadas ficam no lote certo</h3>
+    <p><span class="rotulo">O problema:</span> depois de liberar uma reprovação da inspeção, a devolução ao fornecedor e o sucateamento
+    pela não conformidade podiam levar peças livres do lote no lugar das reprovadas. E a saída, a perda, a devolução ao cliente e o
+    retalho podiam levar a peça bloqueada de um lote, deixando o bloqueio apontando para um lote vazio.</p>
+    <p><span class="rotulo">O que foi feito:</span> todas essas saídas passaram a conferir quantas peças do lote estão bloqueadas antes
+    de baixar, e a recusar com o caminho certo na mensagem (desbloquear antes, cancelar a não conformidade, rejeitar o sucateamento).</p>
+    <p><span class="rotulo">O que isso evita:</span> sucatear ou devolver peça boa, e bloqueio que não corresponde a nenhuma peça no
+    galpão.</p>
+  </div>
+
+  <div class="item">
+    <h3>Desfazer um lançamento não deixa o estoque torto</h3>
+    <p><span class="rotulo">O problema:</span> desfazer a entrada de uma devolução que tinha ido para a quarentena deixava 2 peças
+    bloqueadas que já não estavam no estoque. Desfazer a entrada de um lote com peças bloqueadas, ou desfazer um desbloqueio depois de o
+    lote ter sido esvaziado, fazia o mesmo. Desfazer a devolução de uma requisição já excluída tirava as peças duas vezes (o estoque
+    caía de 5 para 3). E desfazer um ajuste de prateleira antigo passava por cima de uma contagem mais recente.</p>
+    <p><span class="rotulo">O que foi feito:</span> nesses casos o desfazer passou a ser recusado, dizendo o que fazer antes. A devolução
+    feita depois de uma exclusão interrompida passou a contar o que a exclusão já tinha devolvido. O histórico de Movimentações passou a
+    dizer de quais prateleiras a peça saiu ("Saiu de: A 3 · B 3").</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque e bloqueio que não batem com o que está no galpão depois de corrigir um
+    lançamento.</p>
+  </div>
+
+  <div class="item">
+    <h3>Achar material pelo fornecedor e requisição com projeto</h3>
+    <p><span class="rotulo">O problema:</span> buscando, por exemplo, "aços" em Materiais, o material cujo fornecedor é a Aços Brasil não aparecia, nem
+    pelo código que o fornecedor usa na nota. E a requisição não tinha onde dizer o projeto: a Fila só sabia o projeto quando a requisição
+    citava uma OS.</p>
+    <p><span class="rotulo">O que foi feito:</span> a busca de materiais acha pelo nome e pelo código do fornecedor, e a lista mostra os
+    fornecedores embaixo do nome. O formulário da requisição ganhou o campo <b>Projeto</b>, que vem preenchido quando a OS já tem projeto
+    e recusa projeto de outro cliente.</p>
+    <p><span class="rotulo">O que isso evita:</span> procurar material com o nome errado na mão e requisição sem saber para qual obra
+    vai.</p>
+  </div>
+
+  <div class="item">
+    <h3>O sistema não para para todos na hora da atualização</h3>
+    <p><span class="rotulo">O problema:</span> numa noite de atualizações seguidas, a tela ficou branca para quem abriu o sistema no
+    instante da troca, e depois todas as telas vieram vazias, para todo mundo, parecendo que os dados tinham sumido. Não tinham: o sistema
+    contava os acessos da empresa inteira como se fossem de uma pessoa só e passou a recusar todos.</p>
+    <p><span class="rotulo">O que foi feito:</span> a página passou a se recuperar sozinha ("Atualizando o sistema...") quando abre no
+    meio de uma atualização, e o limite de acessos passou a contar por usuário.</p>
+    <p><span class="rotulo">O que isso evita:</span> a empresa inteira parada porque algumas abas ficaram abertas durante uma
+    atualização.</p>
+  </div>
+
+  <p>Também foram feitos: o modelo de contrato e a capa da proposta de Projeto Conceitual; o valor do item da proposta digitado no
+  formato brasileiro (23.550,00 não vira mais 23,55); apagar uma família ou um produto libera o nome e o código para cadastrar de novo; e a
+  entrada num lote já vencido passou a avisar que a saída fica bloqueada até liberar o vencimento.</p>
+
+  <h2>Tempo gasto</h2>
+  <table>
+    <tr><th>O que foi feito</th><th>Tempo</th></tr>
+    <tr><td>Planejamento das alterações, estimativas de tempo e relatório</td><td>4h30</td></tr>
+    <tr><td>Visual novo das telas (computador e celular), painel por ano e ajustes no Comercial</td><td>4h</td></tr>
+    <tr><td>Propostas: inglês e espanhol, dólar e euro, modelo do Projeto Conceitual</td><td>3h</td></tr>
+    <tr><td>Almoxarifado e Compras: busca pelo fornecedor, projeto na requisição, Fila agrupada, foto do fornecedor e campos do material</td><td>1h30</td></tr>
+    <tr><td>Almoxarifado: prateleiras, lotes e números de série (entrega, separação, Fila, transferência, saída e desfazer lançamentos)</td><td>15h15</td></tr>
+    <tr><th>Total</th><th>28h15</th></tr>
+  </table>
+  <p>Tempo medido pelo registro do trabalho feito na semana.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <b>Comercial → Propostas</b>, edite uma proposta e, em <b>Cliente de fora do Brasil</b>, escolha "Português + inglês" e
+    "Dólar americano": a cotação do Banco Central aparece sozinha. Salve e abra a pré-visualização: o documento sai em duas colunas.</li>
+    <li>Abra <b>Compras → Fornecedores</b>, clique no lápis de um fornecedor e use <b>Trocar foto</b>: a foto aparece também em
+    <b>Fornecedores homologados</b>.</li>
+    <li>Abra <b>Almoxarifado → Fila de separação</b>: o rolamento 6206-2RS aparece em duas requisições, cada uma com uma prateleira
+    diferente em "Pegar em". No campo <b>Agrupar</b>, escolha "Por setor".</li>
+    <li>Abra <b>Almoxarifado → Requisições</b> e clique em REQ-2611-0143: o item mostra as duas prateleiras de onde foi separado.</li>
+    <li>Em <b>Almoxarifado → Movimentações → Nova Movimentação</b>, escolha o inversor CFW300 e o tipo Transferência: a tela pede as
+    séries. Troque para o anel de vedação O-ring e o tipo Saída: o lote L2611-07 mostra "livre 2 (2 bloqueadas no lote)".</li>
+  </ol>
+</main>
+</body>
+</html>
