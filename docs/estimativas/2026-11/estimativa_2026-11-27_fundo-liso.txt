@@ -1,0 +1,9 @@
+*Planejamento — fundo do aplicativo sem manchas coloridas*
+_27/11/2026_
+
+*1. Fundo liso no celular e no computador*
+O fundo do aplicativo deixa de ter as manchas coloridas que se mexem (azul e ciano no celular, azul e roxo bem fracos no computador) e passa a ser um cinza-claro liso, com os cartões brancos por cima; no tema escuro, preto. Junto, no painel do celular, os valores grandes param de quebrar no meio do número (R$ 17.015. / 772).
+Tempo estimado: *45min*
+
+*Total estimado: 45min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
