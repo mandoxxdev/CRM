@@ -3198,6 +3198,11 @@ async function initSchemaUmaExecucao(db) {
   // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_mov_almox_material_tipo
     ON movimentacoes_almoxarifado (material_id, cancelado, tipo)`);
+  // Etapa 271 (Fase 5): a conta do que a exclusao interrompida devolveu (`exclusaoInterrompidaSql`) roda por linha da lista das
+  // entregas e procura as ENTRADAs da requisicao — sem indice em `requisicao_id` era varredura do livro por linha (medido: 450 ms numa
+  // lista de 30 com 20 mil movimentos).
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_mov_almox_requisicao_material
+    ON movimentacoes_almoxarifado (requisicao_id, material_id, tipo)`);
 
   // ── Etapa 12, Task 1 (RN-01..RN-03): fila de notificacoes — enfileirar so grava, o worker
   // (notificationQueueService.processarFila) e quem envia. hash_dedupe UNIQUE e o dedupe (RN-02,

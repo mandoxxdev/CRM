@@ -82,7 +82,11 @@ const saidaComSerieSql = (alias) => `(EXISTS (SELECT 1 FROM series_almoxarifado 
 const exclusaoInterrompidaSql = (saidaSql, semDevolucaoId) => {
   const sem = semDevolucaoId == null ? null : Number(semDevolucaoId);
   if (sem !== null && !Number.isInteger(sem)) throw new Error('exclusaoInterrompidaSql: semDevolucaoId tem de ser inteiro');
-  return `COALESCE((SELECT MAX(0, MIN(MAX(0, sxa.quantidade - ${devolvidaVivaDa('sxa', sem)}),
+  // Fase 5 (desempenho): sem ENTRADA da exclusao da requisicao (o caso de sempre) responde 0 sem as somas — so o EXISTS pelo indice
+  // `idx_mov_almox_requisicao_material`.
+  return `COALESCE((SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado exq
+      WHERE exq.requisicao_id = sxa.requisicao_id AND exq.material_id = sxa.material_id AND exq.tipo = 'ENTRADA'
+        AND exq.motivo LIKE '${MOTIVO_DA_EXCLUSAO}%') THEN 0 ELSE MAX(0, MIN(MAX(0, sxa.quantidade - ${devolvidaVivaDa('sxa', sem)}),
     (SELECT COALESCE(SUM(ex.quantidade), 0) FROM movimentacoes_almoxarifado ex
       JOIN requisicoes_almoxarifado rqe ON rqe.id = ex.requisicao_id
       WHERE ex.requisicao_id = sxa.requisicao_id AND ex.material_id = sxa.material_id AND ex.tipo = 'ENTRADA'
@@ -90,7 +94,7 @@ const exclusaoInterrompidaSql = (saidaSql, semDevolucaoId) => {
         AND NOT EXISTS (SELECT 1 FROM series_entrada_anterior_almoxarifado sez WHERE sez.movimentacao_entrada_id = ex.id))
     - (SELECT COALESCE(SUM(MAX(0, sp.quantidade - ${devolvidaVivaDa('sp', sem)})), 0) FROM movimentacoes_almoxarifado sp
       WHERE sp.requisicao_id = sxa.requisicao_id AND sp.material_id = sxa.material_id AND sp.tipo = 'SAIDA'
-        AND COALESCE(sp.cancelado, 0) = 0 AND sp.id < sxa.id AND NOT ${saidaComSerieSql('sp')})))
+        AND COALESCE(sp.cancelado, 0) = 0 AND sp.id < sxa.id AND NOT ${saidaComSerieSql('sp')}))) END
   FROM movimentacoes_almoxarifado sxa
   WHERE sxa.id = ${saidaSql} AND sxa.requisicao_id IS NOT NULL AND sxa.tipo = 'SAIDA' AND COALESCE(sxa.cancelado, 0) = 0
     AND NOT ${saidaComSerieSql('sxa')}), 0)`;
