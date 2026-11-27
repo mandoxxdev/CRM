@@ -1,0 +1,9 @@
+*Planejamento — lista de clientes ao clicar no campo*
+_27/11/2026_
+
+*1. O campo de cliente da proposta abre a lista ao ser clicado*
+Hoje a lista só aparece depois de digitar. Ao clicar no campo, passa a abrir na hora com os primeiros clientes em ordem alfabética, e ao digitar a lista vai filtrando entre todos.
+Tempo estimado: *30min*
+
+*Total estimado: 30min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
