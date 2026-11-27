@@ -22,7 +22,12 @@ O C498 dizia que a parte separada de *A* **sem lote** era *"qualquer lote em A"*
 - **Por quê:** a linha sem lote e a linha do lote são pares diferentes no saldo e no motor (a saída estrita por (*A*, *L1*) só baixa a linha de
   *L1*; a de (*A*, sem lote), só a sem lote). A régua exata (B1410) é a certa.
 
-**Sem código.** Ficam a prova permanente (teste) e a correção dos documentos (C498 e B1410 diziam o contrário).
+**Sem código para o caso medido.** Ficam a prova permanente (teste) e a correção dos documentos (C498 e B1410 diziam o contrário).
+*(**Fase 2, achado 3 — a conclusão acima estava incompleta.** O C498 existia por outro caminho: a peça com a origem guardada em (*A*, sem lote)
+escolhendo ela mesma o **Sai de** (*A*, *L1*). Para a troca (Etapa 63) é a mesma origem ("qualquer lote ali"), então a entrega não conferia a
+E1 — só o físico de (*A*, *L1*) — e levava a guarda de outra requisição em (*A*, *L1*). Reproduzido: R1 guardou 3 em (*A*, sem lote), R3 2 em
+(*A*, *L1*); R1 entrega 3 com **Sai de** (*A*, *L1*) → **200**, *A/L1* 1; R3 num clique → 400 *"… a origem da separação (SL-A) não serve mais (O
+saldo em SL-A (1) não cobre a quantidade (2) …"*. Consertado — **B1638**, RN-268.05.)*
 
 ### Item 17 (D (251) 1, B1579) — confirmado
 
@@ -37,7 +42,12 @@ Entrega**. Escolhendo uma prateleira com *"sobra 2"* para 4 → a entrega vai ao
   por (*A*, *L1*) nunca toca essa linha. **O C498 estava errado** ("qualquer lote em A"; "conserto: contar a parte sem lote em todo lote do
   endereço") e a B1410 ("o mesmo limite… → C498") também, na parte que dizia ser um limite. **Descartado:** o caminho reversível do plano da 267
   ("descontar a parte sem lote do total do endereço") — descontaria de *A/L1* uma guarda que está na linha sem lote, recusando entregas que
-  não levam nada de ninguém. **Reversível** (nada mudou).
+  não levam nada de ninguém. **Reversível** (nada mudou). *(Fase 2: vale para o par exato; o caminho da própria peça sem lote escolhendo o lote é a B1638.)*
+- **B1638 (item 16, Fase 2 achado 3)** — a entrega da peça com origem guardada **sem lote** escolhendo no **Sai de** um **lote** no mesmo endereço
+  passa a ser conferida como o caso (c): a E1 do par escolhido (a guarda de outras caixas e dos irmãos em (*A*, *L1*)). A troca e a parte continuam
+  as da Etapa 63 (é a mesma origem para o registro). **Descartado:** (a) chamar de troca (mudaria o registro e a parte que fica, sem ganho para a
+  recusa); (b) descontar da linha sem lote (a parte está lá, mas o motor baixa a do lote). Fora: a planejada aplicada num clique com o lote vindo
+  das séries (D (268)). **Reversível** (uma condição no caso (c)).
 - **B1635 (item 17)** — o limite só vale quando o **Sai de** é uma **prateleira da lista diferente da origem da separação do item** (ou o item
   não tem origem guardada) — o caso (c) da entrega, onde o servidor confere a E1 (a sobra do par menos a guarda que fica dos outros itens desta
   requisição e o que eles pedem dali) e, com peça presa no lote, a régua do lote da 218. Com a própria origem, automático, *"Escolha de onde
@@ -65,13 +75,19 @@ Entrega**. Escolhendo uma prateleira com *"sobra 2"* para 4 → a entrega vai ao
 - **RN-268.03** O mesmo com as duas peças na **mesma** requisição (B1410).
 - **RN-268.04** O **Sai de** de R2 (`GET /estoque/:m/saldos?requisicao_id=R2`) mostra *A* sem lote com `separado_outras` 3 e `sobra` 0, e *A/L1*
   com `separado_outras` 0 e `sobra` 4.
+- **RN-268.05 (Fase 2, B1638)** R1 guardou 3 em (*A*, sem lote); R3 guardou 2 em (*A*, *L1*) (físico 4). R1 entrega 3 com **Sai de** (*A*, *L1*)
+  → **400** antes de qualquer baixa, nada gravado: *"⟨material⟩: em SL-A, lote L1 há 4 para esta entrega, mas 2 já está separado dali para outra
+  requisição (⟨R3⟩); sobra 2, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*. Com 2 → 200 e R3
+  entrega num clique. Sem a guarda de R3: 200 (nenhuma recusa nova). Pela rota e pelo serviço.
 
 ### Item 17 — a janela de entrega limita a quantidade de outra prateleira (tela)
 
 - **RN-268.10** Janela de entrega, item com o **Sai de** numa opção da lista (endereço, lote) diferente da origem da separação dele (ou item sem
   origem guardada): o máximo do item passa a ser o menor entre o de hoje (`maxEntregaNaTela`) e o **limite da opção**:
   `sobra da opção − ocupado pelos outros itens desta requisição no par`, e, com `lote_livre` na opção (lote com peça presa), também
-  `lote_livre − ocupado pelos outros itens no lote`. Ocupado por outro item *j* no par *P* (B1636): se a origem guardada de *j* é *P* —
+  `lote_livre − ocupado pelos outros itens no lote`. *(Fase 2, achados 3 e 4: "diferente da origem" é o par **exato** — a origem sem
+  lote com o **Sai de** num lote é caso (c) desde a B1638; e na própria origem a porta confere a E1 acima da parte, então ali o teto é
+  `max(parte, a conta)`, não "sem limite". A B1635 dizia "a porta não confere a E1 nela" — **estava errado** acima da parte.)* Ocupado por outro item *j* no par *P* (B1636): se a origem guardada de *j* é *P* —
   `max(0, parte_j − q_j)` (o que fica) + o que *j* tira de *P* nesta entrega; senão, o que *j* tira de *P* (q_j quando o **Sai de** dele é *P*).
   *j* tira de *P* = `q_j` com **Sai de** = *P*; `min(q_j, parte_j)` sem escolha nem automático com origem guardada *P* (o servidor aplica a
   planejada); 0 nos outros casos. No lote, a mesma conta pelo lote da opção (origem guardada no lote; **Sai de** com o lote).
