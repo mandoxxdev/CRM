@@ -2650,6 +2650,35 @@ function fraseEntregaLoteImpedido(nomeMaterial, qtyDoItem, unidade, falta, imped
     + `Libere o lote (mude o status ou libere o vencimento) ou ${nada ? 'nada sai deste material' : `entregue ${qu(falta, unidade)} a menos`}.`;
 }
 
+/**
+ * Etapa 273 (C485, RN-273.07/.09; B1652) — os lotes do material com parte guardada (`PARTE_ORIGEM_SQL`) de caixa viva que o automatico
+ * pula, e os numeros das requisicoes: `{ lotes: [codigo], reqs: [numero] }` ou null. As outras requisicoes pela parte do banco; a desta
+ * entrega so pelo que FICA depois dela (`guardaQueConta`, a regua do proprio automatico: o item que entrega a guarda inteira nao conta).
+ * A mesma folga por item da 206. So le (dentro das travas da entrega).
+ */
+async function outrasCaixasNoMaterial(db, materialId, requisicaoId, saiuSimulado, parteQueFicaPorItem) {
+  const viva = caixaVivaSql('r');
+  const rows = await dbAll(db, `SELECT ir.id, ir.requisicao_id AS rid, lt.codigo, r.numero, ${PARTE_ORIGEM_SQL} as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    JOIN lotes_almoxarifado lt ON lt.id = ir.lote_separacao_id
+    WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ${viva.sql}
+    ORDER BY lt.codigo, r.numero`, [materialId, ...viva.params]);
+  const contam = rows.filter((g) => (Number(g.rid) === Number(requisicaoId)
+    ? guardaQueConta(g, saiuSimulado, parteQueFicaPorItem) : (Number(g.q) || 0)) > Q.QTD_FOLGA);
+  if (!contam.length) return null;
+  return { lotes: [...new Set(contam.map((x) => x.codigo))], reqs: [...new Set(contam.map((x) => x.numero))].sort() };
+}
+
+/** Etapa 273 (C485, E2 do plano) — a recusa da entrega cuja falta vem do lote guardado por outra requisicao (prateleira bloqueada/sem endereco). */
+function fraseEntregaGuardaDeOutra(nomeMaterial, qtyDoItem, unidade, falta, outra, nadaSai) {
+  const qu = (q) => [Q.qtd(num(q)), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  return `${nomeMaterial}: não é possível entregar ${qu(qtyDoItem)} — faltam ${qu(falta)} em lote que pode sair. O resto `
+    + `${outra.lotes.length > 1 ? 'dos lotes' : 'do lote'} ${outra.lotes.join(', ')} está separado `
+    + `${outra.reqs.length > 1 ? 'nas caixas de' : 'na caixa de'} ${outra.reqs.join(', ')} ou em prateleira bloqueada ou sem `
+    + `endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou ${nadaSai ? 'nada sai deste material'
+      : `entregue ${qu(falta)} a menos`}.`;
+}
+
 /** Etapa 206 (Fase 5, R1): o `cabe(m)` da conferencia (a formula abaixo), fora dela — o detalhe e a fila usam a mesma conta. So le. */
 async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPorItem, saiuSimulado, parteQueFicaPorItem) {
   const k = String(materialId);
@@ -2858,7 +2887,17 @@ async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, te
     if (falta <= Q.QTD_FOLGA) continue;
     // eslint-disable-next-line no-await-in-loop
     const naoElegiveis = (await lotService.listarLotesDoMaterial(db, x.item.material_id, { apenasComSaldo: true })).filter((l) => !l.elegivel);
-    if (!naoElegiveis.length) continue;
+    // Etapa 273 (C485, RN-273.07; B1652): sem lote impedido, a falta com parte guardada que o automatico pula (de outra requisicao, ou de um item
+    // desta que fica) num lote do material recusa
+    // (E2) — antes seguia "sem lote" e a linha sem lote ficava negativa com o lote cheio (o resto do lote com guarda em prateleira
+    // bloqueada ou sem endereco, que o automatico pula). Sem guarda que conte (a inspecao antiga, B1640): como antes.
+    if (!naoElegiveis.length) {
+      // eslint-disable-next-line no-await-in-loop
+      const outra = await outrasCaixasNoMaterial(db, x.item.material_id, x.item.requisicao_id, saiuSimulado,
+        parteQueFicaPorItem);
+      if (!outra) continue;
+      return { item: x.item, qty: x.qty, falta, outra, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
+    }
     const ids = naoElegiveis.map((l) => Number(l.id));
     // eslint-disable-next-line no-await-in-loop
     const insp = await dbAll(db, `SELECT lote_id, COALESCE(SUM(quantidade_em_inspecao), 0) as q
@@ -2869,7 +2908,14 @@ async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, te
       .map((l) => ({ codigo: l.codigo, status: l.status, data_validade: l.data_validade,
         quantidade: Q.qtd(Math.max(0, num(l.saldo) - (inspecao.get(Number(l.id)) || 0))) }))
       .filter((l) => l.quantidade > Q.QTD_FOLGA);
-    if (!impedidos.length) continue; // B1386: falta sem lote impedido segue como antes (C485)
+    if (!impedidos.length) {
+      // B1386: falta sem lote impedido segue como antes — salvo a parte guardada que conta (Etapa 273, acima)
+      // eslint-disable-next-line no-await-in-loop
+      const outra = await outrasCaixasNoMaterial(db, x.item.material_id, x.item.requisicao_id, saiuSimulado,
+        parteQueFicaPorItem);
+      if (!outra) continue;
+      return { item: x.item, qty: x.qty, falta, outra, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
+    }
     return { item: x.item, qty: x.qty, falta, impedidos, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
   }
   return null;
@@ -3312,8 +3358,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // elegiveis nao cobrem, com saldo em lote impedido, recusa a entrega inteira (B1387); antes ela saia sem lote e negativava (C484).
   const faltaNoLote = await conferirAutomaticoPeloLote(db, itensDaEntrega, origemPorItem, origemGuardada, parteQueFicaPorItem());
   if (faltaNoLote) {
-    const { item: it, qty: q, falta, impedidos, nadaSai } = faltaNoLote;
-    throw Object.assign(new Error(fraseEntregaLoteImpedido(it.material_nome, q, it.unidade, falta, impedidos, nadaSai)), { status: 400 });
+    const { item: it, qty: q, falta, impedidos, outra, nadaSai } = faltaNoLote;
+    throw Object.assign(new Error(outra ? fraseEntregaGuardaDeOutra(it.material_nome, q, it.unidade, falta, outra, nadaSai)
+      : fraseEntregaLoteImpedido(it.material_nome, q, it.unidade, falta, impedidos, nadaSai)), { status: 400 });
   }
   if (!algoAEntregar) {
     const err = new Error('Informe ao menos uma quantidade maior que zero para entregar');
