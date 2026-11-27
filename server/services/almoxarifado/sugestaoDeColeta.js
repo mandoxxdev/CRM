@@ -122,9 +122,12 @@ function candidatoSugerivel(linha, { arvore, material, hojeISO }) {
  *  - jaIndicado (Etapa 266, RN-266.10, B1628): opcional { porPar: Map(chavePar -> q), porLote: Map(chaveLote -> q) } — o sugerido as
  *    requisicoes ANTERIORES na ordem da Fila; desconta como o dos irmaos (no par, no teto das series e no do lote preso), exceto na planejada
  *    (RN-266.15). MUTADO ao fim: soma o sugerido desta requisicao (quem chama passa o mesmo objeto, na ordem da Fila). Ausente = so os irmaos.
+ *  - planejadasDeOutras (Etapa 266, Fase 5, RN-266.17): opcional, mesmo formato, so lido — o sugerido as PLANEJADAS das outras requisicoes da
+ *    Fila (da frente e de tras); quem nao e planejada desconta. Por isso `jaIndicado` recebe so o sugerido aos itens NAO planejados, e a
+ *    saida traz `planejadas` (o sugerido aos planejados desta requisicao).
  * Saida: { porItem: Map(item_id -> { pegar_em, pegar_em_aviso }), ordem_coleta: [...] }.
  */
-function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, lotePreso, hojeISO, jaIndicado }) {
+function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, material, seriesPorLote, lotePreso, hojeISO, jaIndicado, planejadasDeOutras }) {
   const planejado = planejadoPorPar || new Map();
   const series = seriesPorLote || new Map();
   const presos = lotePreso || new Map();
@@ -143,7 +146,13 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
   const sugeridoPorPar = new Map(); // o consumo dos irmaos desta requisicao
   const sugeridoPorLote = new Map();
   const outras = jaIndicado || { porPar: new Map(), porLote: new Map() }; // Etapa 266 (RN-266.10): o indicado as requisicoes da frente
-  const dasOutras = (mapa, k, comOutras) => (comOutras ? num(mapa && mapa.get(k)) : 0);
+  // Etapa 266 (Fase 5): o sugerido as PLANEJADAS das outras requisicoes da Fila (da frente ou de tras) — a planejada so tem a origem dela
+  // (RN-188.01a) e nao desconta ninguem (RN-266.15), entao quem nao e planejada desconta a parte dela. `planejadasDeOutras` e so lido.
+  const pdo = planejadasDeOutras || { porPar: new Map(), porLote: new Map() };
+  const dasOutras = (mapa, k, comOutras) => (comOutras ? num(mapa && mapa.get(k))
+    + num(mapa === outras.porPar ? pdo.porPar.get(k) : pdo.porLote.get(k)) : 0);
+  const planejadasPorPar = new Map(); // o sugerido aos itens planejados desta requisicao (vai para `planejadas`, nao para `jaIndicado`)
+  const planejadasPorLote = new Map();
 
   // Etapa 266: `comOutras` false = sem o indicado as requisicoes da frente (a planejada, RN-266.15; e a pergunta da RN-266.12).
   const livreDe = (mat, linha, comOutras = true) => {
@@ -249,14 +258,19 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
       sugeridoPorPar.set(kp, num(sugeridoPorPar.get(kp)) + pegarEm.quantidade_sugerida);
       const kl = chaveLote(it.material_id, pegarEm.lote_id);
       sugeridoPorLote.set(kl, num(sugeridoPorLote.get(kl)) + pegarEm.quantidade_sugerida);
+      if (temPlanejada) {
+        planejadasPorPar.set(kp, num(planejadasPorPar.get(kp)) + pegarEm.quantidade_sugerida);
+        planejadasPorLote.set(kl, num(planejadasPorLote.get(kl)) + pegarEm.quantidade_sugerida);
+      }
       paradas.push({ pos, it, pegarEm });
     }
   });
 
   // Etapa 266 (RN-266.10): o sugerido desta requisicao passa a descontar para as de tras na Fila.
   if (jaIndicado) {
-    for (const [k, q] of sugeridoPorPar) jaIndicado.porPar.set(k, num(jaIndicado.porPar.get(k)) + q);
-    for (const [k, q] of sugeridoPorLote) jaIndicado.porLote.set(k, num(jaIndicado.porLote.get(k)) + q);
+    // (Fase 5) so o dos itens NAO planejados — o das planejadas ja chega as outras por `planejadasDeOutras`.
+    for (const [k, q] of sugeridoPorPar) jaIndicado.porPar.set(k, num(jaIndicado.porPar.get(k)) + q - num(planejadasPorPar.get(k)));
+    for (const [k, q] of sugeridoPorLote) jaIndicado.porLote.set(k, num(jaIndicado.porLote.get(k)) + q - num(planejadasPorLote.get(k)));
   }
 
   // RN-188.06: pelo percurso do endereco sugerido; empate pela ordem do pedido, depois lote_id.
@@ -272,7 +286,7 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
     localizacao_codigo: pegarEm.localizacao_codigo, caminho: pegarEm.caminho, lote_codigo: pegarEm.lote_codigo,
     quantidade_sugerida: pegarEm.quantidade_sugerida,
   }));
-  return { porItem, ordem_coleta: ordemColeta };
+  return { porItem, ordem_coleta: ordemColeta, planejadas: { porPar: planejadasPorPar, porLote: planejadasPorLote } };
 }
 
 /**

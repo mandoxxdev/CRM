@@ -1331,10 +1331,30 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
   fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel)) || compararPrioridade(a, b));
   // Etapa 266 (RN-266.10/11): a dica na ordem da Fila, com um acumulador so (`jaIndicado`, mutado por sugerirColeta).
+  // Fase 5 (achado 1): antes, o sugerido as PLANEJADAS de cada requisicao (presas a origem, RN-188.01a; nao dependem das outras): quem nao e
+  // planejada desconta as das outras requisicoes, da frente e de tras — senao a da frente levava a origem da planejada de tras e a separacao
+  // dela era recusada, com outra prateleira livre.
+  const planejadasPorReq = new Map();
+  const planejadasTotal = { porPar: new Map(), porLote: new Map() };
+  const somar = (dst, src, s = 1) => { for (const [k, q] of src) dst.set(k, (Number(dst.get(k)) || 0) + s * q); };
+  for (const f of fila) {
+    const { itensDaColeta } = coletaPendente.get(f.id);
+    if (!itensDaColeta) continue;
+    const p = sugestaoDeColeta.sugerirColeta({ ...itensDaColeta, ...dadosColeta }).planejadas;
+    planejadasPorReq.set(f.id, p);
+    somar(planejadasTotal.porPar, p.porPar); somar(planejadasTotal.porLote, p.porLote);
+  }
+  const planejadasDasOutras = (id) => {
+    const p = planejadasPorReq.get(id);
+    if (!p) return planejadasTotal;
+    const r = { porPar: new Map(planejadasTotal.porPar), porLote: new Map(planejadasTotal.porLote) };
+    somar(r.porPar, p.porPar, -1); somar(r.porLote, p.porLote, -1);
+    return r;
+  };
   const jaIndicado = { porPar: new Map(), porLote: new Map() };
   for (const f of fila) {
     const { itensDaColeta, linhas } = coletaPendente.get(f.id);
-    const coleta = itensDaColeta ? sugestaoDeColeta.sugerirColeta({ ...itensDaColeta, ...dadosColeta, jaIndicado }) : null;
+    const coleta = itensDaColeta ? sugestaoDeColeta.sugerirColeta({ ...itensDaColeta, ...dadosColeta, jaIndicado, planejadasDeOutras: planejadasDasOutras(f.id) }) : null;
     for (const l of linhas) {
       const s = coleta && coleta.porItem.get(l.item_id);
       l.pegar_em = s ? s.pegar_em : null;

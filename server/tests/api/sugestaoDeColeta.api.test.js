@@ -362,6 +362,20 @@ test('[RN-266.15] a planejada nao desconta o indicado as da frente (o "resto nao
     linhas: [linha(10, 5)], planejado: [[10, null, 1]], jaIndicado: ja }), 1);
   assert.deepStrictEqual([s.pegar_em.localizacao_codigo, s.pegar_em.quantidade_sugerida, s.pegar_em_aviso], ['A-01', 2, null]);
 });
+const num0 = (v) => Number(v) || 0;
+test('[RN-266.17] a planejada vai para `planejadas`, nao para `jaIndicado`; quem nao e planejada desconta `planejadasDeOutras`', () => {
+  const ja = novoIndicado();
+  const r = rodar({ itens: [item(1, 2, { origem_separacao_id: 10, lote_separacao_id: null, separado_pendente: 1 })],
+    linhas: [linha(10, 5)], planejado: [[10, null, 1]], jaIndicado: ja });
+  assert.strictEqual(r.planejadas.porPar.get(sc.chavePar(MAT, 10, null)), 2);
+  assert.strictEqual(num0(ja.porPar.get(sc.chavePar(MAT, 10, null))), 0, 'nao conta em dobro para as de tras');
+  // A-01 5 com 3 indicados a planejadas de outras: a nao planejada de 3 vai a B-02.
+  const pdo = novoIndicado(); pdo.porPar.set(sc.chavePar(MAT, 10, null), 3);
+  const s = de(sc.sugerirColeta({ itens: [item(2, 3)], candidatosPorMaterial: new Map([[MAT, [linha(10, 5), linha(21, 3)]]]),
+    planejadoPorPar: new Map(), arvore: arvoreBase(), material: new Map([[MAT, { id: MAT, controle_serie: 0 }]]), seriesPorLote: new Map(),
+    hojeISO: HOJE, jaIndicado: novoIndicado(), planejadasDeOutras: pdo }), 2);
+  assert.deepStrictEqual(onde(s), ['B-02', 3, 3]);
+});
 test('[RN-266.10] material com serie: o teto do LOTE desconta o indicado a da frente (L1 com 2 series em A-01 e B-01 -> a 2a vai a L2)', () => {
   const L1 = { id: 1, codigo: 'L1', validade: '2026-11-30' }; const L2 = { id: 2, codigo: 'L2', validade: '2026-12-30' };
   const linhas = [linha(10, 2, L1), linha(20, 2, L1), linha(30, 2, L2)];

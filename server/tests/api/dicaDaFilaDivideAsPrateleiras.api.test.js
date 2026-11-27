@@ -147,6 +147,24 @@ process.on('exit', (code) => {
     assert.deepStrictEqual([depois.separavel, depois.pegar_em, depois.pegar_em_aviso], [0, null, null]);
   });
 
+  // Fase 5 (achado 1, reproduzido): a planejada de tras (presa a origem dela) nao desconta ninguem; a da frente tem de descontar a parte dela,
+  // senao leva SA-01 e a separacao da planejada e recusada com SB-01 livre.
+  await test('[RN-266.17, Fase 5] SA-01 5 e SB-01 3; R1 (atras) ja separou 1 de SA-01 e falta 2; R2 URGENTE 3 -> R2 SB-01, R1 SA-01; as duas separam', async () => {
+    await limpar();
+    const m = await material([[SA, 5], [SB, 3]]);
+    const r1 = await requisicao(m, 3);
+    await ok(request(app).put(`${API}/requisicoes/${r1.R}/separacao`).send({ itens_separados: [{ item_id: r1.item, quantidade_separada: 1,
+      localizacao_origem_id: SA }] }));
+    const r2 = await requisicao(m, 3, { urgencia: 'URGENTE' });
+    const f = await fila();
+    assert.deepStrictEqual(f.map((x) => x.id), [r2.R, r1.R], 'premissa: a URGENTE na frente');
+    assert.deepStrictEqual(dica(daFila(f, r2.R)), ['SB-01', 3, null]);
+    assert.deepStrictEqual(dica(daFila(f, r1.R)), ['SA-01', 2, null]);
+    assert.deepStrictEqual((await janela(r1.R)).pegar_em, daFila(f, r1.R).pegar_em);
+    await ok(separarPelaDica(r2.R, daFila(f, r2.R)));
+    await ok(separarPelaDica(r1.R, daFila(f, r1.R)));
+  });
+
   await test('[RN-266.10, servico] listarFilaSeparacao direto da a mesma divisao que a rota', async () => {
     await limpar();
     const m = await material([[SA, 3], [SB, 3]]);

@@ -80,6 +80,9 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
   para a requisição (a fila inteira lida). Requisição fora da fila → `itens: []` como hoje; 404 como hoje.
 - **RN-266.15 (Fase 2)** A planejada (RN-188.01a) **não** desconta o indicado às requisições da frente — a frase dela (*"o resto não cabe lá"*)
   seria falsa: a prateleira foi indicada a outra, não está cheia. Fica como hoje.
+- **RN-266.17 (Fase 5)** O sugerido às **planejadas** (RN-188.01a) de todas as outras requisições da Fila — da frente e de trás — desconta
+  para quem não é planejada (a planejada não desconta ninguém, RN-266.15). Cenário: *SA-01* 5, *SB-01* 3; R1 (atrás) já separou 1 de *SA-01*,
+  faltam 2; R2 URGENTE 3 → R2 *SB-01* 3, R1 *SA-01* 2; as duas separam pela dica.
 - **RN-266.16 (Fase 2)** A janela de separação, no item sem planejada cuja sugestão veio sem prateleira com `SALDO_INDICADO_A_OUTRAS`, mostra a
   frase da RN-266.12 (`#separacao-sugestao-<item>`) — antes ficava calada. A lista de coleta impressa mostra a mesma frase em "Sem endereço
   sugerido" (sem código novo; um caso no teste dela).
@@ -100,11 +103,11 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
 - [x] **T1 (independente; só teste)** — `b681741c` (23/23; sabotagens: guarda de status 15 caem, de vencimento 7, derivação do lote 22; a
   prateleira de verdade entrou no arranjo — sem ela o saldo nascia sem endereço e "escolher a prateleira" não escolhia nada) — RN-266.01: `server/tests/api/entregaConfereLoteDasSeries.api.test.js`. Controle positivo: sabotar a
   guarda de status de `checarOrigemItem` e a derivação `loteId = loteSeries` → os cenários caem (item 1 sai antes da recusa).
-- [ ] **T2 (tronco)** — RN-266.10..13: `sugestaoDeColeta.js` (`jaIndicado`, aviso novo) + `requisitionService.listarFilaSeparacao` (a dica
+- [x] **T2 (tronco)** — `787ee077` — RN-266.10..13: `sugestaoDeColeta.js` (`jaIndicado`, aviso novo) + `requisitionService.listarFilaSeparacao` (a dica
   depois de ordenar a fila, um acumulador) + `sugestaoDeColetaDaRequisicao` (fila inteira). Testes: unidade em
   `server/tests/api/sugestaoDeColeta.api.test.js` (função pura) e rota em `server/tests/api/dicaDaFilaDivideAsPrateleiras.api.test.js`, com
   a **RN-266.14** (integração Fila → janela → separação pela rota) e um cenário pelo **serviço** (`listarFilaSeparacao`).
-- [ ] **T3 (galho, contra o contrato)** — a frase da RN-266.12 em `coletaTexto.js` + `coletaTexto.test.js`, a janela (RN-266.16, `RequisicoesList.js`)
+- [x] **T3 (galho, contra o contrato; feito em série depois da T2)** — `6a55156f` — a frase da RN-266.12 em `coletaTexto.js` + `coletaTexto.test.js`, a janela (RN-266.16, `RequisicoesList.js`)
   e um caso em `listaColetaPdf.test.js`.
 - [ ] **T4** — Fase 5, documentos (`fechar-etapa`), suítes.
 
@@ -127,3 +130,17 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
   resto for separado de outra prateleira, a dica da de trás pode ser recusada (dica; vai para os pontos de atenção e D).
 - **Refutação tentada, não achou:** nenhum caminho da entrega em que a série de lote impedido só é recusada na baixa (planejada sem lote,
   K1, caso (c), `origem_automatica`, controle de lote 0); a corrida do status do lote está sob a trava do material desde a 220.
+
+## Fase 5 (um revisor fresco, sondas `scratchpad/f5-266-*.js`, sobre `6a55156f`)
+
+1. **[importante, reproduzido]** A planejada de trás (presa à origem, sem descontar ninguém pela RN-266.15) ficava com a origem dela, e a
+   requisição da frente, calculada sem saber dela, levava a mesma prateleira (a de mais livre): *SA-01* 5 (1 separado por R1), *SB-01* 3 → R2
+   *SA-01* 3, R1 *SA-01* 2; separar R1 pela dica → 400 com *SB-01* livre. Não era regressão (antes da 266, igual). → **consertado**
+   (RN-266.17): uma passada antes calcula o sugerido às planejadas de cada requisição; quem não é planejada desconta o das outras; o
+   `jaIndicado` recebe só o dos não planejados (sem contar em dobro). Cenário pela rota e de unidade; sabotagens: tirar o desconto → o cenário
+   da rota e o de unidade caem; somar a planejada no `jaIndicado` → o de unidade cai.
+- Tentado e não quebrou: irmãos do mesmo material (o aviso certo), série e lote preso (os dois tetos descontam), materiais diferentes,
+  alçada de valor e sem separável (não entram no acumulador), a ordem do acumulador = a da Fila, a frase de `SALDO_INDICADO_A_OUTRAS`
+  (verdadeira por construção), a janela (mesma porta, mesmo gate, 404 e fora da fila como antes), e o item 12 (todo caminho passa por
+  `checarOrigemItem` antes da 1ª baixa). Mencionado, não reproduzido: com **Agrupar por setor**, a requisição "da frente" na Fila pode aparecer
+  abaixo da que mostra a frase (a ordem da divisão é a da Fila sem agrupar) — vai para D (266).
