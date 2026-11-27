@@ -229,9 +229,11 @@ async function criarOuObterLote(db, user, dados) {
  * sobrescrever. O motor chama POR ESTE OBJETO DO MODULO (o teste de corrida substitui a funcao). A auditoria nao derruba (o livro ja
  * gravou a entrada). Erro do UPDATE propaga — quem chama (o motor, depois do livro) e que nao deixa a falha virar 500 (Fase 2, I-1).
  */
-async function preencherValidadeSeVazia(db, user, loteId, dataISO, { movimentoId = null } = {}) {
+async function preencherValidadeSeVazia(db, user, loteId, dataISO, { movimentoId = null, anterior = null } = {}) {
+  // Etapa 269 (C460, B1642): a validade em branco (cadastro antigo) tambem e "sem validade" — a guarda casa as duas; `anterior` e o que o
+  // motor leu (null ou o branco), para a auditoria dizer o que havia.
   const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND data_validade IS NULL RETURNING id`, [dataISO, loteId]);
+    WHERE id = ? AND (data_validade IS NULL OR TRIM(data_validade) = '') RETURNING id`, [dataISO, loteId]);
   if (!claim) {
     const atual = await getLote(db, loteId);
     return { preenchida: false, atual: atual ? atual.data_validade : null };
@@ -239,7 +241,7 @@ async function preencherValidadeSeVazia(db, user, loteId, dataISO, { movimentoId
   await registrarAuditoriaDoAto(db, {
     entidade: 'lote', entidade_id: loteId, acao: 'VALIDADE_PREENCHIDA',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-    dados_anteriores: { data_validade: null },
+    dados_anteriores: { data_validade: anterior },
     dados_novos: { data_validade: dataISO, movimento_id: movimentoId },
   });
   return { preenchida: true };

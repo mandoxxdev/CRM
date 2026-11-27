@@ -204,3 +204,21 @@ describe('Movimentação — validade do lote na Entrada (Etapa 190, RN-190.10)'
     expect(campoLote().value).toBe('L-1');
   });
 });
+
+// Etapa 269 (C457, B1641, RN-269.13): a Entrada num lote existente vencido avisa mesmo SEM a validade digitada — o servidor manda o
+// `aviso_validade`; a tela o mostra como o da Etapa 190 (a tela nao muda: esta e a prova da fronteira HTTP).
+describe('Movimentação — entrada num lote vencido sem digitar a validade (Etapa 269, RN-269.13)', () => {
+  const AVISO_VENCIDO = 'O lote L-1 entrou já vencido (validade 20/11/2026). A saída para consumo fica bloqueada até liberar o vencimento '
+    + 'na tela de Lotes e Séries.';
+  test('[RN-269.13] sem data no payload, a resposta com aviso_validade vira o aviso que nao fecha sozinho, depois do sucesso', async () => {
+    api.post.mockResolvedValue({ data: { id: 1, saldo_anterior: 5, saldo_posterior: 10, aviso_validade: AVISO_VENCIDO } });
+    await abrirEntrada();
+    preencher(campoLote(), 'L-1');
+    await enviar();
+    expect(Object.prototype.hasOwnProperty.call(payload(), 'data_validade')).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith('Movimentação registrada!');
+    expect(toast.warn).toHaveBeenCalledTimes(1);
+    expect(toast.warn.mock.calls[0]).toEqual([AVISO_VENCIDO, { autoClose: false }]);
+    expect(toast.success.mock.invocationCallOrder[0]).toBeLessThan(toast.warn.mock.invocationCallOrder[0]);
+  });
+});

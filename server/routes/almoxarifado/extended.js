@@ -892,8 +892,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // para consumo) — a tela de Movimentacoes so lista a serie; o lote dela nao ia no corpo e o motor nao o olhava.
       // `saidaPelaSerie` (Etapa 265, C545, RN-265.10): sem origem escolhida, a saida de material com serie baixa da prateleira de cada
       // serie quando o registro dela bate com o saldo (senao, como antes). So esta porta (a tela de Movimentacoes); a entrega tem a dela.
+      // `avisaLoteVencido` (Etapa 269, B1641): a Entrada num lote existente vencido avisa sem a data digitada — so esta porta.
       const result = await stockService.registrarMovimentacao(db, req.user, req.body,
-        { exigeLote: true, exigeSerie: true, lotePelasSeries: true, confereLivreDoLote: true, saidaPelaSerie: true });
+        { exigeLote: true, exigeSerie: true, lotePelasSeries: true, confereLivreDoLote: true, saidaPelaSerie: true,
+          avisaLoteVencido: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

@@ -1718,8 +1718,10 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   let validadeDoLote = null;
   if (validadeInformada.informada && loteResolvido) {
     const atual = loteResolvido.data_validade;
-    if (atual == null) {
-      validadeDoLote = { modo: 'PREENCHER' };
+    // Etapa 269 (C460, B1642, RN-269.12): a validade em branco ('', cadastro antigo) e "sem validade" — preenche, como a nula. Antes caia
+    // no CONFLITO e a recusa dizia "ja tem validade ." (a data vazia).
+    if (atual == null || String(atual).trim() === '') {
+      validadeDoLote = { modo: 'PREENCHER', anterior: atual == null ? null : atual };
     } else if (String(atual).slice(0, 10) !== validadeInformada.data) {
       if (!(await lotService.loteEstaVazio(db, loteResolvido.id))) {
         throw Object.assign(new Error(lotService.MSG_VALIDADE.CONFLITO(loteResolvido.codigo, atual)), { status: 400 });
@@ -3063,7 +3065,8 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     if (validadeDoLote) {
       try {
         const r = validadeDoLote.modo === 'PREENCHER'
-          ? await lotService.preencherValidadeSeVazia(db, user, loteIdFinal, nova, { movimentoId: result.lastID })
+          ? await lotService.preencherValidadeSeVazia(db, user, loteIdFinal, nova,
+            { movimentoId: result.lastID, anterior: validadeDoLote.anterior })
           : await lotService.redefinirValidadeDoLoteVazio(db, user, loteIdFinal, validadeDoLote.antiga, nova,
             { movimentoId: result.lastID });
         if (r.preenchida || r.redefinida) {
@@ -3072,7 +3075,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
             : msgV.AVISO_REDEFINIDA(loteCodigoFinal, validadeDoLote.antiga, nova));
         } else if (r.atual != null && String(r.atual).slice(0, 10) === nova) {
           vigente = nova; // a outra operacao gravou a mesma data: nada a avisar
-        } else if (r.atual == null) {
+        } else if (r.atual == null || String(r.atual).trim() === '') { // Etapa 269 (B1642): o branco nao e "outra operacao"
           // Perdeu o UPDATE e o lote continua SEM validade (ou sumiu): nao foi "outra operacao" — a validade nao gravou. Medido no
           // controle (b) da T4: o AVISO_CORRIDA saia com "()" no lugar da data.
           console.warn(`[almoxarifado] validade do lote nao gravada (movimentacao ${result.lastID}, lote ${loteIdFinal}): UPDATE nao casou`);
@@ -3092,6 +3095,16 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       const liberado = (!validadeDoLote || validadeDoLote.modo !== 'REDEFINIR') && lotService.vencimentoLiberado(loteResolvido);
       avisosValidade.push(liberado ? msgV.AVISO_VENCIDO_LIBERADO(loteCodigoFinal, vigente)
         : msgV.AVISO_VENCIDO(loteCodigoFinal, vigente));
+    }
+  } else if (opcoes.avisaLoteVencido === true && tipo === 'ENTRADA' && loteResolvido) {
+    // Etapa 269 (C457, B1641, RN-269.10/11; revê a B1282): a Entrada da tela de Movimentacoes (so a v2 passa a opcao, no 4o argumento)
+    // num lote que JA existe e esta vencido avisa mesmo sem a data digitada. So a data AAAA-MM-DD conta (a validade em branco ou com
+    // espacos nao vence — Fase 2, achado 8: `'' < hoje` e verdadeiro em JS). As entradas internas e a v1 nao passam a opcao: como antes.
+    const v = String(loteResolvido.data_validade == null ? '' : loteResolvido.data_validade).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v < diaLocal.hojeLocalISO()) {
+      const msgV = lotService.MSG_VALIDADE;
+      avisosValidade.push(lotService.vencimentoLiberado(loteResolvido) ? msgV.AVISO_VENCIDO_LIBERADO(loteCodigoFinal, v)
+        : msgV.AVISO_VENCIDO(loteCodigoFinal, v));
     }
   }
 
