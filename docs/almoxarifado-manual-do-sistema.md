@@ -1121,6 +1121,12 @@ material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
 menor que o físico do material; a diferença é o saldo **sem lote atribuído**. O relatório **Saldo por
 lote** (21d) mostra os dois e fecha a conta com o físico.
 
+No material **sem** controle por lote, isso vale mesmo quando ele tem saldo em lote (Entradas que indicaram o lote), peças de um lote
+separadas para outra requisição ou peças numa prateleira bloqueada: a parte automática da entrega não olha os lotes dele e sai pela linha sem
+lote. Com 3 do *L1* em *A-01* separadas para outra requisição e 1 do *L1* em *B-01* bloqueada, entregar 1 passa: o *L1* continua com 4, a peça
+de *B-01* fica onde está, o físico vai a 3 e o *"Sem lote atribuído"* a −1. A recusa da entrega pelo lote separado e pela prateleira bloqueada
+(10.2) é só do material com controle por lote. Para o saldo do lote acompanhar a entrega, ligue o *Controle por lote* no material (6.1).
+
 A tela **Lotes e Séries** mostra, em cada lote, o saldo **atribuído** — é o número contra o qual a saída
 por lote é conferida, e o mesmo que os seletores de lote de Movimentações, Devoluções e Sobras mostram.
 **Abaixo da tabela**, quando o material tem saldo fora dos lotes, aparece o bloco:

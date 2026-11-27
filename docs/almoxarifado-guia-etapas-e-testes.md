@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 275 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 276 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 275 fechada — 2026-11-27.** **O sucateamento da reprovação é recusado depois do "Sem lote" em vez de
+> **O desenvolvimento parou aqui: Etapa 276 fechada — 2026-11-27.** **A entrega de material sem controle por lote com saldo em lote foi
+> conferida: sai "sem lote" com ou sem prateleira bloqueada, como o manual descreve — o aviso C558 estava errado na causa; nada mudou na tela**
+> (fora da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 276). **Onde parou,
+> exatamente:** a **276 está fechada**; a próxima está no fim do plano da 276 (o aviso C561, achado na revisão final: dois materiais com a padrão de um bloqueada); o item 24 da estimativa de 23/11 (série e etiqueta obrigatórios)
+> ainda depende de resposta.
+> *Antes:* **Etapa 275 fechada — 2026-11-27.** **O sucateamento da reprovação é recusado depois do "Sem lote" em vez de
 > sucatear peça livre, e entregar juntos os dois itens do mesmo lote é recusado antes de baixar o primeiro** (fora da estimativa de 23/11; C559 e
 > C560). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 275). **Onde parou, exatamente:** a **275 está
 > fechada**; a próxima está no fim do plano da 275 (C558); o item 24 da estimativa de 23/11 (série e etiqueta obrigatórios) ainda depende de resposta.
@@ -7523,6 +7528,33 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 276 — A entrega de material sem controle por lote com saldo em lote (CONFERIDA, sem mudança — 2026-11-27)
+
+**Em uma frase:** um material **sem** *Controle por lote* que recebeu Entradas indicando o lote sai "sem lote" na entrega, com ou sem prateleira
+bloqueada e com ou sem peça separada para outra requisição — é como o sistema já funcionava e como o manual descreve; o aviso que dizia que a
+prateleira bloqueada era a causa estava errado, e nada mudou na tela.
+
+| Antes | Agora |
+|---|---|
+| Material sem controle por lote; 3 do *L1* em *A-01* separadas para outra requisição, 1 do *L1* em *B-01* bloqueada; entregar 1 → passa, *"Sem lote atribuído"* −1 | Igual (provado por teste); sem a prateleira bloqueada ou sem a outra requisição, o mesmo |
+| O mesmo material **com** *Controle por lote* | Igual: recusado antes de baixar (*"… O resto do lote L1 está separado na caixa de ⟨requisição⟩ ou em prateleira bloqueada ou sem endereço. …"*) |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **administrador**. Um material **sem** *Controle por lote*: **Movimentações → Entrada** de 3 em *A-01* e de 1 em *B-01*, as duas com
+   o lote *L1*.
+2. Uma requisição de 3, separada de *A-01 — lote L1*; outra de 1, separada no automático. **Localizações**: bloqueie *B-01*.
+3. Abra a segunda requisição → **Confira:** 1 para entregar. **Entregar** 1 → **Confira:** passa.
+4. **Lotes e Séries** do material → **Confira:** o *L1* continua com 4; o bloco *"Sem lote atribuído"* mostra −1; o físico é 3.
+5. Repita com um material **com** *Controle por lote* → **Confira:** 0 para entregar e a entrega recusada com a frase acima.
+
+**O que esta etapa NÃO cobre:** fazer a entrega do material sem controle por lote tirar de lote (é mudar a regra para todo material sem
+controle — decisão **B1658** do documento de novidades; quem quer o lote acompanhando a entrega liga o *Controle por lote*); material com número de
+série sem controle por lote (regra das séries escolhidas).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito para você
+conferir à mão.
 
 ## Etapa 275 — O sucateamento da reprovação depois do "Sem lote" e a entrega dos dois itens do mesmo lote (ENTREGUE — 2026-11-27)
 
