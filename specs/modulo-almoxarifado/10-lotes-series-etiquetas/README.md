@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 273 (2026-11-27, `908bccae`): o estorno da entrada de um lote deixa de contar a reprovação já liberada pelo "Sem lote" quando outro
+> lote tem bloqueio (C556, B1651, B1653).** Ver "Etapa 273" no fim.
 > **+ Etapa 272 (2026-11-27, `d22f41c4`, `3942620c`, `7422dfa5`): o estorno de um Desbloquear com lote é recusado quando o lote não tem mais as peças
 > (C504, B1648, B1649).** Ver "Etapa 272" no fim.
 > **+ Etapa 269 (2026-11-26, `ee8394e1`): a Entrada da tela Movimentações num lote existente vencido avisa mesmo sem a validade digitada
@@ -1712,3 +1714,26 @@ saldo **deixou de valer** na 272 para o estorno do Desbloquear (o caso da entrad
 Testes: `estornoDesbloqueioComLote.api.test.js` (15, rota e serviço, corrida e fluxo). Sabotagens: sem a conferência → 6 caem; sem contar o que
 volta → 6; sem o teto da reprovação → 1; sem a caixa → 1; sem o caminho sem lote → 1; sem inspeção e terceiros → 2. Aviso novo: **C556** (a
 mesma conta do teto no estorno da entrada da 264, não medido).
+*(Etapa 273: o **C556** foi medido e resolvido — ver "Etapa 273" abaixo.)*
+
+## Etapa 273 — o estorno da entrada de um lote não conta a reprovação já liberada (C556) (2026-11-27)
+
+Plano: `docs/superpowers/plans/2026-11-27-almoxarifado-etapa273-estorno-entrada-lote-e-guarda-de-outra-caixa.md` (RN-273.01 a .05; B1651,
+B1653). Fora da estimativa de 23/11.
+
+- [x] **RN-273.01 (C556, B1651)** — no estorno da entrada com lote (264), a reprovação do lote conta só no que o bloqueado do material cobre além
+  do bloqueado de **todos** os lotes; L1 4 + 1, reprovação de 2 liberada pelo "Sem lote", 4 bloqueadas no L2 → o estorno da entrada de 4 do L1
+  passa (antes: 400 mandando para a NC) — `908bccae`.
+- [x] **RN-273.02** — a reprovação ainda de pé continua presa (a literal geral da 264), com e sem bloqueio no L2 — `908bccae`.
+- [x] **RN-273.03** — o bloqueio de outro lote sozinho não prende; o bloqueio do próprio lote, a literal "só o bloqueio" da 264 — `908bccae`.
+- [x] **RN-273.04 (B1653)** — uma régua só (`bloqueadoPorLotePositivoSql`) para os dois estornos (264 e 272); nome novo de propósito — a
+  `bloqueioPorLote.bloqueadoComLoteSql` (soma líquida) é das guardas do "Sem lote" e não mudou — `908bccae`.
+- [x] **RN-273.05** — dentro da seção do estorno, rota e serviço; a recusa volta o claim — `908bccae`.
+- [ ] **Fora (declarado, D (273) 1):** com **outra** reprovação de pé em outro lote, a liberada pelo "Sem lote" ainda conta (o total não diz de
+  qual reprovação é cada peça) — recusa a mais.
+- [ ] **Fora (B1651):** o Bloquear indicando o lote continua com a reprovação crua (Etapa 249; a borda do C516).
+
+**Correção de spec:** o bloco da Etapa 272 acima diz *"Aviso novo: **C556** (… não medido)"* — **medido na 273**: reproduzido e resolvido.
+
+Testes: `estornoEntradaLoteReprovacaoLiberada.api.test.js` (9, rota e serviço, fluxo). Sabotagens: teto só deste lote → 4 caem; reprovação zerada
+→ 3. Aviso novo: **C557** (a NC depois do "Sem lote", deduzido).

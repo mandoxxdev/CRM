@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-27):** **Etapa 272 fechada** (**o estorno do Desbloquear com lote confere se o lote ainda tem as peças, e a
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 273 fechada** (**o estorno da entrada de um lote deixa de contar a reprovação já liberada
+> quando outro lote tem bloqueio, e a entrega com o lote separado para outra requisição e o resto em prateleira bloqueada é recusada antes de
+> baixar** — fora da estimativa de 23/11; **C556** resolvido; a metade da outra caixa do **C485** medida e resolvida; decisões **B1651** a **B1653**;
+> avisos **C557** e **C558**; limitação **D (273)**; verificação **F (273)**; sem consulta antes do deploy). **Próxima:** o entregável do detalhe e da Fila com a
+> parte separada de outra caixa (**D (273)** 2, fim do plano da 273); o item 24 da estimativa de 23/11 ainda depende de resposta.
+> Antes: **Etapa 272 fechada** (**o estorno do Desbloquear com lote confere se o lote ainda tem as peças, e a
 > entrega de dois itens do mesmo lote com peça presa dá o mesmo resultado em qualquer ordem** — fora da estimativa de 23/11; **C504** e **C555**
 > resolvidos; decisões **B1648** a **B1650**; aviso **C556**; limitação **D (272)**; verificação **F (272)**; sem consulta antes do deploy). **Próxima:** a guarda de
 > outra caixa do **C485** (fim do plano da 272); o item 24 da estimativa de 23/11 ainda depende de resposta.
@@ -4934,7 +4939,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650, B1651 a B1653; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15792,6 +15797,35 @@ os outros itens. **Descartado:** trocar a conta da primeira passada pelo total (
 da planejada). **Preço:** a entrega que passava numa das ordens com o lote comprometido demais passa a ser recusada nas duas. **Reversível.**
 `7ab8f156`.
 
+**B1651 (NOVA, da Etapa 273; decisão do agente) — o estorno da entrada de um lote desconta do teto da reprovação o bloqueado de todos os
+lotes; o Bloquear indicando o lote fica como está.** **Escolhido:** no estorno da entrada, a reprovação do lote só conta no que o bloqueado do
+material cobre além do bloqueado de **todos** os lotes (a mesma conta do estorno do Desbloquear, Etapa 272) — a reprovação liberada pelo *"Sem
+lote"* deixa de recusar o estorno quando outro lote tem bloqueio (**C556**). O **Bloquear indicando o lote** continua lendo a reprovação crua
+(Etapa 249): depois desse estorno, bloquear no *L1* a peça que sobrou é recusado (*"Saldo livre do lote L1 insuficiente para bloquear: 0 UN"*)
+— recusa segura, a borda do **C516**; bloquear sem indicar o lote passa. **Descartado:** aplicar o mesmo teto ao Bloquear com lote (deixaria
+bloquear, num lote, a peça de uma reprovação ainda de pé quando o total não distingue de qual lote ela é). **Reversível** (uma conta).
+`908bccae`.
+
+**B1652 (NOVA, da Etapa 273, com a revisão do plano; decisão do agente) — a entrega recusa antes de baixar quando o que falta do lote está
+separado numa caixa e o resto em prateleira bloqueada ou sem endereço.** **Escolhido:** em material com controle por lote, quando a parte
+automática passa do que os lotes que podem sair cobrem, sem lote impedido, e algum lote do material tem parte separada que o automático pula (de
+outra requisição; ou de um item desta que não sai nesta entrega), a entrega é recusada com *"⟨material⟩: não é possível entregar N un — faltam F
+un em lote que pode sair. O resto do lote L1 está separado na caixa de ⟨requisição⟩ ou em prateleira bloqueada ou sem endereço. Desbloqueie a
+prateleira ou transfira as peças para uma prateleira livre, ou entregue F un a menos."* (ou *"… ou nada sai deste material."*). **Descartado:**
+(a) recusar **toda** falta sem lote impedido (mudaria a **B1640**: o registro antigo de inspeção, que a Etapa 269 decidiu manter como está);
+(b) tirar da prateleira bloqueada (o motor recusa a origem bloqueada, Etapa 239). **Medido antes:** sete sondas sem prateleira bloqueada não
+reproduziram (o disponível já desconta a caixa inteira); a revisão do plano achou o caminho da prateleira bloqueada e da linha sem endereço, e ele
+reproduziu (saldo sem lote −1). **Revisão final:** só conta o lote com parte separada que **também** tem peças em prateleira bloqueada ou sem
+endereço — a guarda num lote sem isso não explica a falta (com a falta vinda do registro antigo de inspeção de outro lote, a entrega sai como
+antes, **B1640**). **Reversível** (uma condição na conferência). `6b7ab65e`, `b0876c15`.
+
+**B1653 (NOVA, da Etapa 273, com a revisão do plano; decisão do agente) — a conta do bloqueado de todos os lotes fica na régua "que mais
+bloqueia".** **Escolhido:** a mesma régua do estorno do Desbloquear (o bloqueio conta enquanto o estorno dele não concluiu). **Preço:** se o
+servidor cair no meio do estorno de um bloqueio de outro lote (depois de baixar o total, antes de gravar), o teto da reprovação fica menor do que
+devia e o estorno de uma entrada pode passar com reprovação de pé — só com o processo morrendo, porque tudo roda sob a trava do material.
+**Descartado:** a régua "que menos bloqueia" (contaria como de pé o próprio Desbloquear que o estorno da Etapa 272 está devolvendo, e recusaria
+estornos certos). **Reversível.** `908bccae`.
+
 **B1646 (NOVA, da Etapa 271, com a revisão do plano; decisão do agente) — o que a exclusão interrompida devolveu é contado pela ordem das
 entregas, sem gravar de qual entrega veio.** **Escolhido:** a Devolução soma as entradas da exclusão daquela requisição e material e reparte
 pelas entregas na mesma ordem da exclusão (a mais antiga primeiro, cada uma pelo que ainda faltava voltar dela); a entrada da exclusão que
@@ -20259,6 +20293,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *"[RN-206.15 c]"* reproduzia com um registro **antigo** (a inspeção só no item do recebimento, sem estar no material), que nenhuma porta
      de hoje grava: só ele ainda sai "sem lote", negativo — e fica assim, porque nesse registro a decisão da inspeção é recusada e uma
      recusa da entrega prenderia o item (**B1640**). **Continua valendo** para a parte guardada da caixa de outra requisição.)*
+     *(**A parte guardada de outra caixa — Etapa 273**, `6b7ab65e` (**B1652**): medida. Só com a parte guardada o negativo **não** nascia (o
+     disponível já desconta a caixa inteira — sete sondas); nascia quando o resto do lote com guarda estava em **prateleira bloqueada** ou numa
+     linha **sem endereço**, que o automático pula: saldo sem lote −1 com o lote cheio. Agora a entrega é recusada antes de baixar (*"… O resto do
+     lote L1 está separado na caixa de ⟨requisição⟩ ou em prateleira bloqueada ou sem endereço. …"*). **Fica só o registro antigo de inspeção
+     (B1640).**)*
 486. **NOVO (da Etapa 206; o comportamento é anterior) — série em lote impedido é recusada só na hora da baixa.** A conferência das séries da
      entrega não olha o lote; quem recusa a série de um lote bloqueado é o motor, na baixa — com vários itens, **depois** de outros já terem
      saído (entrega pela metade). Item com série fica fora da conferência nova. **O que fazer:** em material com série, não marcar série de
@@ -20676,6 +20715,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      volta a contar e o estorno pode ser recusado com as peças no lote. O estorno do Desbloquear da Etapa 272 já usa o bloqueado de todos os
      lotes (reproduzido e consertado lá). **Nenhum erro de estoque** (é uma recusa a mais). **O que fazer:** estornar depois de desbloquear o
      outro lote, ou registrar a correção pela não conformidade. Conserto: a mesma conta da 272 no estorno da entrada (~30 min, não medido).
+     *(**Resolvido na Etapa 273** — `908bccae` (**B1651**): reproduzido antes do conserto (L1 4 + 1, reprovação de 2 liberada pelo "Sem lote",
+     4 bloqueadas no L2 → o estorno da entrada de 4 do L1 era recusado mandando para a não conformidade); agora passa. Fica a borda com **outra**
+     reprovação de pé em outro lote (**D (273)** 1).)*
+557. **NOVO (da Etapa 273, revisão do plano; deduzido, não reproduzido) — depois de liberar a reprovação pelo Desbloquear "Sem lote", a não
+     conformidade da mesma reprovação pode tentar tirar do lote peças que ele não tem mais.** A inspeção liberada pelo *"Sem lote"* não fica
+     marcada (**C501**/**C516**); se o lote perdeu peças depois (estorno da entrada, saída) e outro lote do material tem bloqueio, a decisão
+     *Devolver* da não conformidade confere só o bloqueado do material e o físico, e a baixa no lote pode ser recusada pelo motor (*"Saldo
+     insuficiente no lote …"*) — o documento fica sem fechar. O mesmo estado já era alcançável antes da Etapa 273 (estornar a entrada antes de
+     bloquear o outro lote). **O que fazer:** liberar reprovação sempre pela não conformidade (**C516**). Conserto: marcar a inspeção quando o
+     *"Sem lote"* libera a reprovação, ou a não conformidade conferir o lote (não medido).
+
+558. **NOVO (da Etapa 273, revisão final; o comportamento é anterior) — material SEM controle por lote mas com saldo em lote ainda pode deixar
+     "sem lote" negativo pela mesma prateleira bloqueada.** Reproduzido só pelas portas: material com *Controle por lote* desligado, Entradas
+     indicando o lote *L1* (aceitas), uma requisição separa 3 de *A-01 — lote L1*, *B-01* (1 do *L1*) bloqueada, outra requisição entrega 1 →
+     passa, a saída vai sem lote e a linha sem lote fica −1. A conferência da entrega por lote só vale para material com controle por lote.
+     **Nenhuma peça presa sai**; o total do material fica certo e as linhas não. **O que fazer:** não indicar lote em material sem controle por
+     lote; acertar por **Ajuste** com localização (**C487**). Conserto: a conferência valer também para material com saldo em lote (não medido).
 
 
 ### D. Limitações declaradas— são decisão, não esquecimento
@@ -22045,6 +22101,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   há lá; na entrega sai o que houver e o resto no automático (revisão final). (8) Quando a entrega tira de uma outra prateleira só parte do que
   foi separado de lá (alguém tirou a peça antes, por uma Saída avulsa), o resto continua anotado nela até a próxima entrega, que o manda para o
   automático — o detalhe pode mostrar uma prateleira já vazia (revisão final).
+- **(273) O estorno da entrada de lote e a entrega com a parte separada, o que ficou de fora.** (1) A reprovação liberada pelo *"Sem lote"* ainda
+  conta no estorno da entrada quando **outra** reprovação, de outro lote, ainda está de pé (o bloqueado do material não diz de qual reprovação é
+  cada peça): recusa a mais, nunca peça presa saindo (revisão do plano). (2) O detalhe da requisição e a Fila só descontam do entregável o lote
+  impedido: no caso da prateleira bloqueada com o lote separado para outra requisição, podem mostrar como entregável o que a entrega agora recusa
+  (a recusa diz o que fazer; nada sai).
 - **(272) O estorno do Desbloquear com lote e a conferência do lote na entrega, o que ficou de fora.** (1) Com o histórico de bloqueios do lote
   inconsistente (dado antigo que dá bloqueado negativo no lote), o número de *"livres"* da recusa do estorno pode sair maior que o real — só o
   número da frase; a decisão de recusar é a mesma (revisão do plano). (2) Na própria prateleira de onde o item foi separado, a janela de entrega
@@ -23802,6 +23863,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(273) Nenhum clique foi dado.** O estorno da entrada foi provado pela rota real e pelo serviço (9 cenários); a entrega, pela rota e pelo
+  serviço (13 cenários; a prateleira foi bloqueada direto no banco, o mesmo campo que a tela de Localizações grava). Vale 5 minutos: o roteiro da
+  Etapa 273 no guia (passos 1 e 2, o estorno; 3 a 5, a entrega com a prateleira bloqueada).
 
 **(272) Nenhum clique foi dado.** O estorno do Desbloquear foi provado pela rota real e pelo serviço (15 cenários, com a corrida contra a Saída
   do lote); a entrega, pelo serviço e pela rota (9 cenários). Vale 5 minutos: o roteiro da Etapa 272 no guia (passos 1 a 4, o estorno; o passo 5
@@ -45947,7 +46012,65 @@ em *ZA* continuam guardadas, então só sobram 3 para os dois itens.
 - Na própria prateleira de onde o item foi separado, a janela de entrega continua prometendo a parte separada inteira (**B1636**); a entrega
   pode recusar se outro item comprometer o lote — **D (272)** 2.
 - O estorno da **entrada** de um lote com peça presa ainda pode contar uma reprovação já liberada quando outro lote tem bloqueio (**C556**, achado na
-  revisão final, não medido).
+  revisão final, não medido). *(Resolvido na Etapa 273.)*
+
+## Etapa 273 — O estorno da entrada de um lote deixa de contar uma reprovação já liberada, e a entrega não sai mais "sem lote" negativa quando o lote está separado para outra requisição (2026-11-27)
+
+Duas correções do galpão, fora da estimativa da semana. **(1)** Quem estornava a entrada de um lote recebia *"… 2 UN presas nele (2 reprovadas
+na inspeção) … Libere 1 UN do lote L1 (a reprovação pela não conformidade)"* mesmo quando essa reprovação já tinha sido liberada pelo
+Desbloquear *"Sem lote"*, sempre que **outro** lote do mesmo material tinha peças bloqueadas — e a não conformidade não resolvia nada (o aviso
+**C556**). Agora o estorno conta só o que de fato está preso no lote. **(2)** Numa entrega de material com lote, quando as peças livres do lote
+estavam numa prateleira **bloqueada** (ou numa linha sem prateleira) e o resto do lote estava separado na caixa de **outra** requisição, a
+entrega passava, a saída ia *"sem lote"* e o saldo sem lote ficava negativo, com o lote ainda cheio (a metade do aviso **C485** que nunca tinha
+sido medida). Agora a entrega é recusada antes de baixar qualquer coisa e diz o lote, a requisição que guarda as peças e o que fazer. Decisões do
+agente: **B1651** a **B1653**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| L1 com 4 + 1, reprovação de 2 no L1 liberada pelo *"Sem lote"*, 4 bloqueadas no L2; estornar a entrada de 4 do L1 → recusado mandando liberar pela não conformidade | Passa: o L1 fica com 1 e o bloqueado do material continua 4 (as do L2) |
+| O mesmo com a reprovação **ainda não liberada** | Igual: recusado com a mesma frase (as 2 reprovadas estão de fato no L1) |
+| L1: 3 em *A-01* separadas na caixa da requisição *R1* e 1 em *B-01* bloqueada; entregar 1 da *R2* → passava, saía "sem lote" e o saldo sem lote ficava −1 | Recusada antes de baixar: *"⟨material⟩: não é possível entregar 1 un — faltam 1 un em lote que pode sair. O resto do lote L1 está separado na caixa de ⟨R1⟩ ou em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou nada sai deste material."* |
+| Com *B-01* livre | Igual: sai de *B-01*, lote *L1* |
+
+### As regras, com o cenário exato
+
+**1. A reprovação já liberada não conta no estorno da entrada (RN-273.01).** Material com controle por lote, entradas de 4 e de 1 no *L1* e de 4
+no *L2*; 2 peças do *L1* reprovadas na inspeção e liberadas por **Desbloquear** *sem lote*. **Materiais → Bloquear**, 4, lote *L2*.
+**Movimentações → Histórico**: estorne a entrada de 4 do *L1* → passa; o *L1* fica com 1 e o bloqueado do material continua 4. Antes: *"Não é
+possível estornar: o lote L1 tem 2 UN presas nele (2 reprovadas na inspeção) e, sem esta entrada, ficaria com 1 UN — o lote ficaria apontando
+para peças que não estão nele. Libere 1 UN do lote L1 (a reprovação pela não conformidade) e depois estorne esta entrada."*
+
+**2. A reprovação ainda presa continua contando (RN-273.02).** O mesmo, **sem** o Desbloquear *sem lote*: o estorno é recusado com a frase de
+cima. Sem o bloqueio do *L2*, também (como antes).
+
+**3. A entrega com o lote separado para outra requisição (RN-273.07).** Material com lote, 3 no *L1* em *A-01* e 1 no *L1* em *B-01*. Requisição
+*R1* de 3 separada de *A-01 — lote L1*; requisição *R2* de 1 separada no automático. **Localizações**: bloqueie *B-01*. **Entregar** a *R2* →
+*"⟨material⟩: não é possível entregar 1 un — faltam 1 un em lote que pode sair. O resto do lote L1 está separado na caixa de ⟨número da R1⟩ ou
+em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou nada sai deste material."*
+Nada sai. Quando outro lote cobre parte (a *R2* pede 2 e o *L2* tem 1 livre), a frase termina em *"… ou entregue 1 un a menos."* — e entregar 1
+passa, do *L2*. Desbloqueando *B-01*, a entrega da *R2* sai de *B-01*; depois a *R1* entrega as 3 de *A-01*.
+
+**4. A guarda da própria requisição (RN-273.09).** Na mesma requisição, um item com 3 separadas de *A-01 — lote L1* e outro de 1 separado no
+automático, com *B-01* bloqueada: entregar só o segundo → a mesma recusa, com o número da própria requisição. Entregando o primeiro (a caixa
+inteira dele), passa.
+
+**5. Sem peça separada no lote, nada muda (RN-273.06/09).** As conferências de sempre continuam: com o lote todo separado para outra requisição, a
+segunda nem separa (*"… não é possível separar 2 un. Máximo: 0 …"*); com a caixa menor que o pedido, *"… não é possível entregar 2 un. Máximo: 1
+(pendente: 2, disponível: 4)"*; o registro antigo de inspeção (só no item do recebimento) continua saindo como antes (**B1640**).
+
+### O que esta etapa NÃO cobre
+
+- A reprovação de um lote liberada pelo *"Sem lote"* ainda pode contar no estorno quando **outra** reprovação, de outro lote, ainda está de pé
+  (o total do material não diz de qual reprovação é cada peça) — recusa a mais, nunca peça presa saindo — **D (273)** 1.
+- O **Bloquear indicando o lote** continua contando a reprovação liberada pelo *"Sem lote"* (de propósito: nunca deixa bloquear peça reprovada;
+  **C516**) — **B1651**.
+- O detalhe e a Fila podem mostrar como entregável o que a entrega agora recusa (eles só descontam com lote impedido) — **D (273)** 2.
+- Depois de liberar a reprovação pelo *"Sem lote"*, a não conformidade da mesma reprovação pode tentar tirar do lote peças que ele não tem mais
+  (revisão do plano, deduzido, não reproduzido) — **C557**.
+- Material **sem** controle por lote mas com saldo em lote (Entradas que indicaram o lote) ainda pode sair "sem lote" negativo pela mesma prateleira
+  bloqueada — a conferência por lote só vale para material com controle por lote (revisão final, comportamento anterior) — **C558**.
 
 ## Onde estamos e o que vem a seguir
 
@@ -45955,6 +46078,13 @@ em *ZA* continuam guardadas, então só sobram 3 para os dois itens.
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 273 entregue (2026-11-27):** **o estorno da entrada de um lote deixa de contar a reprovação já liberada quando outro lote tem bloqueio, e
+  a entrega com o lote separado para outra requisição e o resto em prateleira bloqueada é recusada antes de baixar** (fora da estimativa de 23/11;
+  **C556** resolvido; a metade da outra caixa do **C485** medida e resolvida). Commits `858e1911` (estimativa), `803f059d` (plano), `908bccae` (o
+  estorno), `6b7ab65e` e `b0876c15` (a entrega) e o fechamento. **O que é seu:** as **B1651** a **B1653** (reversíveis); os avisos **C557** (deduzido na revisão do
+  plano, não reproduzido) e **C558** (revisão final, anterior); a limitação **(273)** em D e a verificação **(273)** em F. Sem consulta antes do deploy. **Próxima:** ver o fim do plano
+  da 273.
 
 - **Etapa 272 entregue (2026-11-27):** **o estorno do Desbloquear com lote é recusado quando o lote não tem mais as peças, e a conferência do
   lote na entrega dá o mesmo resultado em qualquer ordem dos itens** (fora da estimativa de 23/11; **C504** e **C555** resolvidos). Commits
