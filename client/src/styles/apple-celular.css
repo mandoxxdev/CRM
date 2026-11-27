@@ -124,6 +124,13 @@
     border-radius: 980px !important; font-weight: 600 !important;
   }
   .btn-primary svg, .btn-premium svg, .plm-nova svg, .prm-novo svg, .plm-aplicar svg { color: #fff !important; stroke: #fff !important; }
+  /* Proposta (27/11/2026): "Salvar" e "Catálogo de produtos" (.btn-pri) ficavam invisíveis no celular — a regra geral dos botões
+     tira o fundo e nada o devolvia (texto branco sobre nada). Mesmo preto do computador. */
+  html .layout .main-content .proposta-form button.btn-pri {
+    background: #1d1d1f !important; color: #fff !important; -webkit-text-fill-color: #fff !important;
+    border-radius: 980px !important; font-weight: 600 !important;
+  }
+  html .layout .main-content .proposta-form button.btn-pri svg { color: #fff !important; stroke: #fff !important; }
   /* "Exportar PDF" (Relatórios) ficava com o fundo transparente e o texto branco: invisível. */
   .btn-export { background: var(--gmp-primary, #0071E3) !important; color: #fff !important; -webkit-text-fill-color: #fff !important;
     border: none !important; border-radius: 980px !important; min-height: 40px !important; padding: 0 18px !important; }
