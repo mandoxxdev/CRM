@@ -165,6 +165,33 @@ const E1 = (L, livre, q) => `Não é possível estornar o desbloqueio: o lote ${
     assert.strictEqual(Number((await foto(m)).mat.b), 4);
   });
 
+  // ---------------------------------------------------------------- Fase 2 (achados 1 e 2)
+  await test('[RN-272.05 sem bloquear com lote, Fase 2 achado 1] material sem controle de lote com Desbloquear de lote: o caminho e "sem indicar o lote"', async () => {
+    const { m, e1, d } = await montar();
+    await ok(estornar(e1));
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 0 WHERE id = ?', [m.id]);
+    await recusa(m, estornar(d), E1('L1', 0, 4).replace('use Bloquear Material escolhendo um lote que tenha as peças.',
+      'use Bloquear Material sem indicar o lote.'));
+  });
+  await test('[RN-272.03 teto, Fase 2 achado 2] reprovacao de 2 no L1 ja liberada pelo "Sem lote": L1 6, bloquear/desbloquear 4, Saida 1 -> o estorno passa', async () => {
+    const m = await material();
+    await entrar(m, 6, 'L1'); await entrar(m, 4, 'L2');
+    const L1 = await loteId(m, 'L1');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 2 WHERE id = ?', [m.id]);
+    const rec = await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero, status, nota_fiscal) VALUES (?,?,?)', [`REC-272-${m.id}`, 'RECEBIDO', 'NF-272']);
+    const it = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, lote) VALUES (?,?,?,?,?,?)`, [rec.lastID, m.id, 2, 2, L1, 'L1']);
+    await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado (recebimento_item_id, conforme, quantidade_aprovada, quantidade_reprovada,
+      responsavel_id, responsavel_nome) VALUES (?,?,?,?,?,?)`, [it.lastID, 0, 0, 2, 9, 'Q']);
+    await ok(desbloquear(m, 2, undefined));
+    assert.strictEqual(Number((await foto(m)).mat.b), 0, 'premissa: a reprovacao saiu pelo "Sem lote" (documento sem carimbo)');
+    await ok(bloquear(m, 4, L1));
+    await ok(desbloquear(m, 4, L1));
+    await ok(saida(m, 1, { lote_id: L1 }), 201);
+    await ok(estornar(await ultimo(m, 'DESBLOQUEIO')));
+    assert.strictEqual(await bloqueadoNoLote(m, L1), 4);
+  });
+
   // ---------------------------------------------------------------- RN-272.06
   await test('[RN-272.06 corrida] 15 rodadas: Saida de 4 do L1 x estorno do Desbloquear ao mesmo tempo -> nunca os dois', async () => {
     for (let i = 0; i < 15; i++) {

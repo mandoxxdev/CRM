@@ -3386,6 +3386,38 @@ async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
     + `lote ${L} (${caminhos.join('; ')}) e depois estorne esta entrada.`;
 }
 
+/**
+ * Etapa 272 (C504, RN-272.01..03; Fase 2 achado 2) — o que esta PRESO no lote `loteId` e o saldo dele, para o estorno do Desbloquear com
+ * lote: a caixa viva de todas as requisicoes no lote, o em inspecao no lote e as parcelas da 264 (o bloqueado do livro na regua "que mais
+ * bloqueia", limitado ao total; a reprovacao so no que o total ainda cobre; terceiros so no que o material tem em terceiros — o teto por
+ * familia da Fase 5 da 264, B1436). Sem o teto, a reprovacao ja liberada pelo "Sem lote" (C501) recusava um estorno com as pecas no lote.
+ * So le; quem chama segura a trava do material. `{ saldo, preso, codigo }` ou null.
+ */
+async function presoNoLoteParaEstorno(db, materialId, loteId) {
+  const rdl = require('./retidoDoLote');
+  const r = await dbGet(db, `SELECT COALESCE(mq.quantidade_bloqueada, 0) AS total,
+      COALESCE(mq.quantidade_em_terceiros, 0) AS em_terceiros,
+      (SELECT ${Q.qtdSql(`COALESCE(SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END), 0)`)}
+        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
+          AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
+        AS no_lote,
+      COALESCE((SELECT SUM(ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado ri
+        WHERE ri.lote_id = lq.id AND COALESCE(ri.quantidade_em_inspecao, 0) > 0), 0) AS insp,
+      ${rdl.reprovadoDoLoteSql('lq')} AS repr, ${rdl.terceirosDoLoteSql('mq', 'lq')} AS terc,
+      (SELECT COALESCE(SUM(s.quantidade), 0) FROM estoque_saldo_almoxarifado s WHERE s.material_id = mq.id AND s.lote_id = lq.id) AS saldo,
+      lq.codigo AS codigo
+    FROM materiais_almoxarifado mq JOIN lotes_almoxarifado lq ON lq.id = ? WHERE mq.id = ?`, [loteId, materialId]);
+  if (!r) return null;
+  const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
+  const total = Number(r.total) || 0;
+  const bloq = Q.qtd(Math.max(0, Math.min(total, Number(r.no_lote) || 0)));
+  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, total - bloq)));
+  const terc = Q.qtd(Math.min(n(r.terc), n(r.em_terceiros)));
+  // eslint-disable-next-line global-require
+  const caixa = Q.qtd(await require('./requisitionService').guardadoNoLoteDeOutras(db, materialId, loteId, null));
+  return { saldo: Q.qtd(Number(r.saldo) || 0), preso: Q.qtd(caixa + n(r.insp) + bloq + repr + terc), codigo: r.codigo };
+}
+
 /** E2 da Etapa 116 (400, contrato congelado no plano). */
 function mensagemEstornoSemSerie(codigo, n) {
   return `Não é possível estornar: esta saída baixou ${n} série(s) do material ${codigo} e o controle por número de série `
@@ -4504,21 +4536,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             { status: 400 });
           }
           compensarBloqueada = -mov.quantidade; // Etapa 118 (C238, RN-02)
-          // Etapa 272 (C504, RN-272.01..04): com lote, o lote tem de ter as pecas para bloquear de novo — sem isto, estornada a entrada do
-          // lote (ou saida a peca), o bloqueio voltava apontando para o lote vazio. A regua do Bloquear indicando o lote (249) pela projecao
-          // do ajuste (caixa no lote, inspecao, bloqueado no lote, reprovado, terceiros): o claim do livro ja rodou (este DESBLOQUEIO esta
-          // `cancelado = 1`), entao o bloqueado do lote ja conta o que volta. Depois do material (RN-272.04) e com o `compensarBloqueada`
-          // armado: a recusa sai pelo catch, que devolve o bloqueado do material e o claim. Dentro da secao (`naTravaDoMaterial`).
+          // Etapa 272 (C504, RN-272.01..05): com lote, o lote tem de ter as pecas para bloquear de novo — sem isto, estornada a entrada do
+          // lote (ou saida a peca), o bloqueio voltava apontando para o lote vazio. O que esta preso no lote (`presoNoLoteParaEstorno`: caixa
+          // no lote, inspecao, bloqueado no lote, reprovado e terceiros com o teto por familia da 264) contra o saldo do lote. O claim do
+          // livro ja rodou (este DESBLOQUEIO esta `cancelado = 1`), entao o bloqueado do lote ja conta o que volta. Depois do material
+          // (RN-272.04) e com o `compensarBloqueada` armado: a recusa sai pelo catch, que devolve o bloqueado do material e o claim. Dentro
+          // da secao (`naTravaDoMaterial`).
           if (mov.lote_id) {
-            const proj = await projecaoDoLoteNoAjuste(db, mov.material_id, mov.lote_id, 0);
-            if (proj.piso > proj.atual + Q.QTD_FOLGA) {
-              const lt = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [mov.lote_id]);
-              const livre = Q.qtd(Math.max(0, proj.atual - (proj.piso - Number(mov.quantidade))));
+            const r = await presoNoLoteParaEstorno(db, mov.material_id, mov.lote_id);
+            if (r && r.preso > r.saldo + Q.QTD_FOLGA) {
+              const livre = Q.qtd(Math.max(0, r.saldo - Math.max(0, r.preso - Number(mov.quantidade))));
               const un = material.unidade || 'UN';
-              throw Object.assign(new Error(`Não é possível estornar o desbloqueio: o lote ${lt ? lt.codigo : mov.lote_id} tem ${livre} ${un} `
+              // Fase 2 (achado 1): o Bloquear indicando o lote so vale com controle por lote e sem serie — nos outros, o caminho e sem lote
+              const comLote = Number(material.controle_lote) === 1 && Number(material.controle_serie) !== 1;
+              throw Object.assign(new Error(`Não é possível estornar o desbloqueio: o lote ${r.codigo || mov.lote_id} tem ${livre} ${un} `
                 + `${livre > Q.QTD_FOLGA && livre < 2 - Q.QTD_FOLGA ? 'livre' : 'livres'} para bloquear de novo e o estorno bloquearia `
                 + `${Q.qtd(mov.quantidade)} ${un} nele — o bloqueio ficaria apontando para peças que não estão no lote. Para bloquear de novo, `
-                + 'use Bloquear Material escolhendo um lote que tenha as peças.'), { status: 400 });
+                + `${comLote ? 'use Bloquear Material escolhendo um lote que tenha as peças.' : 'use Bloquear Material sem indicar o lote.'}`),
+              { status: 400 });
             }
           }
         }
