@@ -273,11 +273,18 @@ const DevolucoesAlmoxarifado = () => {
     // Etapa 121 (C253): o que voltou ao estoque por uma entrada que não cita esta saída (Entrada avulsa, devolução avulsa)
     // já não se devolve — sem dizer isso, a saída zerada apareceria como "já devolvido por inteiro" sem devolução nenhuma.
     const reentrada = Number(s.quantidade_reentrada) || 0;
+    // Etapa 271 (RN-271.03, C553): o que uma exclusão da requisição interrompida no meio já devolveu desta entrega — a mesma conta
+    // do servidor; sem a frase, a entrega zerada pela exclusão apareceria como "já devolvido por inteiro".
+    const pelaExclusao = Number(s.quantidade_exclusao) || 0;
+    const porFora = reentrada > 0 || pelaExclusao > 0;
     if (s.saldo_devolvivel > 0) partes.push(`devolvível ${s.saldo_devolvivel}`);
-    else if (!(reentrada > 0)) partes.push('já devolvido por inteiro');
+    else if (!porFora) partes.push('já devolvido por inteiro');
     // Fase 2 da 121 (I5): com devolução também, as duas partes — senão o "devolvido" some do rótulo e a conta não fecha.
-    if (reentrada > 0 && Number(s.quantidade_devolvida) > 0) partes.push(`devolvido ${s.quantidade_devolvida}`);
+    if (porFora && Number(s.quantidade_devolvida) > 0) partes.push(`devolvido ${s.quantidade_devolvida}`);
     if (reentrada > 0) partes.push(`${reentrada} já ${reentrada > 1 ? 'voltaram' : 'voltou'} ao estoque por outra entrada`);
+    if (pelaExclusao > 0) {
+      partes.push(`${pelaExclusao} já ${pelaExclusao > 1 ? 'voltaram' : 'voltou'} ao estoque pela exclusão interrompida da requisição`);
+    }
     return partes.join(' · ');
   };
 

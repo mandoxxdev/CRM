@@ -192,6 +192,31 @@ describe('DevolucoesAlmoxarifado — saída de origem e limite de quantidade', (
     expect(opcoes.find((o) => o.value === '504').textContent).not.toMatch(/devolvido [0-9]/);
   });
 
+  test('Etapa 271 (RN-271.03, C553): a entrega que a exclusão interrompida já devolveu diz isso, não "devolvido por inteiro"', async () => {
+    saidasDoBanco = [
+      { ...SAIDA_ZERADA, id: 601, quantidade: 2, quantidade_devolvida: 0, quantidade_reentrada: 0, quantidade_exclusao: 2, saldo_devolvivel: 0 },
+      { ...SAIDA_COM_SALDO, id: 602, quantidade: 6, quantidade_devolvida: 0, quantidade_reentrada: 0, quantidade_exclusao: 1,
+        saldo_devolvivel: 5 },
+      { ...SAIDA_ZERADA, id: 603, quantidade: 4, quantidade_devolvida: 1, quantidade_reentrada: 0, quantidade_exclusao: 3, saldo_devolvivel: 0 },
+      SAIDA_ZERADA,
+    ];
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    const opcoes = [...campo('dev-saida').querySelectorAll('option')];
+    const zerada = opcoes.find((o) => o.value === '601');
+    expect(zerada.disabled).toBe(true);
+    expect(zerada.textContent).toMatch(/2 já voltaram ao estoque pela exclusão interrompida da requisição/);
+    expect(zerada.textContent).not.toMatch(/devolvido por inteiro/);
+    const parcial = opcoes.find((o) => o.value === '602');
+    expect(parcial.disabled).toBe(false);
+    expect(parcial.textContent).toMatch(/devolvível 5 · 1 já voltou ao estoque pela exclusão interrompida da requisição/);
+    expect(opcoes.find((o) => o.value === '603').textContent)
+      .toMatch(/devolvido 1 · 3 já voltaram ao estoque pela exclusão interrompida da requisição/);
+    // A metade positiva: sem exclusão, a devolvida de verdade continua "já devolvido por inteiro" e sem a frase nova.
+    expect(opcoes.find((o) => o.value === '502').textContent).toMatch(/já devolvido por inteiro/);
+    expect(opcoes.find((o) => o.value === '502').textContent).not.toMatch(/exclusão/);
+  });
+
   test('escolhida a saída, a quantidade fica limitada ao saldo devolvível', async () => {
     await abrirModal();
     await escolherMaterial(MATERIAL.id);
