@@ -2524,7 +2524,7 @@ Regras:
 
     > *"Pino: não é possível entregar 1 un — faltam 1 un em lote que pode sair. O resto do lote L1 está separado na caixa de REQ-1 ou em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou nada sai deste material."*
 
-    Com vários lotes ou requisições: *"… O resto dos lotes L1, L3 está separado nas caixas de REQ-1, REQ-2 …"*. Quando parte do pedido cabe (outro lote cobre), a frase termina em *"… ou entregue ⟨falta⟩ ⟨un⟩ a menos."*. A guarda de um item desta requisição que sai inteira nesta mesma entrega não conta. O detalhe da requisição e a Fila só descontam do entregável o lote impedido — nesse caso podem mostrar como entregável o que a entrega recusa.
+    Com vários lotes ou requisições: *"… O resto dos lotes L1, L3 está separado nas caixas de REQ-1, REQ-2 …"*. Quando parte do pedido cabe (outro lote cobre), a frase termina em *"… ou entregue ⟨falta⟩ ⟨un⟩ a menos."*. A guarda de um item desta requisição que sai inteira nesta mesma entrega não conta. O detalhe da requisição e a Fila fazem a mesma conta nesse caso: o entregável mostrado é o que a entrega aceita (no exemplo, 0 para a requisição que não guardou as peças; a dona das peças separadas continua com a sua caixa inteira).
   - Os lotes são lidos na hora de cada baixa: dois itens do mesmo material na mesma entrega dividem os lotes na ordem da requisição. Em material que **permite saldo negativo**, a baixa do lote é contada na posição padrão do material (o total do lote fica certo; a posição de onde o material saiu fisicamente não baixa — acerte pela contagem da posição).
   - Excluir a requisição devolve cada saída ao lote dela (7.6); a devolução citando a saída herda o lote (12.4). Material **sem** Controle por lote, mesmo com saldo em lote, continua saindo sem lote na parte automática (com a parte separada sem lote pulada — abaixo); e a entrega de EPI não escolhe lote.
 - **A parte separada sem lote também é pulada pela regra automática.** Num item **sem** número de série, quando a parte automática sai
@@ -6050,6 +6050,18 @@ devolver ao fornecedor é uma das razões mais comuns de um lote vencido deixar 
 o deixaria preso para sempre. Mas lote **Bloqueado** ou **Reprovado** não sai nem por aqui: a
 recusa é a mesma de qualquer saída (*"Lote ⟨código⟩ esta reprovado e nao pode ser utilizado"*), e
 reabilitar o lote é um segundo gesto, na tela de Lotes, com justificativa.
+
+⚠️ **A reprovação liberada pelo Desbloquear *"Sem lote"* não sai de novo por aqui.** A reprovação da inspeção fica no bloqueado
+**sem lote** do material. Se ela já foi solta pelo **Desbloquear** sem indicar lote e o que resta bloqueado no material é de lote (outro
+lote bloqueado), a execução é recusada antes de mexer em qualquer coisa — o documento continua decidido, com a execução pendente:
+
+> *"Não é possível devolver pela não conformidade: só 0 UN do bloqueado está sem lote e a reprovação tem 2 UN — parte dela pode já ter sido
+> liberada pelo Desbloquear (o resto do bloqueado está em lote: L2: 4). Bloqueie de novo, sem lote, o que falta e registre a execução outra
+> vez, ou cancele a não conformidade"*
+
+Quando o lote da inspeção já não tem as peças da reprovação (por exemplo, a entrada dele foi estornada), o fim da frase muda para *"O lote
+L1 tem só 1 UN, menos que a reprovação: cancele a não conformidade"*. Sem nenhum lote bloqueado no material, vale a regra de sempre
+(*"O material já havia saído do bloqueio — a execução foi registrada sem mover saldo"*, na tabela abaixo).
 
 #### O aviso de sucesso
 

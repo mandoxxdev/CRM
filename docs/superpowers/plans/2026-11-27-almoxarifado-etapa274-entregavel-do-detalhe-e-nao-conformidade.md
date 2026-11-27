@@ -43,8 +43,8 @@ NC confere isso desde a 249 (`SEM_LOTE_INSUFICIENTE`, frase própria), a devolu�
 - **RN-274.07** — O C557 como escrito (variante 1) passa a receber a mesma recusa L1 (antes a frase crua do motor), nada se move.
 - **RN-274.08** — Sem bloqueio em lote, nada muda: a reprovação ainda bloqueada → 200 `BAIXADA` (como antes); o bloqueado drenado abaixo da
   reprovação → o "registra sem mover" de sempre (`SEM_SALDO`, RN-11 da Etapa 45).
-- **RN-274.09** — A conferência roda dentro da seção da devolução (`naTravaDoMaterial`, Etapa 218), antes do claim da inspeção; o claim da NC
-  (passo 2) é desfeito para PENDENTE. Fluxo: recusa → Bloquear 2 *sem lote* → executar → 200 `BAIXADA`, bloqueado volta a 4 (o do L2).
+- **RN-274.09** — A conferência roda dentro da seção da devolução (`naTravaDoMaterial`, Etapa 218), **depois** do claim da inspeção *(revista pela
+  Fase 5: antes dizia "antes do claim", e a segunda NC da mesma inspeção ficava presa)*; a recusa desfaz o claim da inspeção e o da NC (PENDENTE). Fluxo: recusa → Bloquear 2 *sem lote* → executar → 200 `BAIXADA`, bloqueado volta a 4 (o do L2).
 
 ## Contratos (congelados)
 
@@ -58,12 +58,16 @@ cancele a não conformidade` — o mesmo molde da frase da liberação (Etapa 24
 
 ## Tasks
 
-- [ ] **T1 (galho, leitura)** — A: o gatilho em `tetoDaEntregaPeloLote` + a Fila deixa de pular o item sem lote impedido. Teste
-  `entregavelGuardaDeOutraCaixa.api.test.js` (detalhe pela rota, Fila pela rota, e o cruzamento detalhe = o que a porta aceita). Sabotagem.
-- [ ] **T2 (tronco, NC)** — B: a conferência em `executarDevolucaoNaTrava`. Teste `ncDevolucaoDepoisDoSemLote.api.test.js` (serviço + rota, as 3
-  variantes, controle e fluxo). Sabotagem.
-- [ ] **T3** — Fase 5 (revisor fresco, adversarial, cenário reproduzido).
-- [ ] **T4** — fechamento (`fechar-etapa`, sem 7½ e 8).
+- [x] **T1 (galho, leitura)** — A: o gatilho em `tetoDaEntregaPeloLote` + a Fila deixa de pular o item sem lote impedido (e lê `ma.controle_serie`).
+  Teste `entregavelGuardaDeOutraCaixa.api.test.js` (9 cenários; 6 vermelhos antes) — `6afe38eb`. Sabotagens (âncora contada, cópia, md5 de volta):
+  sem o gatilho → 6; a Fila pulando sem impedido → 4. Tirar o `parteQueFica` 0 do próprio item no gatilho **não derruba nada**: o teto calculado
+  com a guarda própria saindo inteira dá o mesmo número (a dona → 3) — declarado, a forma fica pela regra (a mesma régua da E2). Vizinhos: 8
+  arquivos de entrega, entregável e Fila verdes (92 cenários).
+- [x] **T2 (tronco, NC)** — B: a conferência em `executarDevolucaoNaTrava` (com o fim "cancele" quando o lote não tem a reprovação — Fase 2,
+  achado 1). Teste `ncDevolucaoDepoisDoSemLote.api.test.js` (7 cenários; 4 vermelhos sobre HEAD) — `75262048`. Sabotagens: sem o ramo do lote
+  curto → 1; sem desfazer o claim da NC → 5. Vizinhos: 12 arquivos de NC, devolução, sucateamento e bloqueio por lote verdes.
+- [x] **T3** — Fase 5 (revisor fresco, adversarial, sondas numa cópia `git archive`) — 1 achado reproduzido e consertado, `30eb19ba` (abaixo).
+- [x] **T4** — fechamento (`fechar-etapa`, sem 7½ e 8) — o commit de fechamento. Nenhuma coluna, tabela nem índice novo (primeiro boot igual).
 
 ## Pontos de atenção
 
@@ -71,3 +75,60 @@ cancele a não conformidade` — o mesmo molde da frase da liberação (Etapa 24
 - `tetoDaEntregaPeloLote` com origem impedida/não cobre (Etapa 251) continua igual; o gatilho novo só abre a porta de entrada.
 - A conferência da NC lê o bloqueado por lote dentro da trava do material (a mesma régua de `bloqueioPorLote.bloqueadoPorLote` que o
   Desbloquear usa).
+
+## Fase 2 (revisor fresco, uma passada, 27/11) — 2 importantes, 3 menores
+
+1. **[importante → aplicado `75262048`]** No C557 como escrito (o L1 com 1) a frase mandava "bloquear de novo, sem lote", o que não resolve (o
+   lote não tem a reprovação): a recusa termina em *"O lote L1 tem só 1 UN, menos que a reprovação: cancele a não conformidade"*.
+2. **[importante → C559, deduzido]** O sucateamento da reprovação (`scrapDisposalService`, a SUCATA "do bloqueado") só confere o total: o mesmo
+   furo da devolução, deduzido pela leitura. Fora desta etapa; é a próxima tarefa.
+3. **[menor → D (274) 1]** A conferência é do bloqueado do material, não de cada inspeção.
+4. **[menor → texto]** "Nenhum campo novo" no detalhe: os campos de teto da 206 (`saldo_entregavel_lote*`) passam a vir também no caso novo.
+5. **[menor → C560, deduzido]** Entregar juntos os dois itens da RN-274.04: a E2 não dispara para o irmão (furo da 273, não regressão).
+
+## Fase 5 (revisor fresco, adversarial, 27/11) — 1 consertado; A não refutado
+
+1. **[média → consertado `30eb19ba`]** A conferência da NC rodava **antes** do claim da inspeção: a **segunda** NC da mesma inspeção (já devolvida
+   pela primeira, com outro lote bloqueado) levava a recusa nova em vez do *JA_DEVOLVIDA* de sempre e nunca fechava — e, seguindo a frase,
+   duas peças livres ficariam bloqueadas. Agora roda depois do claim e a recusa desfaz os dois. Cenário novo (vermelho com a ordem anterior);
+   sabotagem sem desfazer o claim da inspeção → 4.
+- Não refutado: B com duas inspeções decimais (2,3 e 3,4) presas + L2 → as duas BAIXADA; A com dois itens do mesmo material (detalhe 2/2, Fila
+  2/0, porta 2+1 recusa e 1+1 passa), guarda própria com a R1 no L1, segunda rodada (a Fila mostra 0 — igual antes da 274), material crítico.
+
+## Divergências do plano
+
+- A Fase 0 de B dizia "conferência antes do claim da inspeção" (RN-274.09) — **estava errado**: a Fase 5 mostrou a segunda NC presa. A RN-274.09
+  passa a dizer: dentro da seção, **depois** do claim da inspeção, desfazendo os dois claims na recusa.
+- O C557 estava errado no efeito (o caso descrito o motor já recusava); a variante sem estorno era o furo real.
+- **CLAUDE.md:** nenhuma linha ficou errada (a devolução continua numa seção só, sob a trava do material desde a 218).
+
+## Próxima tarefa detalhada
+
+Escolhida pelas pendências C da feature 10 (o mesmo furo, o de maior valor: apaga patrimônio do lote errado): **C559 — o sucateamento da
+reprovação depois do "Sem lote"** (~45 min, motor: medir antes). Caminho: reproduzir pelo fluxo da NC *Sucatear* → *Solicitar sucateamento* →
+duas aprovações (`scrapDisposalService`, a SUCATA "do bloqueado", ~linha 498) com a reprovação liberada pelo "Sem lote" e 4 bloqueadas no L2;
+se reproduzir, a mesma conferência de `executarDevolucaoNaTrava` (`bloqueioPorLote.bloqueadoPorLote`, sem lote < reprovação com lote bloqueado →
+400 antes da baixa, desfazendo o que a aprovação gravou), dentro da trava do material; frase no molde da L1 desta etapa (*"Não é possível
+sucatear pela não conformidade: …"*). Pontos de atenção: a segunda NC da mesma inspeção (a lição da Fase 5 daqui: conferir depois do claim);
+o sucateamento avulso (sem NC) não passa por ali. Alternativas: **C560** (medir a entrega dos dois itens juntos, ~30 min); **C558**.
+
+- **Item 24 da estimativa de 23/11 (série e etiqueta obrigatórios) ainda depende de resposta** — não comece sem ela. O item 23 (tirar o campo
+  Aplicação) **foi resolvido na Etapa 263** (esta linha dizia, no plano da 273, que ainda dependia; estava desatualizada).
+- **O que já está pronto e não reabre:** o entregável do detalhe e da Fila no caso da E2 e a devolução pela NC depois do "Sem lote", desta etapa.
+
+## Verificação (medida)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`, sobre `30eb19ba`, **depois** do último conserto): **687/689 arquivos OK** —
+  os 2 que falham são os já conhecidos de proposta, de outra máquina (`propostaBilingueTemplate` 7/1, `propostaPdfExigeLogin` 3/1).
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0** (sobre `30eb19ba`).
+- Jest da tela e build: **não rodados** — o client não mudou nesta etapa.
+- Nenhum clique no navegador (F (274)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2 — o fim "cancele" para o lote sem a reprovação; Fase 5 — a conferência depois do claim da inspeção).
+- Achados: Fase 2 — 2 importantes (1 aplicado, 1 deduzido → C559), 3 menores (D (274) 1, texto, C560); Fase 5 — 1 reproduzido e consertado, A não
+  refutado.
+- Paralelismo: os revisores rodaram enquanto os testes e a documentação eram escritos; a primeira rodada do `test:api` foi parada e refeita
+  depois do conserto da Fase 5.
+- Defeito que escapou: (preencher na etapa seguinte). Da 273: o C557 estava errado no efeito e escondia a variante sem estorno (resolvida aqui).

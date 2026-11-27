@@ -5,14 +5,20 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 273 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 274 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 273 fechada — 2026-11-27.** **O estorno da entrada de um lote deixa de contar a reprovação já
+> **O desenvolvimento parou aqui: Etapa 274 fechada — 2026-11-27.** **A tela da requisição e a Fila mostram o que a entrega aceita quando o
+> lote está separado para outra requisição e o resto em prateleira bloqueada, e a devolução pela não conformidade é recusada depois do "Sem lote"
+> em vez de tirar peça livre** (fora da estimativa de 23/11; D (273) 2 e C557). **Sem consulta antes do deploy.** **Nenhum clique foi dado**
+> (roteiro na seção da 274). **Onde parou, exatamente:** a **274 está fechada**; a próxima está no fim do plano da 274; o item 24 da estimativa
+> de 23/11 (série e etiqueta obrigatórios) ainda depende de resposta.
+>
+> *(Antes:)* **Etapa 273 fechada — 2026-11-27.** **O estorno da entrada de um lote deixa de contar a reprovação já
 > liberada quando outro lote tem bloqueio, e a entrega com o lote separado para outra requisição e o resto em prateleira bloqueada é recusada
 > antes de baixar** (fora da estimativa de 23/11; C556 e a metade da outra caixa do C485). **Sem consulta antes do deploy.** **Nenhum clique foi
 > dado** (roteiro na seção da 273). **Onde parou, exatamente:** a **273 está fechada**; a próxima é o entregável do detalhe e da Fila com a parte
@@ -7513,6 +7519,37 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 274 — A tela da requisição e a Fila mostram o que a entrega aceita, e a devolução pela não conformidade depois do "Sem lote" (ENTREGUE — 2026-11-27)
+
+**Em uma frase:** quando as peças livres de um lote estão numa prateleira bloqueada e o resto está separado para outra requisição, a tela da
+requisição e a Fila deixam de oferecer para entrega o que a entrega recusa; e registrar a devolução ao fornecedor de uma reprovação já liberada
+pelo *"Sem lote"* passa a ser recusado com o caminho a seguir, em vez de tirar peças livres do lote.
+
+| Antes | Agora |
+|---|---|
+| *L1*: 3 em *A-01* separadas para a *R1* e 1 em *B-01* bloqueada; a *R2* (1) aparecia com 1 para entregar, e a entrega recusava | A tela e a Fila mostram **0** para a *R2* |
+| Reprovação de 2 no *L1* liberada pelo *"Sem lote"*, 4 bloqueadas no *L2*; **Registrar execução** da devolução → "2 devolvido(s) ao fornecedor" (saíam 2 peças livres do *L1*) | Recusada, nada muda: *"Não é possível devolver pela não conformidade: só 0 UN do bloqueado está sem lote e a reprovação tem 2 UN — parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote: L2: 4). Bloqueie de novo, sem lote, o que falta e registre a execução outra vez, ou cancele a não conformidade"* |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **administrador**. Um material **com controle por lote**: Entradas de 3 no *L1* em *A-01* e de 1 no *L1* em *B-01*. Requisição
+   *R1* de 3, separada de *A-01 — lote L1*; requisição *R2* de 1, separada no automático.
+2. **Localizações**: bloqueie *B-01*. Abra a *R2* → **Confira:** para entregar, **0**. Na **Fila** → **Confira:** a *R2* não está em *Entregar*;
+   a *R1* mostra 3.
+3. Desbloqueie *B-01* → **Confira:** a *R2* volta a mostrar 1; entregue-a → sai 1 de *B-01*, lote *L1*.
+4. Outro material com lote: Entradas de 4 e de 1 no *L1* e de 4 no *L2*. Reprove 2 do *L1* numa inspeção (a não conformidade abre sozinha) e
+   decida **Devolver**. **Materiais → Desbloquear** 2, *sem lote*; **Bloquear** 4, lote *L2*.
+5. Na não conformidade, **Registrar execução** → **Confira** a recusa acima; o estoque não muda e a não conformidade continua pendente.
+6. **Materiais → Bloquear** 2, *sem lote*; **Registrar execução** de novo → **Confira:** "2 devolvido(s) ao fornecedor"; o *L1* fica com 3 e o
+   material com 4 bloqueadas (as do *L2*).
+
+**O que esta etapa NÃO cobre:** com duas reprovações (uma liberada, outra ainda presa em outro lote) a liberada ainda pode devolver (**D (274)** 1
+do documento de novidades); o **sucateamento** da reprovação não recebeu a mesma conferência (**C559**); entregar **juntos** dois itens da mesma
+requisição nesse caso dos lotes não foi medido (**C560**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota e pelo serviço) provam,
+escrito para você conferir à mão.
 
 ## Etapa 273 — O estorno da entrada de um lote e a entrega com o lote separado para outra requisição (ENTREGUE — 2026-11-27)
 

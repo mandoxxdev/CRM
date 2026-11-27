@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 274 (2026-11-27, `75262048`): a devolução pela não conformidade confere o bloqueado sem lote depois do Desbloquear "Sem lote"
+> (C557, B1655).** Ver "Etapa 274" no fim.
 > **+ Etapa 273 (2026-11-27, `908bccae`): o estorno da entrada de um lote deixa de contar a reprovação já liberada pelo "Sem lote" quando outro
 > lote tem bloqueio (C556, B1651, B1653).** Ver "Etapa 273" no fim.
 > **+ Etapa 272 (2026-11-27, `d22f41c4`, `3942620c`, `7422dfa5`): o estorno de um Desbloquear com lote é recusado quando o lote não tem mais as peças
@@ -1737,3 +1739,27 @@ B1653). Fora da estimativa de 23/11.
 
 Testes: `estornoEntradaLoteReprovacaoLiberada.api.test.js` (9, rota e serviço, fluxo). Sabotagens: teto só deste lote → 4 caem; reprovação zerada
 → 3. Aviso novo: **C557** (a NC depois do "Sem lote", deduzido).
+
+## Etapa 274 — a devolução pela não conformidade depois do "Sem lote" (C557) (2026-11-27)
+
+Plano: `docs/superpowers/plans/2026-11-27-almoxarifado-etapa274-entregavel-do-detalhe-e-nao-conformidade.md` (RN-274.06 a .09; B1655).
+Fora da estimativa de 23/11.
+
+- [x] **RN-274.06 (C557, B1655)** — a execução da NC DEVOLVER recusa antes de qualquer efeito (dentro da trava, antes do claim da inspeção; o
+  claim da NC volta a PENDENTE) quando há bloqueado em lote e o bloqueado sem lote não cobre a reprovação: L1 4 + 1, L2 4, reprovação de 2
+  liberada pelo "Sem lote", 4 bloqueadas no L2 → 400 (antes 200 BAIXADA: 2 livres saíam do L1 e o bloqueado caía para 2 com as 4 do L2 no livro);
+  rota e serviço — `75262048`.
+- [x] **RN-274.07** — o C557 como escrito (a entrada de 4 do L1 estornada, L1 1): a mesma recusa, terminando em "cancele" (antes a frase crua do
+  motor, *"Saldo insuficiente no lote L1. Disponível: 1 UN"*) — `75262048`.
+- [x] **RN-274.08** — como antes sem bloqueio em lote (SEM_SALDO, a RN-11 da 45) e com a reprovação ainda presa (BAIXADA) — `75262048`.
+- [x] **RN-274.09** — o fluxo recusa → Bloquear 2 sem lote → executar → BAIXADA; e cancelar depois da recusa — `75262048`. Revisão final:
+  a conferência roda **depois** do claim da inspeção (antes, a segunda NC da mesma inspeção já devolvida levava a recusa em vez do *JA_DEVOLVIDA* e
+  nunca fechava) — `30eb19ba`.
+- [ ] **Fora (C559, deduzido na revisão do plano):** o sucateamento da reprovação (`scrapDisposalService`) não recebeu a conferência.
+- [ ] **Fora (D (274) 1):** a conferência olha o bloqueado do material inteiro, não o de cada inspeção.
+
+**Correção de spec:** o bloco da Etapa 273 acima diz *"Aviso novo: **C557** (a NC depois do "Sem lote", deduzido)"* — **medido na 274: estava
+errado no efeito** (o caso descrito o motor já recusava, sem negativo); o furo real era a variante sem estorno, resolvida.
+
+Testes: `ncDevolucaoDepoisDoSemLote.api.test.js` (8, rota e serviço, fluxo, a segunda NC). Sabotagens: sem o ramo do lote curto → 1 cai; sem desfazer o
+claim da NC → 5; sem desfazer o claim da inspeção → 4. Vizinhos de NC, devolução e sucateamento verdes.
