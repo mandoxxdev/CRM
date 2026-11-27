@@ -327,6 +327,19 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await linhas(r.ids[0]), []);
   });
 
+  await test('[RN-270.14, Fase 5 achado 1] entrega escolhendo exatamente B no "Sai de" consome a parte de B (nao aponta para a prateleira vazia)', async () => {
+    const A = await loc('FA'); const B = await loc('FB'); const m = await material();
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 2);
+    const r = await req([[m.id, 8]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 1 }]));
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 2, localizacao_origem_id: B.id }]));
+    assert.deepStrictEqual(await saldo(m.id, B.id), 0);
+    assert.deepStrictEqual(await partes(r.id, r.ids[0]), []);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 3, caixa: 4 });
+  });
+
   await test('[RN-270.15] integracao pela rota: separar A 3 + B 2 -> entregar 5 (o estorno avulso da saida de B e recusado) -> excluir: cada prateleira volta ao de antes', async () => {
     const { A, B, P, m, id, ids } = await cenarioAB({ pedido: 6 });
     const antes = [await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)];

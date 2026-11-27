@@ -3665,6 +3665,22 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       // desta entrega). Parte ou caixa zerada: origem, lote e parte zeram juntos.
       // Etapa 270 (RN-270.14): o que saiu de cada outra prateleira desconta dela — regrava o limitado de antes da entrega menos o que saiu
       // (a leitura depois limita pela caixa nova, B1644). Zerada, a linha sai. No finally: falhou um pedaco depois, o que saiu conta.
+      // Etapa 270 (Fase 5, achado 1): o "Sai de" escolhido que e exatamente uma outra prateleira da caixa (endereco + lote) consome a parte
+      // dela pelo que saiu de la — senao a parte ficava apontando para a prateleira que a entrega acabou de esvaziar.
+      const entradaDoItem = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+      const escolhida = entradaDoItem && !semEscolhaNaEntrega(entradaDoItem) ? origemPorItem.get(item.id) : null;
+      if (escolhida && escolhida.origemId && plano.baixadoComOrigem > Q.QTD_FOLGA && partesAntesEntrega.has(Number(item.id))) {
+        const ef = partesEfetivas(retratoEntrega.get(Number(item.id)) || item, partesAntesEntrega.get(Number(item.id)));
+        const alvo = ef.find((p) => Number(p.localizacao_id) === Number(escolhida.origemId)
+          && (p.lote_id != null ? Number(p.lote_id) : null) === (escolhida.loteId != null ? Number(escolhida.loteId) : null));
+        if (alvo) {
+          const resta = Q.qtd(Math.max(0, alvo.quantidade - plano.baixadoComOrigem));
+          // eslint-disable-next-line no-await-in-loop
+          await (resta <= Q.QTD_FOLGA
+            ? dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE id = ?', [alvo.id])
+            : dbRun(db, `UPDATE partes_separacao_almoxarifado SET quantidade = ?, updated_at = datetime('now') WHERE id = ?`, [resta, alvo.id]));
+        }
+      }
       for (const p of plano.partesPreferidas) {
         if (p.saiu <= Q.QTD_FOLGA) continue;
         // eslint-disable-next-line no-await-in-loop
