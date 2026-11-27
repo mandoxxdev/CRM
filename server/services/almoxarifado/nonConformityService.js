@@ -53,6 +53,8 @@ const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require` — o cabecalho acima continua
 // valendo: sem ciclo). Pelo OBJETO do modulo: os testes espiam `trava.comLockDoMaterial`.
 const trava = require('./travaPorMaterial');
+const bloqueioPorLote = require('./bloqueioPorLote'); // Etapa 274 (RN-274.06): o bloqueado sem lote na devolucao
+const Q = require('./quantidade');
 
 const NC_ORIGENS = ['RECEBIMENTO', 'INSPECAO'];
 const NC_REFERENCIA_TIPOS = ['RECEBIMENTO_ITEM', 'INSPECAO'];
@@ -1645,6 +1647,33 @@ function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) {
 }
 
 async function executarDevolucaoNaTrava(db, user, nc, insp, previsto, observacoes, id) {
+  // Etapa 274 (RN-274.06/07/09, C557): a reprovacao mora no bloqueado SEM lote (B1418). Se o Desbloquear "Sem lote" ja a tirou e o que
+  // sobra do bloqueado e de lote (outro lote bloqueado), o nivel 8 da precedencia passa (o total cobre) e a devolucao tirava a reprovacao do
+  // bloqueado do outro lote — 2 pecas livres do L1 saiam e o bloqueado caia para 2 com as 4 do L2 ainda bloqueadas no livro. A mesma
+  // conferencia da liberacao (Etapa 249, C501), aqui antes de qualquer efeito, dentro da trava; a NC volta a PENDENTE (decidida). Descartado
+  // (B): registrar sem mover (o "ja saiu do bloqueio" da RN-11) — fecharia o documento sem a devolucao e sem volta.
+  const porLote = await bloqueioPorLote.bloqueadoPorLote(db, previsto.material_id);
+  if (porLote && porLote.lotes.length && menosQue(porLote.sem_lote, previsto.quantidade)) {
+    await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
+      execucao_estado = ?, execucao_em = NULL, execucao_por_id = NULL, execucao_por_nome = NULL,
+      execucao_observacoes = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND execucao_em IS NOT NULL`, [EXECUCAO_PENDENTE, id]);
+    const mat = await dbGet(db, 'SELECT unidade FROM materiais_almoxarifado WHERE id = ?', [previsto.material_id]);
+    const un = (mat && mat.unidade) || '';
+    const lista = porLote.lotes.map((l) => `${l.codigo}: ${Q.qtd(l.quantidade)}`).join('; ');
+    let fim = 'Bloqueie de novo, sem lote, o que falta e registre a execução outra vez, ou cancele a não conformidade';
+    if (previsto.lote_id) {
+      const doLote = await dbGet(db, `SELECT l.codigo, COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
+        WHERE s.material_id = ? AND s.lote_id = l.id), 0) AS q FROM lotes_almoxarifado l WHERE l.id = ?`, [previsto.material_id, previsto.lote_id]);
+      // Fase 2 (achado 1): o lote ja nao tem a reprovacao (a entrada dele foi estornada) — bloquear de novo nao resolve; so cancelar.
+      if (doLote && menosQue(doLote.q, previsto.quantidade)) {
+        fim = `O lote ${doLote.codigo} tem só ${Q.qtd(Number(doLote.q))} ${un}, menos que a reprovação: cancele a não conformidade`;
+      }
+    }
+    throw Object.assign(new Error(`Não é possível devolver pela não conformidade: só ${Q.qtd(porLote.sem_lote)} ${un} do bloqueado está sem lote`
+      + ` e a reprovação tem ${Q.qtd(previsto.quantidade)} ${un} — parte dela pode já ter sido liberada pelo Desbloquear`
+      + ` (o resto do bloqueado está em lote: ${lista}). ${fim}`), { status: 400 });
+  }
   // Passo 3 — o claim da INSPECAO (RN-05). E por INSPECAO e nao por NC de proposito: duas NCs de
   // TIPOS diferentes da mesma inspecao baixariam a reprovada duas vezes, e o motor nao salva
   // porque o pool e agregado. Ver o comentario da coluna em schema.js.
