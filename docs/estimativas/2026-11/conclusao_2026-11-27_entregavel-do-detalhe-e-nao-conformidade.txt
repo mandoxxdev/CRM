@@ -1,0 +1,7 @@
+*Concluído — número de entrega na tela e não conformidade depois da liberação do lote*
+_27/11/2026_
+
+1. A tela da requisição e a Fila mostram o que a entrega aceita — estimado 45min · realizado 30min
+2. A não conformidade depois de liberar a reprovação do lote — estimado 30min · realizado 30min
+
+*Total: estimado 1h15 · realizado 1h*
