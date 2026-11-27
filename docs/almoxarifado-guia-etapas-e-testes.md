@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 269 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 270 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 269 fechada — 2026-11-26.** **A recusa da entrega diz quando o que falta está em inspeção, e a
+> **O desenvolvimento parou aqui: Etapa 270 fechada — 2026-11-27.** **Separar parte de uma prateleira e parte de outra: a separação
+> guarda as duas, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** (itens 19 e 20 da estimativa de 23/11).
+> **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 270). **Onde parou, exatamente:** a **270 está fechada**; a
+> próxima é o item 22 da estimativa de 23/11 (a devolução depois de uma exclusão interrompida — fim do plano da 270).
+>
+> *(Antes:)* **Etapa 269 fechada — 2026-11-26.** **A recusa da entrega diz quando o que falta está em inspeção, e a
 > Entrada num lote vencido avisa mesmo sem digitar a validade** (itens 18 e 21 da estimativa de 23/11). **Sem consulta antes do deploy.**
 > **Nenhum clique foi dado** (roteiro na seção da 269). **Onde parou, exatamente:** a **269 está fechada**; a próxima são os itens 19 e 20 da
 > estimativa de 23/11, juntos (separar de duas prateleiras — fim do plano da 269).
@@ -7490,6 +7495,41 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 270 — Separar parte de uma prateleira e parte de outra (ENTREGUE — 2026-11-27)
+
+**Em uma frase:** quando a separação de um item pega parte das peças numa prateleira e o resto em outra, o sistema passa a guardar as duas
+(e quanto de cada uma), o detalhe da requisição mostra as duas, e a entrega de um clique tira cada parte da prateleira de onde ela foi pega —
+sem escolher de novo no **"Sai de"**.
+
+| Antes | Agora |
+|---|---|
+| 3 separados de *A-01* e 2 de *B-02* → o detalhe dizia só *"separado de A-01 (3 PC)"* | *"separado de A-01 (3 PC) · B-02 (2 PC)"* |
+| A entrega de um clique tirava 3 de *A-01* e as 2 de *B-02* pela regra automática (o endereço padrão) | Tira 3 de *A-01* e 2 de *B-02* |
+| A janela de entrega dizia *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. …"* | *"3 PC sai de A-01 (o que foi separado de lá); 2 PC de B-02, se ainda estiverem lá; o restante, automático. Se em A-01 não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **administrador**. Um material **sem** controle por lote, com Entradas de 5 em *A-01*, 5 em *B-02* e 10 no endereço padrão
+   (*P-01*). Crie e aprove uma requisição de 8 desse material.
+2. **Iniciar Separação**: quantidade 3, **Sai de** *A-01* → **Confirmar Separação**.
+3. **Ajustar Separação**: quantidade 2, **Sai de** *B-02* → **Confira:** o aviso *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta
+   parte fica anotada como separada de B-02 e sai de lá na entrega, se ainda estiver lá (senão, no automático)."* → confirme.
+4. No detalhe do item → **Confira:** *"separado de A-01 (3 PC) · B-02 (2 PC)"*.
+5. **Completar Entrega** → **Confira:** a quantidade 5, o **Sai de** em *"Qualquer endereço (automático)"* e a frase *"3 PC sai de A-01 (o que
+   foi separado de lá); 2 PC de B-02, se ainda estiverem lá. Se em A-01 não houver mais essa quantidade, a entrega é recusada — escolha de
+   onde sai."* → **Confirmar Entrega**.
+6. Em **Movimentações** → **Confira:** saída de 3 de *A-01* e saída de 2 de *B-02*; *P-01* continua com 10.
+7. (Quando a outra prateleira esvaziou) Repita os passos 1 a 4 com *B-02* tendo só 2 e, antes de entregar, separe 2 de *B-02* para **outra**
+   requisição. Entregue a primeira → **Confira:** passa; 3 de *A-01* e 2 pela regra automática (de *P-01*).
+8. **Excluir** a requisição do passo 5 → **Confira:** *A-01* e *B-02* voltam ao saldo de antes da entrega.
+
+**O que esta etapa NÃO cobre:** a outra prateleira não segura as peças contra outras requisições (só a primeira segura); itens separados em
+duas vezes **antes** desta mudança continuam com a segunda parte no automático; a **Fila de separação** e a lista de coleta continuam
+mostrando só a primeira prateleira; item com número de série sai pelas séries escolhidas (**D (270)** do documento de novidades).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 269 — A entrega diz quando o que falta está em inspeção, e a Entrada num lote vencido avisa (ENTREGUE — 2026-11-26)
 

@@ -33,9 +33,9 @@
   todas as partes na tabela nova, inclusive a 1ª (troca a régua de todas as guardas). **Reversível** (a tabela só acrescenta).
 - **B1644** — a conta da caixa: as outras partes valem **até o que sobra da caixa depois da parte da origem**, na ordem em que foram separadas.
   Quem tira da caixa sem dizer de onde (devolução à prateleira, entrega no automático) tira primeiro o que não tem prateleira, depois as outras
-  partes da **última para a primeira**, por último a origem — a mesma regra da RN-196.08 estendida. A leitura limita sempre (o número gravado só
-  sobe na separação, que antes regrava o valor limitado). **Descartado:** decrementar a tabela em toda porta que mexe na caixa (três portas a
-  mais para manter; a leitura limitada dá o mesmo número).
+  partes da **última para a primeira**, por último a origem — a mesma regra da RN-196.08 estendida. A leitura limita sempre; **quem encolhe a caixa** (a entrega,
+  a devolução à prateleira) **regrava** as partes limitadas pela caixa nova, e a separação só soma (*Fase 2, L1*: sem regravar, a parte
+  "ressuscitava" quando uma rodada automática fazia a caixa crescer de novo). **Descartado:** só limitar na leitura (o plano original).
 - **B1645** — a entrega sem "Sai de" (um clique, ou a janela sem escolha) tira a parte de cada outra prateleira **de lá**, quando a prateleira
   ainda tem essas peças **livres** (o saldo do par menos o que as caixas vivas guardam ali — a mesma régua do automático —, endereço não
   bloqueado, lote que pode sair e sem a peça em inspeção/presa); o que não couber, no automático de hoje. **Não** se aplica com o "Sai de"
@@ -71,8 +71,10 @@
 - **RN-270.13** — Não se aplica com o "Sai de" escolhido, com `origem_automatica`, nem a item com série (B1645): como hoje.
 - **RN-270.14** — Entrega parcial: caixa A 3 + B 2 + C 2, um clique 4 → 3 de A, 1 de B; partes depois: B 1, C 2. Um clique 3 → 1 de B, 2 de
   C. O que saiu de cada parte desconta dela; depois a régua da RN-270.03.
-- **RN-270.15** — A parte que sai de B-02 pela entrega é uma SAÍDA com o endereço: o estorno da saída, a devolução da saída para Estoque e a
-  exclusão da requisição a devolvem para B-02 (o registro por linha das Etapas 257/259) — nada novo a fazer, só provado.
+- **RN-270.15** — A parte que sai de B-02 pela entrega é uma SAÍDA com o endereço: a exclusão da requisição a devolve para B-02 (o estorno
+  por linha das Etapas 257/259). O estorno avulso da saída de requisição é recusado como sempre (*"Movimentação vinculada a requisição — use
+  os fluxos da requisição (exclusão/encerramento)"*); a devolução da saída para Estoque vai para o endereço que o almoxarife **escolhe**
+  (*Fase 2, L5* — o plano dizia "devolve para B-02"; **estava errado**). Nada novo a fazer, só provado.
 - **RN-270.16** — A janela de entrega (sem "Sai de" escolhido, quantidade acima da parte da origem) diz *"3 UN sai de A-01 (o que foi separado
   de lá); 2 UN de B-02, se ainda estiverem lá; o restante, automático. Se em A-01 não houver mais essa quantidade, a entrega é recusada —
   escolha de onde sai."* Sem outras partes: a frase de hoje, byte a byte. Item sem origem e só com outras partes: *"2 UN sai de B-02, se ainda
@@ -95,17 +97,97 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor, item 19)** — tabela, `partesEfetivas`, gravação na separação, `partes_separacao` no detalhe, limpeza na
+- [x] **T1 (tronco, servidor, item 19)** — `51b0415c` — tabela, `partesEfetivas`, gravação na separação, `partes_separacao` no detalhe, limpeza na
   exclusão. Teste `server/tests/api/separarDeDuasPrateleiras.api.test.js` (RN-270.01..06; rota e serviço).
-- [ ] **T2 (tronco, servidor, item 20)** — a entrega sem escolha tira de cada parte (RN-270.10..15), decremento no finally. Mesmo arquivo de
+- [x] **T2 (tronco, servidor, item 20)** — `af99a506` — a entrega sem escolha tira de cada parte (RN-270.10..15), decremento no finally. Mesmo arquivo de
   teste; **integração** separar → entregar parcial → entregar o resto → estornar a saída de B → excluir (RN-270.15), pela rota e pelo serviço.
-- [ ] **T3 (galho, tela)** — detalhe (RN-270.04), dica da entrega (RN-270.16), aviso da separação (RN-270.17); textos da Fila
+- [x] **T3 (galho, tela)** — `4084f4b2` — detalhe (RN-270.04), dica da entrega (RN-270.16), aviso da separação (RN-270.17); textos da Fila
   (`coletaTexto.js`) e `FRASE_PARCIAL` que dizem "sai no automático na entrega" ajustados. Teste
   `client/src/components/almoxarifado/RequisicoesDuasPrateleiras.test.js`.
-- [ ] **T4** — Fase 5, documentos (`fechar-etapa`), suítes, estimativa.
+- [x] **T4** — `36a9fd45` (Fase 5) e o fechamento — Fase 5, documentos (`fechar-etapa`), suítes, estimativa.
 
 T3 depende só do contrato (RN-270.04) — galho. T2 depende da T1 (lê a tabela).
 
-## Fase 2 (revisor fresco, uma passada)
+## Fase 2 (revisor fresco, uma passada, sobre o plano `d3ea0b6d`; sondas apagadas)
 
-(a preencher)
+1. **[alta, reproduzido, absorvido — R1]** A caixa no banco encolhe a cada baixa (o entregue é gravado logo depois de cada SAÍDA): lidas na
+   passada 2, as partes davam 0. → as partes são **fixadas antes da 1ª baixa**, pelo retrato do item (`retratoEntrega`).
+2. **[confirmado — R2]** O C461 (3 de A + 2 sem endereço, da padrão).
+3. **[reproduzido, absorvido — R3]** Parte (B, sem lote) em material com lote só existe sobre a linha sem lote; o livre lê o lote **exato**
+   (`lote_id IS ?`) — ler "qualquer lote em B" faria o motor recusar no meio da entrega.
+4. **[alta, leitura, absorvido — L1]** A parte "ressuscitava": a leitura limitada não basta quando a caixa encolhe e depois cresce (rodada
+   automática). → a entrega e a devolução à prateleira **regravam** as partes limitadas pela caixa nova (`regravarPartesLimitadas`). A B1644
+   foi corrigida: "quem encolhe a caixa regrava; a separação só soma".
+5. **[média, absorvido — L2]** Irmão do mesmo material no automático, de id menor, esvaziava B antes da parte. → sub-passada `'2p'` depois das
+   passadas 0/1 e antes de **todo** automático.
+6. **[média, absorvido — L3]** O orçamento da parte é do **item**, dividido entre os pedaços (excedente sem reserva e os com `reserva_id`).
+   Não entra em `saiuDaOrigemPorItem`.
+7. **[média, absorvido — L4]** Lote sem guarda não tem régua pronta de livre por endereço → `livreDaParteNaEntrega`: min(linha do par − guarda
+   que conta ali, livre do lote no automático). Inspeção/retido **limitam** (não mandam o lote inteiro ao automático). Endereço inativo: o
+   motor não recusa a origem inativa; a régua pula mesmo assim (cai no automático, sem efeito ruim).
+8. **[alta, a RN estava errada — L5]** A devolução da saída para Estoque vai para o endereço que o almoxarife escolhe (não pelo registro por
+   linha). → RN-270.15 corrigida; o teste devolve escolhendo B.
+9. **[L6, absorvido]** A dica da entrega reparte a quantidade na ordem (4 com A 3 + B 2 → "1 PC de B-02"); o " — lote L" fica nas duas; o
+   "Se lá…" vira "Se em ⟨origem⟩…" só com partes; item com série fica com a frase de antes (tela e servidor); a ordem é a da **primeira**
+   separação do par; cancelada continua mostrando "separado de" como a origem (declarado, D).
+- T3 independente no código, mas entregue **depois** da T2 (as frases prometem o comportamento dela).
+
+## Fase 5 (um revisor fresco, 20 cenários em sondas `tests/zzsonda270/`, apagadas, sobre `af99a506`)
+
+1. **[baixa, reproduzido, consertado — `36a9fd45`]** Entrega escolhendo **exatamente** B no "Sai de" (caixa A 3 + B 2 + 1): B esvaziava e o
+   detalhe ainda dizia B 1 (a regra da caixa tira primeiro o sem prateleira). → o que sai do "Sai de" que é uma outra prateleira desconta dela.
+2. **[baixa, reproduzido, registrado — D (270) 7]** O mesmo item separa de B duas vezes as mesmas peças (já passava): a parte fica acima do
+   físico de B; a entrega tira o que há e o resto no automático.
+3. **[baixa, reproduzido, registrado — D (270) 8]** Parte coberta só em parte na entrega (saída avulsa antes) fica apontando para a
+   prateleira vazia até a próxima entrega (como a RN-270.12 manda).
+- Tentado e não quebrou: guarda de outra requisição no par (lote), irmão com origem em B e automático escolhido, origem nova no mesmo par da
+  parte, lote com inspeção, controle de lote ligado depois, reserva real do `/aprovar`, frações, dois itens com parte em B, cancelamento.
+  Nenhuma entrega pela metade, nenhum total diferente do pedido. Não testado: série, retido em quarentena, permite negativo, concorrência real.
+
+## Divergências do plano
+
+- **B1644** — o plano limitava só na leitura; a Fase 2 (L1) mostrou a parte "ressuscitando" → quem encolhe a caixa regrava.
+- **B1645 na entrega** — o plano punha a parte no pedaço do próprio item (passada 2); a Fase 2 (L2) pediu a sub-passada `'2p'` antes de
+  qualquer automático. As partes são fixadas antes da 1ª baixa (R1).
+- **RN-270.15** — dizia que a devolução da saída para Estoque e o estorno da saída devolvem a B-02: **estava errado** (a devolução vai para o
+  endereço escolhido; o estorno avulso da saída de requisição é recusado). Corrigida; o teste prova a recusa e a exclusão.
+- Testes antigos que afirmavam o automático para a parte de B: `origemSeparacaoEmDuasVezesIntegracao` (cenário 2 e o controle "sem a
+  feature", que agora também apaga as partes) e `separacaoOrigemPorItem` (RN-02) — ajustados com nota. Na tela: as frases "sai no automático
+  na entrega" da separação parcial, da dica da Fila e do aviso com endereço escolhido (5 arquivos de teste).
+- **CLAUDE.md:** nenhuma linha ficou errada — a sub-passada `'2p'` baixa pelo motor dentro das duas travas que a entrega já segura
+  (`comTravaDaRequisicao` por dentro da por requisição); a leitura do livre (`livreDaParteNaEntrega`) é a mesma régua do automático.
+
+## Próxima tarefa detalhada
+
+O item **22** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`, 1h15, motor) — **C553**, o
+item 3 do fim do plano da 259: *depois de uma falha inesperada no meio da exclusão, a Devolução ainda aceita o que a exclusão já devolveu*.
+
+- Onde: `server/services/almoxarifado/devolucaoViva.js` — a régua única de "o que já voltou de uma saída" (cinco contas: a validação da
+  devolução, o `INSERT … WHERE EXISTS`, a conferência devolução × estorno, as séries que voltaram, a exclusão). Ela não conta a **ENTRADA
+  parcial** que a exclusão interrompida gravou (o estorno por linha da exclusão — `fatiasDaSaidaPorLinha`, Etapas 257/259; a B1609 faz a
+  exclusão de novo devolver só o que faltava).
+- Cenário medido (C553): *A* 3, *B* 5; entrega de 6 (*A* 3, *B* 3); a exclusão falha depois de devolver *A* (a requisição continua);
+  **Devolução** de 6 citando a saída → aceita (só 3 estavam fora); **Excluir** de novo → nada a devolver; físico 11 (o certo: 8).
+- Contrato: `POST /api/almoxarifado/devolucoes` — nenhum campo novo; a recusa de quantidade acima do que ainda está fora é a de sempre (ler a
+  literal no `returnService`). Molde da sonda de falha no meio: o gancho de exclusão de `exclusaoSerieQueVoltou.api.test.js` (RN-15 — dispare o
+  gesto concorrente do contexto do teste, não de dentro do gancho; CLAUDE.md).
+- Pontos de atenção: a régua é uma só para as cinco contas — mudar num lugar e não nos outros reabre a B1609. A trava: a devolução para
+  Estoque roda as pernas sob `naTravaDoMaterial` e a validação fica fora (CLAUDE.md, Etapa 121).
+- **O que já está pronto e não reabre:** a separação de duas prateleiras e a entrega de cada parte (esta etapa); a B1609.
+- Candidatos fora da estimativa: **C555** (~1 h); a outra prateleira segurar as peças contra outras requisições (**D (270)** 1 — só se
+  aparecer na operação); a Fila mostrar as outras prateleiras (**D (270)** 3).
+
+## Pontos de atenção
+
+- A outra prateleira **não** entra em `PARTE_ORIGEM_SQL` nem em nenhuma guarda — se um dia entrar, todas as contas de "separado para outra
+  requisição" mudam juntas (B1643).
+- Quem encolher a caixa por uma porta nova tem de chamar `regravarPartesLimitadas` depois de gravar (B1644).
+- A sub-passada `'2p'` só pega pedaço automático (`passada === 2`, sem origem) e muta `pedaco.quantidade`; a passada 2 pula o pedaço zerado.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2 — fixar as partes antes da baixa, a sub-passada, o regravar; Fase 5 — o "Sai de" na outra
+  prateleira).
+- Achados: Fase 2 — 9 (3 reproduzidos, 6 de leitura, todos absorvidos; 1 RN errada); Fase 5 — 3 reproduzidos (1 consertado, 2 declarados).
+- Paralelismo: T1 → T2 → T3 em série (um executor); as revisões e a suíte rodaram em paralelo com o código e os documentos.
+- Defeito que escapou: (preencher na etapa seguinte). Da 269: nenhum apontado.

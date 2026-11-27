@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-26):** **Etapa 269 fechada** (**a recusa da entrega diz quando o que falta está em inspeção, e a Entrada
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 270 fechada** (**separar parte de uma prateleira e parte de outra: a separação guarda
+> as duas, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** — itens 19 e 20 da estimativa de 23/11;
+> **C461** resolvido; decisões **B1643** a **B1645**; limitação **D (270)**; verificação **F (270)**; sem consulta antes do deploy). **Próxima:**
+> o item 22 da estimativa de 23/11 (a devolução depois de uma exclusão interrompida).
+> Antes: **Etapa 269 fechada** (**a recusa da entrega diz quando o que falta está em inspeção, e a Entrada
 > num lote vencido avisa mesmo sem a validade digitada** — itens 18 e 21 da estimativa de 23/11; o **C485** estava errado no caso da inspeção
 > registrada pelo sistema; **C457** e **C460** resolvidos; decisões **B1639** a **B1642**; limitação **D (269)**; verificação **F (269)**; sem
 > consulta antes do deploy). **Próxima:** os itens 19 e 20 da estimativa de 23/11 (separar de duas prateleiras), juntos.
@@ -4923,7 +4927,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15734,6 +15738,30 @@ validade gravada em branco (ou só espaços) recebe a validade digitada na Entra
 ela foi gravada agora (…)"*); a auditoria grava o que havia. **Descartado:** recusar com outra frase (o lote não tem validade: não há
 conflito). O recebimento fica como estava (já avisa o branco, **B1301**). **Reversível.** `ee8394e1`.
 
+**B1643 (NOVA, da Etapa 270; decisão do agente) — a outra prateleira fica anotada à parte e não segura as peças contra outras requisições.**
+**Medido:** o item guardava uma origem (endereço, lote e quantidade, Etapa 196) e cerca de 30 contas do "separado para outra requisição"
+(a dica da Fila, o **Sai de**, o limite da janela, a conferência da entrega, o automático) leem só ela. **Escolhido:** as outras prateleiras
+de onde a caixa foi separada ficam numa lista própria do item (endereço, lote, quantidade); a origem continua sendo a primeira e a **única** que
+segura a prateleira — nenhuma daquelas contas muda. **Preço (D (270) 1):** outra requisição ainda pode separar da outra prateleira o que esta
+separou de lá; na entrega, o que faltar lá sai no automático. **Descartado:** fazer a outra prateleira segurar as peças (as 30 contas passariam a
+somar a lista — o trabalho e o risco da etapa inteira; fica para quando aparecer na operação) e guardar todas as prateleiras na lista nova,
+inclusive a primeira (troca a régua de todas as contas). **Reversível** (a lista só acrescenta; sem ela, tudo como antes). `51b0415c`.
+
+**B1644 (NOVA, da Etapa 270, com a revisão do plano; decisão do agente) — a conta da caixa com várias prateleiras.** **Escolhido:** as outras
+prateleiras valem até o que sobra da caixa depois da origem, na ordem da primeira separação de cada uma; o que sai da caixa sem dizer de onde
+(a devolução à prateleira, a entrega por outro endereço) tira primeiro o que não tem prateleira, depois as outras da última para a primeira, por
+último a origem — a regra da Etapa 196 estendida. Quem encolhe a caixa (a entrega e a devolução à prateleira) regrava a lista pela caixa nova.
+**Descartado:** só limitar na leitura (o plano original): a revisão do plano mostrou que a prateleira "voltava a valer" quando uma rodada no
+automático fazia a caixa crescer de novo. **Reversível.** `51b0415c`, `af99a506`.
+
+**B1645 (NOVA, da Etapa 270; decisão do agente) — a entrega tira a parte de outra prateleira de lá quando ela ainda está livre, senão no
+automático.** **Escolhido:** na entrega sem **Sai de** escolhido, depois da origem e antes de qualquer automático, sai de cada outra prateleira
+até o que foi separado de lá e o que está **livre** lá (o saldo do endereço no lote exato menos o que outras requisições separaram de lá com
+origem; endereço não bloqueado; lote que pode sair, sem a peça em inspeção ou presa); o resto, no automático de hoje — **sem recusa nova**. Não
+vale com **Sai de** escolhido, com *"Qualquer endereço (automático)"* escolhido, nem para item com número de série (as séries dizem de onde
+sai). **Descartado:** recusar quando a outra prateleira não tem mais as peças (seria recusa sem o almoxarife ter feito nada de errado; hoje
+sai). **Reversível.** `af99a506`, `4084f4b2`.
+
 **B1634 (NOVA, da Etapa 268; decisão do agente) — o C498 estava errado no caso que ele descrevia.** **Medido:** num material com controle por
 lote, a separação com endereço e **sem** lote confere o saldo **sem lote** daquele endereço (com tudo em lotes: *"O saldo em A (0) não cobre a
 quantidade (4) …"*), e a entrega com **Sai de** (*A*, *L1*) só tira do lote *L1* — a peça de outro item separada de *A* sem lote fica intacta.
@@ -19969,6 +19997,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      separado de A-01: 3 PC, que continuam saindo de lá. Esta parte sai no automático na entrega."* **O que fazer:** na entrega, escolher B-02
      no **Sai de** para essa parte (**Entregar escolhendo de onde sai…**), ou entregar a 1ª parte antes de separar a 2ª. Conserto: vários
      endereços por item (o caminho (b) da **B1313**, a "mais de uma origem por item" da **B1254**).
+     *(**✅ RESOLVIDO NA ETAPA 270** — `51b0415c`, `af99a506`, `4084f4b2` (**B1643** a **B1645**): a separação guarda cada prateleira e quanto
+     saiu de cada uma; o detalhe mostra *"separado de A-01 (3 PC) · B-02 (2 PC)"* e a entrega de um clique tira 2 de B-02 — quando B-02 ainda tem
+     as peças livres; senão, no automático. A outra prateleira não segura as peças contra outras requisições (**D (270)** 1), e itens separados
+     antes da mudança continuam como antes (**D (270)** 2).)*
 462. **NOVO (do fechamento da Etapa 196; a frase é da Etapa 188) — a dica da Fila de separação ainda diz que separar de outro endereço
      "troca a origem".** As frases *"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. Separar o resto de outro endereço depois troca a origem da
      separação."*, *"Já separado de ⟨end⟩: o resto não cabe lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair
@@ -21942,6 +21974,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(270) Separar de duas prateleiras, o que ficou de fora.** (1) A outra prateleira **não segura** as peças contra outras requisições — só a
+  primeira (a origem) segura: outra requisição pode separar de *B-02* o que esta separou de lá, e na entrega o que *B-02* não tiver mais sai no
+  automático (**B1643**). (2) Itens separados em duas vezes **antes** desta mudança não ganham a segunda prateleira — o sistema não a
+  reconstrói do histórico das rodadas; a segunda parte deles continua saindo no automático. (3) A **Fila de separação**, a dica "Pegar em" e a
+  lista de coleta impressa continuam mostrando só a primeira prateleira (*"separado de A-01"*). (4) Item com número de série: a parte de outra
+  prateleira sai pelas séries escolhidas, como antes; as frases gerais da separação (*"… sai de lá na entrega (se ainda estiver lá; senão, no
+  automático)"*) não sabem se o material tem série. (5) A requisição cancelada ou encerrada com caixa continua mostrando *"separado de …"* no
+  detalhe, como a origem já mostrava. (6) A rodada de **só lote** (lote sem endereço) não anota prateleira — sai no automático. (7) Como a outra prateleira não segura as peças
+  nem contra o próprio item, separar de *B-02* duas vezes as mesmas peças passa (já passava) e o detalhe passa a mostrar mais em *B-02* do que
+  há lá; na entrega sai o que houver e o resto no automático (revisão final). (8) Quando a entrega tira de uma outra prateleira só parte do que
+  foi separado de lá (alguém tirou a peça antes, por uma Saída avulsa), o resto continua anotado nela até a próxima entrega, que o manda para o
+  automático — o detalhe pode mostrar uma prateleira já vazia (revisão final).
 - **(269) A inspeção na entrega e o lote vencido na Entrada, o que ficou de fora.** (1) O registro **antigo** de inspeção (a peça marcada em
   inspeção no item do recebimento sem estar no material) continua deixando a entrega sair "sem lote", negativa (**B1640**, **C485**). (2) O aviso
   de lote vencido sem a data é só da tela **Movimentações**: o lançamento rápido da tela **Materiais** e as entradas internas (devolução,
@@ -23687,6 +23731,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(270) Nenhum clique foi dado.** A separação e a entrega foram provadas pela rota real e pelo serviço (23 cenários, com a exclusão no fim);
+  a tela, com as respostas do servidor simuladas (10 cenários). Vale 5 minutos: o roteiro da Etapa 270 no guia — separar 3 de uma prateleira e
+  2 de outra, conferir o *"separado de A-01 (3 PC) · B-02 (2 PC)"* e, na entrega de um clique, as duas saídas no histórico.
 
 **(269) Nenhum clique foi dado.** A recusa da entrega foi provada pela rota real e pelo serviço (9 cenários); a Entrada, pela rota real (8
   cenários) e o aviso na tela, com a resposta do servidor simulada (1 cenário). Vale 5 minutos: o roteiro da Etapa 269 no guia — a Entrada num
@@ -45652,12 +45700,81 @@ já estava nele."*; a auditoria do lote mostra *Validade preenchida*. Com a data
   sozinho (devolução, estorno, nota) não avisam — **D (269)** 2.
 - O estorno da Entrada que preencheu a validade em branco não volta o branco (como no lote sem validade) — **D (269)** 3.
 
+## Etapa 270 — Separar parte de uma prateleira e parte de outra: o sistema guarda as duas e a entrega tira cada parte de onde foi pega (2026-11-27)
+
+Quem separa um item às vezes pega parte numa prateleira e o resto em outra — 3 peças em *A-01* e 2 em *B-02*. Até aqui o sistema guardava
+**uma** prateleira por item: o detalhe da requisição só dizia *"separado de A-01 (3 PC)"*, e na entrega as 2 peças pegas em *B-02* saíam pela
+regra automática (o endereço padrão, depois o de mais saldo) — o histórico dizia uma prateleira e a peça tinha vindo de outra (o aviso
+**C461**). Agora a separação guarda cada prateleira de onde as peças foram pegas e quanto de cada uma, o detalhe mostra as duas, e a entrega
+de um clique tira cada parte da prateleira de onde ela foi pega, sem precisar escolher de novo no **Sai de**. Decisões do agente: **B1643** a
+**B1645**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separar 3 escolhendo *A-01* e depois 2 escolhendo *B-02* → o detalhe mostra *"separado de A-01 (3 PC)"* | *"separado de A-01 (3 PC) · B-02 (2 PC)"* |
+| Entrega de um clique dessas 5 → 3 de *A-01* e 2 **pela regra automática** (endereço padrão) | 3 de *A-01* e 2 de *B-02* (cada saída com a prateleira) |
+| Janela de entrega: *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, …"* | *"3 PC sai de A-01 (o que foi separado de lá); 2 PC de B-02, se ainda estiverem lá; o restante, automático. Se em A-01 não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* |
+| Aviso da separação ao escolher *B-02*: *"… Esta parte sai no automático na entrega."* | *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta parte fica anotada como separada de B-02 e sai de lá na entrega, se ainda estiver lá (senão, no automático)."* |
+| A dica da Fila e a frase da separação parcial diziam que o resto separado de outro endereço *"sai no automático na entrega"* | *"… sai de lá na entrega (se ainda estiver lá; senão, no automático)."* |
+
+### As regras, com o cenário exato
+
+Preparação: administrador. Um material **sem** controle por lote com 5 em *A-01*, 5 em *B-02* e 10 em *P-01* (o endereço padrão). Requisição
+de 8 aprovada.
+
+**1. A separação guarda as duas prateleiras (RN-270.01/02, B1643).** **Iniciar Separação**, 3, **Sai de** *A-01* → confirme. **Ajustar
+Separação**, 2, **Sai de** *B-02* → o aviso *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta parte fica anotada como separada de
+B-02 e sai de lá na entrega, se ainda estiver lá (senão, no automático)."* → confirme. O detalhe: *"separado de A-01 (3 PC) · B-02 (2 PC)"*.
+Separar de *B-02* de novo soma (*B-02 (4 PC)*); o mesmo endereço com outro lote é outra entrada. Separar no **automático** ou só com o lote
+(sem endereço) não anota nada (o aviso continua *"… Esta parte sai no automático na entrega."*).
+
+**2. A entrega tira cada parte de onde foi pega (RN-270.10/11).** **Confirmar Entrega e Baixar Estoque** (5) → no histórico, saída de 3 de
+*A-01* e saída de 2 de *B-02*; *P-01* fica com 10. Com controle por lote, o mesmo vale para o lote de cada prateleira (não o que vence
+primeiro).
+
+**3. Se a outra prateleira não tem mais as peças, sai no automático — sem recusa (RN-270.12, B1645).** Antes de entregar, outra requisição
+separa 3 de *B-02* (que tinha só 3) → a entrega de 5 tira 3 de *A-01* e 2 pela regra automática, e passa. Com 1 livre em *B-02*: 1 de lá e 1
+no automático. *B-02* bloqueada, ou o lote de lá vencido ou impedido: no automático.
+
+**4. Entrega parcial (RN-270.14).** Separados 3 de *A-01*, 2 de *B-02* e 2 de *C-03*: entregar 4 → 3 de *A-01* e 1 de *B-02*; o detalhe passa
+a *"separado de B-02 (1 PC) · C-03 (2 PC)"*; entregar 3 → 1 de *B-02* e 2 de *C-03*. Com a origem já entregue, a janela diz *"Sai 2 PC de B-02,
+se ainda estiverem lá (o que foi separado de lá); o restante, automático."*.
+
+**5. Quando não vale (RN-270.13).** Com um **Sai de** escolhido na janela de entrega, com *"Qualquer endereço (automático)"* escolhido ou em
+item com número de série, a entrega faz como antes (o escolhido, o automático, as séries).
+
+**6. O que sai da caixa sem dizer de onde (RN-270.03, B1644).** **Devolver à prateleira** 2 de uma caixa *A-01* 3 + *B-02* 2 + *C-03* 2 →
+*"separado de A-01 (3 PC) · B-02 (2 PC)"* (tira primeiro o que não tem prateleira, depois a última). A mesma conta vale para a entrega
+escolhendo outro endereço.
+
+**7. A exclusão devolve cada parte à prateleira dela (RN-270.15, RN-270.06).** Depois da entrega de 5, **Excluir** a requisição → *A-01* volta
+a 5 e *B-02* a 5. A saída da entrega não se estorna sozinha (*"Movimentação vinculada a requisição — use os fluxos da requisição
+(exclusão/encerramento)"*, como sempre); a devolução da saída para Estoque vai para o endereço que você escolher.
+
+### O que esta etapa NÃO cobre
+
+- A outra prateleira **não segura** as peças contra outras requisições (só a origem segura): outra requisição ainda pode separar de *B-02* o
+  que esta separou de lá; na entrega, o que *B-02* não tiver mais sai no automático — **D (270)** 1, **B1643**.
+- Itens separados em duas vezes **antes** desta mudança não ganham a segunda prateleira (o sistema não a reconstrói do histórico): a 2ª parte
+  continua saindo no automático, como antes — **D (270)** 2.
+- A **Fila de separação** e a lista de coleta continuam mostrando só a origem (*"separado de A-01"*) — **D (270)** 3.
+- Item com número de série: a parte de outra prateleira sai pelas séries escolhidas, como antes — **D (270)** 4.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 270 entregue (2026-11-27):** **separar parte de uma prateleira e parte de outra: a separação guarda cada prateleira e quanto
+  saiu dela, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** (itens 19 e 20 da estimativa de 23/11;
+  **C461** resolvido). Commits `d3ea0b6d` (plano), `51b0415c` (guardar e mostrar), `af99a506` (a entrega), `4084f4b2` (a tela), Fase 5 `36a9fd45` e o fechamento.
+  **O que é seu:** as **B1643** a **B1645** (reversíveis; a B1643 deixa a outra prateleira sem segurar as peças contra outras requisições); a
+  limitação **(270)** em D e a verificação **(270)** em F. Sem consulta antes do deploy. **Próxima:** o item 22 da estimativa de 23/11 (fim do
+  plano da 270).
 
 - **Etapa 269 entregue (2026-11-26):** **a recusa da entrega diz quando o que falta está em inspeção, e a Entrada num lote vencido avisa
   mesmo sem a validade digitada; o lote antigo com a validade em branco passa a receber a validade** (itens 18 e 21 da estimativa de 23/11; o
