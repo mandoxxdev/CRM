@@ -1,0 +1,13 @@
+*Planejamento — estorno da entrada de lote com reprovação e entrega com a peça separada de outra requisição*
+_27/11/2026_
+
+*1. O estorno da entrada de um lote deixa de contar uma reprovação já liberada*
+Hoje, estornar a entrada de um lote é recusado dizendo que há peças reprovadas presas nele, mesmo quando essa reprovação já foi liberada, sempre que outro lote do mesmo material tem peças bloqueadas. A mensagem manda liberar pela não conformidade, o que não resolve. Passa a contar só o que de fato está preso no lote, e o estorno passa quando o lote tem as peças.
+Tempo estimado: *30min*
+
+*2. A entrega não deixa saldo negativo quando a peça que falta está separada para outra requisição*
+Confere se a entrega ainda pode deixar o saldo "sem lote" negativo quando o lote que falta está todo separado para outra requisição. Se puder, a entrega passa a ser recusada antes de baixar, com o número de peças e a requisição na mensagem; se não puder, fica provado por teste e o aviso que dizia o contrário é corrigido.
+Tempo estimado: *45min*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
