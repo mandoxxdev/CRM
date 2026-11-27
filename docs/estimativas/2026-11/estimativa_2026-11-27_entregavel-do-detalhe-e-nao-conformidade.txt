@@ -1,0 +1,13 @@
+*Planejamento — número de entrega na tela e não conformidade depois da liberação do lote*
+_27/11/2026_
+
+*1. A tela da requisição e a Fila mostram o que a entrega aceita*
+Quando as peças livres de um lote estão numa prateleira bloqueada e o resto do lote está separado para outra requisição, a entrega já é recusada, mas a tela da requisição e a Fila ainda mostram essas peças como prontas para entregar. Passam a mostrar o mesmo número que a entrega aceita.
+Tempo estimado: *45min*
+
+*2. A não conformidade depois de liberar a reprovação do lote*
+Confere se, depois de liberar uma reprovação pelo "Sem lote", a não conformidade da mesma reprovação ainda pode tentar tirar do lote peças que ele não tem mais. Se puder, passa a ser recusada com uma mensagem clara; se não puder, fica provado por teste e o aviso que dizia o contrário é corrigido.
+Tempo estimado: *30min*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
