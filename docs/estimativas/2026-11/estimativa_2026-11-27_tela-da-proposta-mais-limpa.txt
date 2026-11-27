@@ -1,0 +1,9 @@
+*Planejamento — tela de cadastro da proposta mais limpa*
+_27/11/2026_
+
+*1. Tela da proposta reorganizada, com menos informação à vista*
+A tela de nova proposta e de edição passa a mostrar primeiro só o essencial: cliente, título, tipo e responsável, e logo depois os itens com o total. O número da proposta e o status vão para o topo, ao lado do título da tela. Condições comerciais ficam num bloco próprio. O que é usado só às vezes (proposta para fora do Brasil, e acompanhamento do funil com lembrete) fica recolhido, mostrando um resumo de uma linha, e abre com um clique; abre sozinho quando já tem algo preenchido. Os textos de ajuda longos são encurtados. Nenhum campo é retirado e nada muda no que é gravado.
+Tempo estimado: *1h30*
+
+*Total estimado: 1h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
