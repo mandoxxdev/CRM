@@ -241,6 +241,20 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     await insp(m, 'L1', 3);
     await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 4 }], e1(m, 4, 1, 1, 1));
   });
+  await test('[RN-269.07] o caminho da operacao: 1 livre + 3 recebidas em inspecao no L1; separa 1, entrega 1, a 2a rodada de 3 -> 400 com o sufixo', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 4, 'L1');
+    await insp(m, 'L1', 3); // as 3 que chegaram e ficaram em inspecao (o recebimento grava o item e o material)
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 1 }]);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 1 }]));
+    const antes = await foto(R, m);
+    const r = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `${e1(m, 3, 0, 3, 0)}${SUF_L1}`);
+    assert.deepStrictEqual(await foto(R, m), antes, "nada baixado na 2a rodada");
+    assert.strictEqual(await detalheEntregavel(R, ids[0]), 0);
+  });
   await test('[RN-269.06] dado antigo (inspecao so no item do recebimento): como antes — 200 (o C485 continua so para ele, B1640)', async () => {
     const m = await material();
     await entrar(m, A01.id, 4, 'L1');
