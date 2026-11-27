@@ -11,10 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-27):** **Etapa 276 fechada** (**a entrega de material sem controle por lote com saldo em lote foi
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 277 fechada** (**entregar juntos dois materiais com a prateleira padrão de um deles
+> bloqueada é recusado antes de dar baixa em qualquer um — antes o outro material já tinha saído do estoque** — fora da estimativa de 23/11;
+> **C561** resolvido; decisão **B1659**; aviso novo **C562** (achado na revisão final, reproduzido); limitação **D (277)**; verificação **F (277)**;
+> sem consulta antes do deploy). **Próxima:** o **C562** (fim do plano da 277); o item 24 da estimativa de 23/11 ainda depende de resposta.
+> Antes: **Etapa 276 fechada** (**a entrega de material sem controle por lote com saldo em lote foi
 > conferida: sai "sem lote" com ou sem prateleira bloqueada, como o manual descreve — o aviso C558 estava errado na causa; nada mudou no
-> sistema** — fora da estimativa de 23/11; decisão **B1658**; aviso novo **C561** (achado na revisão final); verificação **F (276)**; sem consulta antes do deploy). **Próxima:** o **C561** (fim do plano da 276); o item 24 da
-> estimativa de 23/11 ainda depende de resposta.
+> sistema** — fora da estimativa de 23/11; decisão **B1658**; aviso novo **C561** (achado na revisão final); verificação **F (276)**; sem consulta antes do deploy). **Próxima:** o **C561** (feito na 277).
 > Antes: **Etapa 275 fechada** (**o sucateamento da reprovação é recusado depois do "Sem lote" em vez de
 > sucatear peça livre, e entregar juntos os dois itens do mesmo lote é recusado antes de baixar o primeiro** — fora da estimativa de 23/11;
 > **C559** e **C560** resolvidos; decisões **B1656** e **B1657**; limitação **D (275)**; verificação **F (275)**; sem consulta antes do deploy).
@@ -4952,7 +4955,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650, B1651 a B1653, B1654 a B1655, B1656 a B1657, B1658; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650, B1651 a B1653, B1654 a B1655, B1656 a B1657, B1658, B1659; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15839,6 +15842,16 @@ devia e o estorno de uma entrada pode passar com reprovação de pé — só com
 **Descartado:** a régua "que menos bloqueia" (contaria como de pé o próprio Desbloquear que o estorno da Etapa 272 está devolvendo, e recusaria
 estornos certos). **Reversível.** `908bccae`.
 
+**B1659 (NOVA, da Etapa 277, com a revisão final; decisão do agente) — a entrega confere a posição padrão bloqueada antes de baixar, só no
+caso em que a conferência é exata.** O motor recusa a saída sem prateleira e sem lote quando a posição padrão do material está bloqueada (começa a
+tirar por ela e o que faltar fica negativo nela) — a saída avulsa recusa igual. **Escolhido:** manter a recusa e levá-la para antes da primeira
+baixa da entrega, com a mesma frase, para o primeiro item do material que sai no automático sem endereço — só quando nada do mesmo material sai
+antes na mesma entrega (nenhum item com prateleira escolhida ou separada nela, nenhuma outra prateleira da caixa) e só para material sem
+controle por lote e sem série. **Descartado:** (a) deixar de recusar (mudaria a regra da saída avulsa e o lugar onde nasce o negativo); (b)
+conferir todo item no automático antes de baixar — a revisão reproduziu uma entrega que passava e passaria a ser recusada (a baixa do primeiro
+item de *Y* muda de onde o segundo sai); (c) simular as baixas antes de fazer (estado demais para a etapa). O que fica: **C562**. **Reversível**
+(37 linhas num lugar só). `d4b911ec`.
+
 **B1658 (NOVA, da Etapa 276; decisão do agente) — a entrega de material sem controle por lote continua saindo "sem lote" mesmo quando o
 material tem saldo em lote, também com peça separada de lote e prateleira bloqueada.** O aviso **C558** dizia que esse material ainda podia
 deixar o *"Sem lote atribuído"* negativo **pela prateleira bloqueada**; medido, a parte automática da entrega desse material **não** tira de lote (fora as peças que o próprio item separou de outras prateleiras, que saem de lá; é a **B204**,
@@ -20835,6 +20848,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      um item só, a recusa vem antes de baixar (teste antigo). **O que fazer:** com a padrão de um material bloqueada, desbloquear ou trocar a padrão
      antes de entregar, ou entregar esse item sozinho. Conserto: a conferência antes de qualquer baixa conferir a padrão bloqueada do material
      (a próxima tarefa do plano da 276; medir de onde vem a recusa — a saída sem lote tira de *P01*, que está livre).
+     *(**Resolvido na Etapa 277** — `d4b911ec`. Medido: a recusa vem do motor, que confere a posição padrão na saída sem prateleira e sem lote
+     (a saída avulsa faz igual) — é a regra de sempre, a ordem é que estava errada. Agora a entrega faz a mesma conferência antes de baixar
+     qualquer item, com a mesma frase (*"⟨Y⟩: Localização PB-01 está bloqueada"*), e nada sai; entregar só o item de *X* passa. Vale quando nada do
+     material com a padrão bloqueada sai antes na mesma entrega por prateleira escolhida — o caso que sobra é o **C562** (**B1659**).)*
+
+562. **NOVO (da Etapa 277, revisão final; reproduzido; o comportamento é anterior) — o mesmo do C561 quando o material com a padrão bloqueada
+     tem, na mesma entrega, um item com prateleira escolhida e outro no automático.** Medido pela rota: *X* (5 sem lote, padrão livre); *Y* sem
+     controle por lote, padrão *PB-01* bloqueada, 4 em *P-01* (2 separadas para outra requisição) e 3 em *A-01*; uma requisição com 2 de *X* e dois
+     itens de *Y* (2 com **Sai de** *P-01*, 3 no automático); **Entregar** os três → 400 *"⟨Y⟩: Localização PB-01 está bloqueada"* — e *X* e o
+     primeiro item de *Y* **já tinham saído** (entregue 2, 2, 0). A conferência da 277 pula esse material, porque a baixa do primeiro item muda de
+     onde o automático sai (conferido antes, recusava entregas que passam — achado da revisão, **B1659**). **O que fazer:** como no C561 —
+     desbloquear ou trocar a padrão antes de entregar, ou entregar o item do automático sozinho. Conserto: a próxima tarefa do plano da 277.
 
 
 ### D. Limitações declaradas— são decisão, não esquecimento
@@ -22209,6 +22234,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   cada peça): recusa a mais, nunca peça presa saindo (revisão do plano). (2) O detalhe da requisição e a Fila só descontam do entregável o lote
   impedido: no caso da prateleira bloqueada com o lote separado para outra requisição, podem mostrar como entregável o que a entrega agora recusa
   (a recusa diz o que fazer; nada sai). *(O item 2 foi resolvido na Etapa 274, **B1654**.)*
+- **(277) A posição padrão bloqueada na entrega, o que ficou de fora.** (1) O material com a padrão bloqueada que tem, na mesma entrega, item com
+  prateleira escolhida ou separada e item no automático — a recusa pode vir depois de baixar (**C562**). (2) Material com número de série ou com
+  controle por lote: não entram na conferência nova (o automático deles sai por lote ou pelas séries; o resto sem lote só aparece quando os lotes
+  não cobrem) — não medido. (3) A saída avulsa não mudou: com a padrão bloqueada, a Saída sem prateleira continua recusada.
 - **(275) O sucateamento depois do "Sem lote" e a entrega dos dois itens, o que ficou de fora.** (1) Depois de entregar só o primeiro item, o
   segundo (a última peça do lote está na prateleira bloqueada, sem nenhuma peça separada no lote) aparece com **1** para entregar no detalhe e na
   Fila, e a entrega recusa com *"Localização B-01 está bloqueada"*, sem baixar nada — a regra da prateleira bloqueada da Etapa 239; o número da
@@ -23976,6 +24005,9 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(277) Nenhum clique foi dado.** A entrega foi provada pela rota (7 cenários; a prateleira bloqueada direto no banco, o mesmo campo que a tela
+  de Localizações grava). Vale 5 minutos: o roteiro da Etapa 277 no guia.
 
 **(276) Nenhum clique foi dado.** A entrega do material sem controle por lote foi provada pela rota da entrega e pela do detalhe (5 cenários; a
   prateleira bloqueada direto no banco, o mesmo campo que a tela de Localizações grava). Vale 5 minutos: o roteiro da Etapa 276 no guia.
@@ -46339,12 +46371,50 @@ em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira 
 - Achado na revisão final, fora do C558: entregar juntos dois materiais com a posição padrão de um deles bloqueada é recusado **depois** de
   baixar o outro — **C561** (a próxima).
 
+## Etapa 277 — Entregar dois materiais com a prateleira padrão de um deles bloqueada é recusado antes de baixar (2026-11-27)
+
+Uma correção, fora da estimativa da semana. Numa requisição com dois materiais em que a prateleira **padrão** de um deles está bloqueada (e o
+saldo dele está em outra prateleira), **Entregar** os dois dava *"Localização ⟨código⟩ está bloqueada"* — mas as peças do **outro** material já
+tinham saído do estoque e o item dele aparecia como entregue (o aviso **C561**). A recusa em si é a regra de sempre (a Saída avulsa faz igual); o
+que estava errado era a hora. Agora a entrega confere isso antes de dar baixa em qualquer item: a mesma mensagem, e o estoque fica como estava.
+Decisão do agente: **B1659**. Aviso novo, achado na revisão final: **C562**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *X* (5 em *P-01*, padrão livre) e *Y* (3 em *P-01*, padrão *PB-01* bloqueada); requisição com 2 de *X* e 1 de *Y*; **Entregar** os dois → *"⟨Y⟩: Localização PB-01 está bloqueada"* **e as 2 de *X* já tinham saído** (físico 5 → 3, item entregue) | Recusada antes de baixar: *"⟨Y⟩: Localização PB-01 está bloqueada"*; nada sai, nenhum item fica como entregue |
+| *Y* em dois itens da mesma requisição, a padrão bloqueada | Igual: recusada antes de baixar (já era) |
+| Entregar só o item de *X* | Igual: passa |
+| *Y* separado **de** *P-01* (sai de lá), ou com peças guardadas para outra requisição que fazem o automático sair por prateleira | Igual: os dois entregam |
+
+### As regras, com o cenário exato
+
+**1. A recusa antes de baixar (RN-277.01/.02).** Crie dois materiais sem controle por lote: *X* com padrão *P-01* e *Y* com padrão *PB-01*.
+**Movimentações → Entrada** de 5 de *X* e de 3 de *Y*, as duas em *P-01*. Uma requisição com 2 de *X* e 1 de *Y*, aprovada e separada **sem**
+prateleira. Em **Localizações**, bloqueie *PB-01*. **Entregar** os dois → *"⟨Y⟩: Localização PB-01 está bloqueada"*. Confira: o físico de *X*
+continua 5, o histórico da requisição não tem saída e os dois itens estão com 0 entregue.
+
+**2. O que passa (RN-277.03 a .05).** Na mesma requisição, **Entregar** só o item de *X* → passa (o físico de *X* vai a 3). Em outra, separe o
+item de *Y* **de** *P-01* → os dois entregam. Desbloqueie *PB-01* → os dois entregam no automático.
+
+### O que esta etapa NÃO cobre
+
+- O material com a padrão bloqueada que, na mesma entrega, tem um item com prateleira escolhida e outro no automático: a recusa ainda pode vir
+  depois de baixar — **C562** (a próxima).
+- Material com número de série ou com controle por lote — **D (277)** 2. A Saída avulsa não mudou — **D (277)** 3.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 277 entregue (2026-11-27):** **entregar juntos dois materiais com a prateleira padrão de um deles bloqueada é recusado antes de
+  baixar qualquer um** (fora da estimativa de 23/11; **C561** resolvido). Commits `a6390036` (estimativa), `4c774416` (plano), `d4b911ec` (a
+  conferência e o teste) e o fechamento. **O que é seu:** a **B1659** (reversível); o aviso **C562** (revisão final, reproduzido); a limitação
+  **(277)** em D e a verificação **(277)** em F. Sem consulta antes do deploy. **Próxima:** o **C562** (fim do plano da 277).
 
 - **Etapa 276 entregue (2026-11-27):** **a entrega de material sem controle por lote com saldo em lote, conferida — sai "sem lote" com ou sem
   prateleira bloqueada (B204); o C558 estava errado na causa; nada mudou no sistema** (fora da estimativa de 23/11). Commits `a4ad2478`
