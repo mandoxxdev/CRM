@@ -1,0 +1,9 @@
+*Planejamento — entrega de material sem controle por lote que tem saldo em lote*
+_27/11/2026_
+
+*1. Entrega de material sem controle por lote, com saldo em lote e prateleira bloqueada*
+Confere a entrega de um material que não exige lote, mas recebeu entradas com o lote indicado, quando parte do lote está separada em outra caixa e as peças livres estão numa prateleira bloqueada. Se a entrega ainda deixar o estoque "sem lote" negativo, passa a ser recusada com a mesma mensagem clara de hoje para o material com lote; se não deixar, fica provado por teste e o aviso é corrigido.
+Tempo estimado: *45min*
+
+*Total estimado: 45min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
