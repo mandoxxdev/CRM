@@ -52,13 +52,40 @@ async function esperarBusca() {
 }
 const tecla = async (key) => act(async () => { campo().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); });
 
-test('nao carrega lista nenhuma ao abrir; com menos de 2 letras, nao busca e orienta', async () => {
+test('nao carrega lista nenhuma ao montar a tela', async () => {
   await montar();
   expect(api.get).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="option"]')).toBeNull();
+});
+
+// 27/11/2026 ("ao clicar deve abrir um menu sabe"): o campo abre a lista ao ser clicado, sem precisar digitar.
+test('clicar no campo abre a lista com os primeiros clientes (sem termo, com o limite) e orienta a digitar', async () => {
+  await montar();
+  await act(async () => { campo().dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  for (let k = 0; k < 4; k++) await act(async () => { await Promise.resolve(); });
+  expect(api.get).toHaveBeenCalledWith('/clientes', { params: { status: 'ativo', limite: LIMITE_BUSCA_CLIENTE } });
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  expect(campo().getAttribute('aria-expanded')).toBe('true');
+  expect(container.textContent).toContain('Digite para buscar entre todos os clientes.');
+});
+
+test('focar com o Tab tambem abre; fechar e abrir de novo nao busca outra vez a lista inicial', async () => {
+  await montar();
+  await act(async () => { campo().focus(); });
+  for (let k = 0; k < 4; k++) await act(async () => { await Promise.resolve(); });
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  await tecla('Escape');
+  expect(container.querySelector('[role="option"]')).toBeNull();
+  await act(async () => { campo().dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+test('uma letra ja filtra no servidor', async () => {
+  await montar();
   await digitar('f');
   await esperarBusca();
-  expect(api.get).not.toHaveBeenCalled();
-  expect(container.textContent).toContain('Digite ao menos 2 letras');
+  expect(api.get).toHaveBeenLastCalledWith('/clientes', { params: { status: 'ativo', search: 'f', limite: LIMITE_BUSCA_CLIENTE } });
 });
 
 test('busca no servidor so os primeiros que batem, com os ativos, e mostra fantasia, CNPJ e cidade/UF', async () => {

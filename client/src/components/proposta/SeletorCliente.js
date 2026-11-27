@@ -7,12 +7,13 @@ import './SeletorCliente.css';
  * Campo de cliente da proposta com busca (27/11/2026: "essa parte de selecionar o cliente está ruim, pensa nisso com 5k de clientes").
  * Antes era um <select> com TODOS os clientes, carregados ao abrir a tela. Agora: digita-se parte da razão social, do nome fantasia ou
  * do CNPJ (com ou sem pontuação) e o servidor devolve os primeiros que batem (GET /clientes?search=&limite=). Mouse ou teclado
- * (↑ ↓ Enter Esc).
+ * (↑ ↓ Enter Esc). Ao clicar no campo a lista já abre (27/11/2026: "ao clicar deve abrir um menu"), com os primeiros clientes em
+ * ordem alfabética; digitando, filtra entre todos.
  *
  * Props: `valor` (id do cliente ou ''), `rotulo` (o nome do cliente escolhido, para mostrar sem buscar), `onEscolher(id, cliente)`.
  */
 export const LIMITE_BUSCA_CLIENTE = 20;
-export const MINIMO_BUSCA_CLIENTE = 2;
+export const MINIMO_BUSCA_CLIENTE = 1;
 const ESPERA_MS = 250;
 
 const nomeDoCliente = (c) => (c && (c.razao_social || c.nome_fantasia)) || (c && c.id ? `#${c.id}` : '');
@@ -24,6 +25,8 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
   const [buscando, setBuscando] = useState(false);
   const [erro, setErro] = useState(false);
   const [ativo, setAtivo] = useState(-1);
+  const [termoBusca, setTermoBusca] = useState('');
+  const primeiros = useRef(null); // a lista de quando se clica sem digitar: busca uma vez e guarda
   const pedido = useRef(0);
   const espera = useRef(null);
   const listaRef = useRef(null);
@@ -32,26 +35,41 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
   useEffect(() => { if (!aberto) setTexto(rotulo || ''); }, [rotulo, aberto]);
   useEffect(() => () => clearTimeout(espera.current), []);
 
+  const mostrar = (lista) => { setResultados(lista); setErro(false); setAtivo(lista.length ? 0 : -1); };
+
+  const carregar = (t) => {
+    const meu = ++pedido.current; // resposta atrasada de um termo anterior não pinta a lista
+    setBuscando(true);
+    const params = t ? { status: 'ativo', search: t, limite: LIMITE_BUSCA_CLIENTE } : { status: 'ativo', limite: LIMITE_BUSCA_CLIENTE };
+    api.get('/clientes', { params })
+      .then(({ data }) => {
+        if (meu !== pedido.current) return;
+        const lista = Array.isArray(data) ? data : [];
+        if (!t) primeiros.current = lista;
+        mostrar(lista);
+      })
+      .catch(() => { if (meu === pedido.current) { setResultados([]); setErro(true); } })
+      .finally(() => { if (meu === pedido.current) setBuscando(false); });
+  };
+
   const buscar = (termo) => {
     clearTimeout(espera.current);
     const t = termo.trim();
+    setTermoBusca(t);
     if (t.length < MINIMO_BUSCA_CLIENTE) {
-      pedido.current += 1; // resposta atrasada de um termo anterior não pinta a lista
-      setResultados([]); setBuscando(false); setErro(false); setAtivo(-1);
+      // Sem termo: os primeiros clientes (em ordem alfabética), na hora; buscados uma vez só.
+      if (primeiros.current) { pedido.current += 1; setBuscando(false); mostrar(primeiros.current); return; }
+      carregar('');
       return;
     }
     setBuscando(true);
-    espera.current = setTimeout(() => {
-      const meu = ++pedido.current;
-      api.get('/clientes', { params: { status: 'ativo', search: t, limite: LIMITE_BUSCA_CLIENTE } })
-        .then(({ data }) => {
-          if (meu !== pedido.current) return;
-          setResultados(Array.isArray(data) ? data : []);
-          setErro(false); setAtivo(Array.isArray(data) && data.length ? 0 : -1);
-        })
-        .catch(() => { if (meu === pedido.current) { setResultados([]); setErro(true); } })
-        .finally(() => { if (meu === pedido.current) setBuscando(false); });
-    }, ESPERA_MS);
+    espera.current = setTimeout(() => carregar(t), ESPERA_MS);
+  };
+
+  const abrir = () => {
+    if (aberto) return;
+    setAberto(true);
+    buscar('');
   };
 
   const escolher = (c) => {
@@ -62,7 +80,7 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
 
   const limpar = () => {
     onEscolher('', null);
-    setTexto(''); setResultados([]); setAtivo(-1); setAberto(true);
+    setTexto(''); setAberto(true); buscar('');
   };
 
   const aoDigitar = (e) => {
@@ -74,7 +92,7 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
   const aoTeclar = (e) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (!aberto) { setAberto(true); return; }
+      if (!aberto) { abrir(); return; }
       setAtivo((i) => Math.min(resultados.length - 1, i + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -92,13 +110,11 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
   }, [ativo]);
 
-  const termo = texto.trim();
   const aviso = !aberto ? null
-    : termo.length < MINIMO_BUSCA_CLIENTE ? 'Digite ao menos 2 letras do nome, do nome fantasia ou do CNPJ.'
-      : buscando ? 'Buscando…'
-        : erro ? 'Não foi possível buscar agora. Tente de novo.'
-          : resultados.length === 0 ? 'Nenhum cliente ativo encontrado.'
-            : null;
+    : buscando && resultados.length === 0 ? 'Buscando…'
+      : erro ? 'Não foi possível buscar agora. Tente de novo.'
+        : resultados.length === 0 ? (termoBusca ? 'Nenhum cliente ativo encontrado.' : 'Nenhum cliente ativo cadastrado.')
+          : null;
 
   return (
     <div className="seletor-cliente" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) { setAberto(false); setTexto(rotulo || ''); } }}>
@@ -117,7 +133,8 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
           value={texto}
           onChange={aoDigitar}
           onKeyDown={aoTeclar}
-          onFocus={(e) => { if (valor) e.target.select(); }}
+          onFocus={(e) => { if (valor) e.target.select(); abrir(); }}
+          onMouseDown={() => abrir()}
         />
         {valor && (
           <button type="button" className="seletor-cliente-limpar" onClick={limpar} aria-label="Trocar cliente" title="Trocar cliente">
@@ -128,6 +145,7 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
       {aberto && (
         <div className="seletor-cliente-painel">
           {aviso && <div className="seletor-cliente-aviso">{aviso}</div>}
+          {!aviso && !termoBusca && <div className="seletor-cliente-aviso">Digite para buscar entre todos os clientes.</div>}
           {!aviso && (
             <ul id={`${id}-lista`} role="listbox" ref={listaRef} className="seletor-cliente-lista">
               {resultados.map((c, i) => {
@@ -151,7 +169,7 @@ export default function SeletorCliente({ valor, rotulo, onEscolher, id = 'propos
               })}
             </ul>
           )}
-          {!aviso && resultados.length >= LIMITE_BUSCA_CLIENTE && (
+          {!aviso && termoBusca && resultados.length >= LIMITE_BUSCA_CLIENTE && (
             <div className="seletor-cliente-aviso">Mostrando os {LIMITE_BUSCA_CLIENTE} primeiros — continue digitando para refinar.</div>
           )}
         </div>
