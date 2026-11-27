@@ -1,0 +1,7 @@
+*Concluído — estorno da entrada de lote com reprovação e entrega com a peça separada de outra requisição*
+_27/11/2026_
+
+1. O estorno da entrada de um lote deixa de contar uma reprovação já liberada — estimado 30min · realizado 30min
+2. A entrega não deixa saldo negativo quando a peça que falta está separada para outra requisição — estimado 45min · realizado 45min
+
+*Total: estimado 1h15 · realizado 1h15*
