@@ -191,3 +191,14 @@ item 3 do fim do plano da 259: *depois de uma falha inesperada no meio da exclus
 - Achados: Fase 2 — 9 (3 reproduzidos, 6 de leitura, todos absorvidos; 1 RN errada); Fase 5 — 3 reproduzidos (1 consertado, 2 declarados).
 - Paralelismo: T1 → T2 → T3 em série (um executor); as revisões e a suíte rodaram em paralelo com o código e os documentos.
 - Defeito que escapou: (preencher na etapa seguinte). Da 269: nenhum apontado.
+
+## Verificação (medida)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`, sobre `4084f4b2`): **680/682 arquivos OK** — os 2 que falham são os já
+  conhecidos de proposta, de outra máquina (`propostaBilingueTemplate` 7/1, `propostaPdfExigeLogin`); o mais lento: `propostaClausulasGrava`,
+  79,7 s. O conserto da Fase 5 (`36a9fd45`) entrou no meio dessa rodada: depois dele, os 127 arquivos de entrega/separação/origem/exclusão/
+  devolução/requisição/Sai de/coleta/Fila rodaram de novo, **127/127 OK**.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, depois do último conserto da tela): **259/259 suítes, 3397/3397 testes**. `CI=true npx react-scripts build`:
+  **Compiled successfully.**
+- `separarDeDuasPrateleiras` 23/23; `RequisicoesDuasPrateleiras` 10/10. Nenhum clique no navegador (F (270)).

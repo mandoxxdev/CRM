@@ -1,0 +1,7 @@
+*Concluído — separar parte de uma prateleira e parte de outra*
+_27/11/2026_
+
+19. Separar de duas prateleiras, 1ª parte (o sistema guarda e mostra as duas) — estimado 1h30 · realizado 30 min
+20. Separar de duas prateleiras, 2ª parte (a entrega tira cada parte de onde foi pega) — estimado 2h · realizado 30 min
+
+*Total: estimado 3h30 · realizado 1h*
