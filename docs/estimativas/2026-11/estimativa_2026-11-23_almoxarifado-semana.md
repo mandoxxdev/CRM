@@ -42,7 +42,7 @@ exceto os três que esperam resposta; o item 1 abaixo foi achado no código).
 | 19 | Separar de duas prateleiras — 1ª parte (guardar e mostrar) | 1h30 | motor + tela (coluna/tabela nova por item) | 1h30 | C461, B1313 caminho (b), B1254 | o item guarda uma origem só (`origem_separacao_id` + quanto saiu dela, Etapa 196); a 2ª rodada de outro endereço escolhido vai para o automático (B1316) | ~13 min (rateio) | 30 min | `d3ea0b6d`, `51b0415c`, `4084f4b2`, `e81206d1` |
 | 20 | Separar de duas prateleiras — 2ª parte (a entrega sai de cada uma) | 2h | motor/entrega sob as duas travas | 2h | C461 | ramo de entrega `baixa.comOrigem` (`requisitionService.js` ~3245) — uma baixa por origem; exclusão e devolução leem o registro das Etapas 257/259 (já por linha) | ~17 min (rateio) | 30 min | `af99a506`, `4084f4b2`, `36a9fd45`, `e81206d1` |
 | 21 | Entrada num lote vencido avisa | 1h | fatia de tela + frase | 1h | C457 (B1282), C460 | `MovimentacoesAlmoxarifado.js:664` mostra o texto do servidor só com data digitada; `lotService.js:51` (`CONFLITO`) imprime a validade em branco do lote antigo como data vazia | ~24 min (rateio) | 30 min | `50eb2998`, `ee8394e1`, `e27d8324` |
-| 22 | Devolução depois de uma exclusão interrompida | 1h15 | motor (régua única de `devolucaoViva.js`, cinco contas) | 1h15 | C553 (o item 3 do fim do plano da 259) | `devolucaoViva.js` não conta a ENTRADA parcial da exclusão (B1609). Só com falha inesperada — por isso por último | — | — | — |
+| 22 | Devolução depois de uma exclusão interrompida | 1h15 | motor (régua única de `devolucaoViva.js`, cinco contas) | 1h15 | C553 (o item 3 do fim do plano da 259) | `devolucaoViva.js` não conta a ENTRADA parcial da exclusão (B1609). Só com falha inesperada — por isso por último | ~48 min | 1h | `d8a9b974`, `ae64f9a5`, `6c1c9021`, `4a9e4feb`, `69cd3d62` |
 | 23 | Tirar o campo Aplicação — **depende de resposta** | 30 min | tirar um campo | 30 min | item 24 de 18/11 (fila do Compras, 7) | `MaterialAlmoxarifadoForm.js:934-938`; a coluna `aplicacao` fica | — | — | — |
 | 24 | Nº de série + nº de controle (etiqueta) obrigatórios — **depende de resposta** | 1h30 | cadastro + obrigatório | 1h30 | item 25 de 18/11 (fila do Compras, 9) | `FerramentasAlmoxarifado.js:296,306,1048` | — | — | — |
 | 25 | Especificações/Observações — **depende de resposta** | 1h | cadastro | 1h | item 26 de 18/11 (fila do Compras, 10) | `MaterialAlmoxarifadoForm.js:939-948` | — | — | — |
@@ -176,3 +176,11 @@ min; arredondado para cima, no mínimo 30 min cada → **realizado 30 min + 30 m
 mesma etapa: a outra prateleira ficou anotada à parte, sem mudar nenhuma conta de "separado para outra requisição" (B1643), e a entrega a tira
 de lá só quando está livre (B1645). A revisão do plano achou quatro consertos antes do código e a revisão final, um. Conclusão:
 `conclusao_2026-11-27_separar-de-duas-prateleiras.txt`.
+
+## Fechamento do item 22 (Etapa 271, 27/11/2026)
+
+Medido com `node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-27 --ate 2026-11-27 --grupos "E271=Etapa 271"`:
+**0,8 h** (plano `d8a9b974` ao fechamento `69cd3d62`); arredondado para cima → **realizado 1h** contra **1h15** estimada. O defeito existia
+como descrito (reproduzido antes do conserto: a devolução aceitava e, na corrida, o estoque ficava 3 a mais). A revisão do plano achou um
+conserto (a entrega com número de série ao lado de uma antiga) e um caso raro que ficou declarado; a revisão final, a lista lenta (consertada).
+Conclusão: `conclusao_2026-11-27_devolucao-depois-de-exclusao-interrompida.txt`.
