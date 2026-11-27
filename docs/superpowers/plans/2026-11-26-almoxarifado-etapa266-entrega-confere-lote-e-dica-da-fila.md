@@ -109,7 +109,7 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
   a **RN-266.14** (integração Fila → janela → separação pela rota) e um cenário pelo **serviço** (`listarFilaSeparacao`).
 - [x] **T3 (galho, contra o contrato; feito em série depois da T2)** — `6a55156f` — a frase da RN-266.12 em `coletaTexto.js` + `coletaTexto.test.js`, a janela (RN-266.16, `RequisicoesList.js`)
   e um caso em `listaColetaPdf.test.js`.
-- [ ] **T4** — Fase 5, documentos (`fechar-etapa`), suítes.
+- [x] **T4** — Fase 5 `517c6e5f`; documentos (`fechar-etapa`) e suítes no fechamento.
 
 ## Pontos de atenção
 
@@ -144,3 +144,52 @@ endereço ou reabra a janela para ver a sugestão atual"* — e *SB-01* tinha os
   (verdadeira por construção), a janela (mesma porta, mesmo gate, 404 e fora da fila como antes), e o item 12 (todo caminho passa por
   `checarOrigemItem` antes da 1ª baixa). Mencionado, não reproduzido: com **Agrupar por setor**, a requisição "da frente" na Fila pode aparecer
   abaixo da que mostra a frase (a ordem da divisão é a da Fila sem agrupar) — vai para D (266).
+
+## Divergências do plano
+
+- **Item 12 não teve código:** a Fase 0 mostrou que a C486 estava errada (B1627); a estimativa (1h15) previa uma conferência nova.
+- RN-266.01 prometia a frase pura do motor nos três modos — errado com a planejada **no** lote impedido (envelope da planejada; Fase 2).
+- RN-266.15 (a planejada não desconta) deixava a da frente levar a origem da planejada de trás → RN-266.17 (Fase 5).
+- A sonda da Fase 0 do item 12 rodou sem prateleira (o saldo nascia sem endereço); o teste final usa uma prateleira de verdade — só com ela
+  o controle positivo derruba os cenários com o item comum saindo primeiro.
+- Dois testes antigos (`preSelecaoColetaIntegracao` C449, `separacaoSeparadoDeOutras` RN-198.09) tinham como premissa "as duas janelas
+  recebem o mesmo par" — o defeito que a etapa conserta; reescritos para abrir a janela velha com a requisição sozinha na Fila.
+- **CLAUDE.md:** nenhuma linha ficou errada — a dica é leitura, sem trava; nada mudou na entrega.
+
+## Próxima tarefa detalhada
+
+Os itens **14 e 15** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`):
+
+1. **Item 14 — Lista "Sai de" atualizada depois de uma recusa (C473; 45 min, tela).** `client/src/components/almoxarifado/RequisicoesList.js`:
+   as janelas de separação e de entrega leem os saldos por endereço (`saldosEntrega`, `GET /almoxarifado/estoque/:material/saldos?requisicao_id=`)
+   ao abrir; quando a confirmação é recusada porque outra pessoa separou da mesma prateleira (a frase C1 *"… já está separado dali para outra
+   requisição …"*, 10.2), reler os saldos e a sugestão (`GET /requisicoes/:id/sugestao-coleta`, que desde esta etapa lê a Fila inteira) sem
+   fechar a janela. Atenção: a pré-seleção é uma vez por abertura (`aberturaSugestaoRef`, `preSelecao`) — a releitura não pode reescolher o
+   que o almoxarife mudou (RN-189.05). Molde de releitura na recusa: a lista de séries da entrega (recarrega e desmarca a série impedida).
+2. **Item 15 — Entrega escolhendo só o lote respeita a separação de outra requisição (C471, B1341; 1h30, motor).** `requisitionService.
+   entregarSemTrava`, o "só lote" (`soLotePendentes`, passada 1): o motor tira do endereço de mais saldo do lote sem descontar o separado de
+   outra requisição ali; a régua da caixa existe (`caixaSql`, B1326; o automático por lote já desconta — `lotesParaOAutomatico`). Roda sob as
+   duas travas da entrega (requisição → material). Sonda antes: lote L1 em *A* 4 (todos separados por R1) e *B* 2; R2 entrega 2 escolhendo só L1.
+- **O que já está pronto e não reabre:** a dica dividida da Fila e a janela (esta etapa); a entrega com série de lote impedido (já recusava).
+- Candidatos fora da estimativa: conferir as séries na origem escolhida (D (265) 1); o estorno do Desbloquear com lote (C504).
+
+## Verificação (medida sobre o código final, `517c6e5f`; os documentos não mudam código)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **675/677 arquivos OK** — os 2 que falham são os já conhecidos de
+  proposta, de outra máquina (`propostaBilingueTemplate`, `propostaPdfExigeLogin`); o mais lento: `entregaGuardaSemLote`, 94,2 s.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, sobre `6a55156f` — a tela não mudou depois): **256/256 suítes, 3367/3367 testes**. `CI=true npx react-scripts
+  build`: **Compiled successfully.**
+- `entregaConfereLoteDasSeries` 23/23; `dicaDaFilaDivideAsPrateleiras` 6/6; `sugestaoDeColeta` 43/43. Sabotagens: 3 no item 12, 12 no servidor
+  da dica, 4 na tela (harness `scratchpad/sab-266a.sh`: âncora contada = 1, cópia, md5 sabotado ≠ original e restaurado = original) — cada uma
+  derruba o seu cenário.
+- Nenhum clique no navegador (F (266)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2 — o envelope da planejada, a janela calada, a planejada que não desconta; Fase 5 — a planejada de
+  trás).
+- Achados: Fase 2 — 2 importantes (1 de mensagem, 1 de execução) e 6 menores, todos absorvidos; Fase 5 — 1 importante reproduzido e
+  consertado, 1 mencionado sem reprodução (Agrupar → D).
+- Paralelismo: nenhum galho em paralelo (T1 e T2 no mesmo arquivo, Fase 2); o Jest da tela rodou enquanto a revisão final trabalhava.
+- Defeito que escapou: (preencher na etapa seguinte). Da 265: nenhum apontado.

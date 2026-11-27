@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-26):** **Etapa 265 fechada** (**a Transferência de peça com número de série pede as séries e muda a
+> **Onde o desenvolvimento está (2026-11-26):** **Etapa 266 fechada** (**a dica "Pegar em" da Fila de separação divide o saldo de cada
+> prateleira entre as requisições, na ordem da Fila, e a entrega de vários itens com série de lote impedido — que já era recusada antes de
+> qualquer item sair — ganhou a prova por cenário** — itens 12 e 13 da estimativa de 23/11; a **C486** estava errada desde a Etapa 206;
+> decisões **B1627** a **B1630**; limitação **D (266)**; verificação **F (266)**; sem consulta antes do deploy). **Próxima:** os itens 14 e 15 da
+> estimativa de 23/11.
+> Antes: **Etapa 265 fechada** (**a Transferência de peça com número de série pede as séries e muda a
 > prateleira de cada uma, e a Saída de peça com série sem origem sai da prateleira da série** — itens 10 e 11 da estimativa de 23/11 (**C545** resolvido
 > para a Saída sem origem; a transferência da **C76**); decisões **B1624** a **B1626**; limitação **D (265)**; verificação **F (265)**; sem consulta
 > antes do deploy). **Próxima:** os itens 12 e 13 da estimativa de 23/11.
@@ -4906,7 +4911,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15683,6 +15688,40 @@ cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
 sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
 
+**B1630 (NOVA, da Etapa 266; decisão do agente) — a janela de separação lê a Fila inteira para sugerir o "Sai de".** **Escolhido:** a
+sugestão que a janela usa para pré-escolher a prateleira é a mesma que a Fila mostra para aquela requisição — calculada com todas as
+requisições da Fila, porque a dica de uma depende das que estão na frente dela (**B1628**). A regra da Etapa 189 ("a sugestão de uma requisição
+só depende das linhas dela") **deixou de valer**. **Descartado:** manter a janela olhando só a própria requisição — ela pré-escolheria a
+prateleira que a Fila já mandou para outra requisição, e a separação seria recusada. **Preço:** abrir a janela faz as mesmas consultas da tela
+da Fila. **Reversível.** `787ee077`.
+
+**B1629 (NOVA, da Etapa 266; decisão do agente) — quando as requisições da frente levaram todo o saldo, a dica não aponta prateleira e diz
+por quê.** **Escolhido:** o item que teria prateleira sem as requisições da frente e não tem com elas fica sem *"Pegar em"*, com a frase
+*"Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha o
+endereço no 'Sai de'."* — na Fila, na lista de coleta impressa e na janela de separação. O irmão da mesma requisição que fica sem nada
+continua com a frase de sempre (*"Sem endereço para sugerir …"*). **Descartado:** (a) voltar à dica antiga (a mesma prateleira da requisição
+da frente) — é a que leva à recusa na separação; (b) usar a frase de sempre — ela fala de endereço bloqueado, área especial ou lote vencido,
+o que seria falso. A **planejada** (o resto de um item já separado em parte) não desconta o indicado às da frente: a frase dela (*"o resto não
+cabe lá"*) seria falsa — a prateleira foi indicada a outra, não está cheia (revisão do plano). **Reversível.** `787ee077`, `6a55156f`.
+
+**B1628 (NOVA, da Etapa 266; decisão do agente) — a dica da Fila divide o saldo de cada prateleira entre as requisições, na ordem da Fila.**
+**Escolhido:** o *"Pegar em"* de cada requisição desconta o que já foi indicado às requisições que aparecem **antes** na Fila (a que pode ser
+feita agora primeiro; depois urgência, data de necessidade, data de criação) — na prateleira, no total de séries do lote e no lote com peça
+presa —, como já descontava o dos itens anteriores da mesma requisição. O que foi sugerido ao resto de um item **já separado em parte** (que só
+pode ser sugerido na prateleira de onde ele já saiu) é descontado por todas as outras requisições, da frente e de trás — senão a da frente
+levava aquela prateleira e o item de trás era recusado ao separar (revisão final). A requisição sem dica (na alçada de valor, ou sem nada a separar) não
+desconta. **Descartado:** (a) dividir só entre requisições do mesmo setor ou projeto — a prateleira é uma só; (b) respeitar o filtro da tela
+(setor, projeto, localização) — o filtro esconde requisições que continuam disputando a prateleira. **Preço:** a dica é só dica — nada é
+reservado; se a requisição de trás for separada primeiro pela dica dela, as duas continuam passando (a da frente vai para a prateleira dela).
+**Reversível** (é a ordem de uma leitura; nada é gravado). `787ee077`, `517c6e5f`.
+
+**B1627 (NOVA, da Etapa 266; decisão do agente) — a C486 estava errada: nenhuma conferência nova na entrega.** **Medido:** a entrega de vários
+itens com uma série de lote bloqueado, reprovado ou vencido sem liberação já é recusada **antes de qualquer item sair** (18 combinações: três
+motivos, material com e sem controle por lote, automático, um clique e prateleira escolhida), com a frase de sempre (*"⟨material⟩: Lote L2 esta
+bloqueado e nao pode ser utilizado"*). A **C486** (Etapa 206) dizia que a recusa só vinha na baixa, depois de outros itens saírem — foi deduzida
+da leitura do código sem ser medida. **Escolhido:** a prova por cenário (que não existia — o teste da 232 tem um item só) e a correção dos
+documentos. **Descartado:** uma conferência "das séries" antes da 1ª baixa — repetiria a que já existe, com a mesma frase. `b681741c`.
+
 **B1626 (NOVA, da Etapa 265; decisão do agente) — a Saída de peça com série sem origem sai da prateleira da série, só pela tela de
 Movimentações e só quando o registro da série serve.** **Escolhido:** na Saída e na Perda de Movimentações (e na mesma porta pela integração),
 sem origem escolhida e em material que não permite saldo negativo, a baixa sai da prateleira em que cada série consta, uma baixa por prateleira
@@ -19855,7 +19894,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entregar ⟨n⟩ ⟨un⟩ — faltam ⟨f⟩ ⟨un⟩ em lote que pode sair. Em lote impedido: ⟨lote⟩ (⟨motivo⟩, ⟨saldo⟩ ⟨un⟩). Libere o lote (mude o
      status ou libere o vencimento) ou entregue ⟨f⟩ ⟨un⟩ a menos."* (**B1383** a **B1391**); o detalhe e a Fila oferecem só o que a entrega
      aceita (**B1390**, **B1395**). **O "o que fazer" acima deixou de valer:** a entrega já não passa. Ficam: sem lote impedido o negativo
-     ainda nasce (**C485**); série em lote impedido (**C486**); o negativo antigo (**C487**). A parte da devolução citando a saída sem lote
+     ainda nasce (**C485**); série em lote impedido (**C486** — *estava errado: a série de lote impedido já era recusada antes de qualquer
+     baixa; medido e provado na Etapa 266, **B1627***); o negativo antigo (**C487**). A parte da devolução citando a saída sem lote
      continua igual — só não nascem mais saídas sem lote por este caminho.)*
 465. **NOVO (da Etapa 197) — a entrega de EPI e a entrega de material sem controle de lote continuam saindo sem lote, e a lista de saídas da
      Devolução mostra menos entregas antigas.** (1) A **B204** continua nesses fluxos (**B1320**, **B1321**): a entrega de EPI e os internos
@@ -21763,6 +21803,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(266) A dica dividida da Fila, o que ficou de fora.** (1) A dica é só dica: nada é reservado. Se a requisição da frente recebe uma
+  prateleira que não cobre tudo (*"Nenhum endereço tem tudo"*) e o resto dela é separado de outra prateleira, a dica que a requisição de trás
+  recebeu para essa outra prateleira pode ser recusada na separação (com a frase de sempre, que manda reabrir a janela) — a dica só conta o que
+  indicou (revisão do plano). (2) A ordem é a da Fila no momento da leitura: se a urgência ou a data de uma requisição muda, as dicas mudam
+  de prateleira na próxima leitura; uma janela aberta antes continua com a sugestão velha (a separação confere, como antes — **C449**). (3) O
+  filtro da tela (setor, projeto, localização) não muda a divisão: a requisição escondida pelo filtro continua levando a parte dela
+  (**B1628** b). (4) Abrir a janela de separação lê a Fila inteira (**B1630**) — o mesmo custo da tela da Fila, não medido com fila grande. (5) Com
+  **Agrupar por setor/projeto** ligado, a divisão continua na ordem da Fila sem agrupar: a requisição que levou a prateleira pode aparecer
+  num bloco abaixo da que mostra *"Sem endereço livre agora…"* (revisão final, não reproduzido em tela).
 - **(265) A transferência com série e a Saída pela prateleira da série, o que ficou de fora.** (1) Com a **origem escolhida** (Saída,
   Perda, a entrega com **Sai de**, a devolução ao cliente), o sistema não confere se as séries marcadas estão nela — sai da origem, como antes
   (**C76**, **C545** parte 2, **D (240)** 1). (2) A **entrega** de requisição sem guarda no caminho continua saindo da linha de sempre (**B1583**),
@@ -22107,7 +22156,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 
 - **(206) A entrega que recusa lote impedido, o que ficou de fora.** (1) **Sem lote impedido** a falta da parte automática ainda sai sem
   lote, negativa — lote bom em inspeção ou na parte guardada de outra caixa (**B1386**, **C485**). (2) **Série** em lote impedido: recusada
-  só na baixa (**C486**). (3) O **negativo antigo** fica até um ajuste (**C487**). (4) O entregável do detalhe e da Fila é **aproximado**: com
+  só na baixa (**C486**). *(**Etapa 266: isto estava errado** desde que foi escrito — a série de lote impedido é recusada antes de qualquer
+  baixa, porque o lote das séries passa pela mesma conferência do lote escolhido; a afirmação foi deduzida sem medir. Provado por cenário,
+  `b681741c`, **B1627**.)* (3) O **negativo antigo** fica até um ajuste (**C487**). (4) O entregável do detalhe e da Fila é **aproximado**: com
   a peça bloqueada num lote bom, pode prometer mais do que a entrega aceita — a entrega recusa sem baixar (**B1390**); dois irmãos podem
   mostrar, cada um, o máximo dele sozinho (**C489**). (5) **Sem trava nova:** bloquear um lote no mesmo instante da entrega (entre a
   conferência e a baixa) ainda manda a diferença para o sem lote (**B1392**). (6) O **"Sai de"** continua oferecendo o lote bloqueado
@@ -23472,6 +23523,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(266) Nenhum clique foi dado.** A divisão da dica foi provada pela rota real (Fila, janela de separação e separação de verdade das duas
+  requisições, a alçada de valor ligada) e pelo serviço; a frase nova na Fila, na lista impressa e na janela, pela tela com a sugestão
+  simulada. Vale 5 minutos: o roteiro da Etapa 266 no guia (duas requisições do mesmo material, as duas prateleiras diferentes no *"Pegar em"*,
+  e a frase *"Sem endereço livre agora…"* quando só há uma prateleira).
 
 **(265) Nenhum clique foi dado.** A transferência, o estorno e a Saída pela prateleira da série foram provados pela rota real (v2,
 `/transferencias`, **Estornar**), com o bloquear série real e o livro forçado a falhar; a lista de séries da Transferência, pela tela com a
@@ -42417,7 +42473,8 @@ inteiro: com *L1* 1, *L2* *Bloqueado* 4 e dois itens de 2, a recusa vem no prime
 
 - **Sem lote impedido**, quando o lote bom está em inspeção ou na parte guardada de outra caixa, o automático ainda deixa *"Sem lote
   atribuído"* negativo (**C485**).
-- **Série** em lote impedido é recusada só na baixa — com vários itens, depois de outros saírem (**C486**).
+- **Série** em lote impedido é recusada só na baixa — com vários itens, depois de outros saírem (**C486**). *(**Estava errado** —
+  medido na Etapa 266: a série de lote impedido é recusada antes de qualquer item sair; **B1627**.)*
 - O **negativo que já existe** não some: regulariza-se por **Ajuste** com localização (**C487**, **C484**).
 - Dois itens do mesmo material podem mostrar, cada um, o máximo dele sozinho; entregando os dois pelo máximo, a entrega recusa sem baixar
   (**C489**).
@@ -45195,12 +45252,67 @@ dali está separada para uma requisição) ou a origem foi escolhida, a saída s
 - A entrega que sai como antes pode deixar o registro da série fora do saldo de novo (**D (265)** 2).
 - As transferências feitas antes desta etapa não são corrigidas: o registro velho das séries fica até a peça mudar (**D (265)** 3).
 
+## Etapa 266 — A dica da Fila não manda duas requisições à mesma prateleira, e a entrega com série de lote impedido (2026-11-26)
+
+Dois pedidos da semana. **(1)** Na **Fila de separação**, o *"Pegar em"* dizia a cada requisição onde pegar como se ela fosse a única: duas
+requisições do mesmo material recebiam a **mesma prateleira**, e a segunda a ser separada era recusada (*"… já está separado dali para outra
+requisição …"*) — mesmo com outra prateleira cheia ao lado. Agora a dica divide o saldo de cada prateleira entre as requisições, na ordem em
+que a Fila as mostra: a mais urgente fica com a primeira prateleira, a seguinte com a próxima. Quando não sobra prateleira, a linha diz isso.
+**(2)** Na **entrega** de vários itens, a série de um lote bloqueado, reprovado ou vencido **já era recusada antes de qualquer item sair** — a
+lista de pendências dizia o contrário (os primeiros itens sairiam e a entrega pararia no meio). A medição mostrou que estava errada; a etapa
+deixou a prova por cenário e corrigiu os documentos. Decisões do agente: **B1627** a **B1630**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Material em *SA-01* (3) e *SB-01* (3); requisições *R1* (normal) e *R2* (urgente), 3 cada → as duas com *"Pegar em SA-01 · 3"*; separar a segunda pela dica → recusada | *R2* *"Pegar em SA-01 · 3"*, *R1* *"Pegar em SB-01 · 3"*; separar as duas pela dica → as duas passam |
+| A janela de separação de *R1* já vinha com *SA-01* escolhida | Vem com *SB-01* (a mesma dica da Fila) |
+| Só *SA-01* (3) → as duas com *"Pegar em SA-01"* | *R2* com *SA-01*; *R1* sem prateleira e *"Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha o endereço no 'Sai de'."* — na Fila, na lista impressa e na janela |
+| Entrega de vários itens com série de lote bloqueado | **Igual** — já era recusada antes de qualquer item sair (a pendência que dizia o contrário estava errada) |
+
+### As regras, com o cenário exato
+
+Preparação: administrador; um material sem lote e sem série, com 3 na prateleira *SA-01* e 3 na *SB-01*; duas requisições aprovadas de 3 cada,
+*R1* com urgência normal e *R2* urgente.
+
+**1. A dica dividida (RN-266.10, B1628).** **Fila de separação** → *R2* (a urgente, em cima) mostra *"Pegar em SA-01 · 3"*; *R1* mostra *"Pegar em
+SB-01 · 3"*. Com a mesma urgência, fica com a primeira prateleira a de **data de necessidade** mais cedo (mesmo criada depois); sem data, a
+criada antes. Uma requisição parada na **alçada de valor** não recebe dica e não tira prateleira das outras.
+
+**2. A janela e a separação (RN-266.13, RN-266.14).** **Separar** *R1* → o **"Sai de"** já vem em *SB-01* (*"Sugerido pela fila de separação…"*);
+confirmar → passa. **Separar** *R2* → vem em *SA-01*; confirmar → passa. A Fila mostra as duas em **Entregar**.
+
+**3. Quando não sobra prateleira (RN-266.12, B1629).** Com só *SA-01* (3): *R2* *"Pegar em SA-01 · 3"*; *R1* sem *"Pegar em"* e com *"Sem endereço
+livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha o endereço no 'Sai
+de'."* — a mesma frase na lista de coleta impressa e, abrindo **Separar** de *R1*, abaixo do **"Sai de"** (nada vem escolhido). Separada *R2*, *R1*
+fica sem nada a separar (o saldo foi para *R2*).
+
+**4. A entrega com série de lote impedido (RN-266.01, B1627 — sem mudança).** Requisição com um item comum e um item com série; a série
+escolhida é do lote *L2* bloqueado. **Entregar** os dois → *"⟨material⟩: Lote L2 esta bloqueado e nao pode ser utilizado"* e **nenhum item sai**
+(nem o comum). Reprovado: *"… esta reprovado …"*; vencido: *"⟨material⟩: Lote L2 vencido em ⟨AAAA-MM-DD⟩ nao pode sair para consumo. Libere o
+vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*
+Se a separação tinha guardado a peça na prateleira e no lote *L2*, a frase é *"⟨material⟩: a origem da separação (⟨prateleira⟩) não serve mais
+(Lote L2 esta bloqueado e nao pode ser utilizado) — entregue escolhendo de onde sai"*. Com o vencimento liberado, os dois saem.
+
+### O que esta etapa NÃO cobre
+
+- A dica não reserva nada: se a requisição da frente for separada de outra prateleira que não a indicada, a dica da de trás pode ser recusada
+  na separação (a frase de sempre manda reabrir a janela) — **D (266)** 1.
+- O filtro da Fila (setor, projeto, localização) não muda a divisão — **D (266)** 3.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 266 entregue (2026-11-26):** **a dica "Pegar em" da Fila divide o saldo de cada prateleira entre as requisições, na ordem da Fila
+  (a janela de separação também), e a entrega com série de lote impedido ganhou a prova de que já recusava antes de qualquer item sair** (itens
+  12 e 13 da estimativa de 23/11; a **C486** estava errada). Commits `9b4d0e65` (plano), `b681741c` (a prova da entrega), `787ee077` (a dica),
+  `6a55156f` (a tela), Fase 5 `517c6e5f` e o fechamento. **O que é seu:** as **B1627** a **B1630** (reversíveis; a B1630 revê a RN-189.01); a limitação **(266)** em
+  D e a verificação **(266)** em F. Sem consulta antes do deploy. **Próxima:** os itens 14 e 15 da estimativa de 23/11 (fim do plano da 266).
 
 - **Etapa 265 entregue (2026-11-26):** **a Transferência de material com número de série pede as séries e muda a prateleira de cada uma (o
   Estornar as devolve), e a Saída de peça com série sem origem sai da prateleira da série** (itens 10 e 11 da estimativa de 23/11). Commits

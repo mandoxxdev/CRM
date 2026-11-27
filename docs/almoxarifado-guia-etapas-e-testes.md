@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 265 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 266 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 265 fechada — 2026-11-26.** **A transferência de peça com número de série e a Saída que sai da
+> **O desenvolvimento parou aqui: Etapa 266 fechada — 2026-11-26.** **A dica da Fila não manda duas requisições à mesma prateleira** (e a entrega
+> com série de lote impedido, que já recusava antes de qualquer item sair — itens 12 e 13 da estimativa de 23/11). **Sem consulta antes do
+> deploy.** **Nenhum clique foi dado** (roteiro na seção da 266). **Onde parou, exatamente:** a **266 está fechada**; a próxima são os itens 14
+> e 15 da estimativa de 23/11 (fim do plano da 266).
+>
+> *(Antes:)* **Etapa 265 fechada — 2026-11-26.** **A transferência de peça com número de série e a Saída que sai da
 > prateleira da série** (itens 10 e 11 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção
 > da 265). **Onde parou, exatamente:** a **265 está fechada**; a próxima são os itens 12 e 13 da estimativa de 23/11 (fim do plano da 265).
 >
@@ -7470,6 +7475,41 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 266 — A dica da Fila não manda duas requisições à mesma prateleira (ENTREGUE — 2026-11-26)
+
+**Em uma frase:** o *"Pegar em"* da **Fila de separação** passa a dividir o saldo de cada prateleira entre as requisições, na ordem em que a
+Fila as mostra (a mais urgente primeiro) — duas requisições do mesmo material deixam de receber a mesma prateleira; e a **entrega** de vários
+itens com série de lote bloqueado, reprovado ou vencido **já era** recusada antes de qualquer item sair (a pendência que dizia o contrário
+estava errada — nada mudou nela).
+
+| Antes | Agora |
+|---|---|
+| *SA-01* 3 e *SB-01* 3, duas requisições de 3 → as duas *"Pegar em SA-01 · 3"*; a segunda separada é recusada | A urgente *SA-01*, a outra *SB-01*; as duas passam |
+| A janela de separação da segunda vinha com *SA-01* | Vem com *SB-01* |
+| Só *SA-01* → as duas mandadas a *SA-01* | A de trás: *"Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha o endereço no 'Sai de'."* |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **administrador**. Escolha um material sem lote e sem série e duas prateleiras *SA-01* e *SB-01*. **Movimentações → Nova**:
+   Entrada de 3 em *SA-01* e de 3 em *SB-01*.
+2. Crie e aprove duas requisições de 3 desse material: *R1* com urgência **Normal** e *R2* **Urgente**.
+3. **Fila de separação** → **Confira:** *R2* (em cima) *"Pegar em SA-01 · 3"*; *R1* *"Pegar em SB-01 · 3"*.
+4. **Separar** *R1* → **Confira:** o **"Sai de"** já vem em *SB-01*. Confirme → passa. **Separar** *R2* → vem em *SA-01*; confirme → passa. A Fila
+   mostra as duas em **Entregar**.
+5. (A frase nova) Outro material só com 3 em *SA-01*, duas requisições de 3 (uma urgente). **Fila** → **Confira:** a de trás sem *"Pegar em"* e
+   com *"Sem endereço livre agora: o saldo das prateleiras já foi indicado às requisições à frente na fila. Separe esta depois delas ou escolha
+   o endereço no 'Sai de'."*; **Separar** essa → a mesma frase abaixo do **"Sai de"**, nada escolhido. A lista de coleta impressa traz a frase
+   em "Sem endereço sugerido".
+6. (A entrega, sem mudança) Requisição com um item comum e um item com série; **Lotes e Séries** → bloqueie o lote da série que vai sair.
+   **Entregar** os dois, marcando essa série → **Confira:** *"⟨material⟩: Lote ⟨lote⟩ esta bloqueado e nao pode ser utilizado"* e **nenhum**
+   item sai (nem o comum).
+
+**O que esta etapa NÃO cobre:** a dica não reserva nada — se a requisição da frente for separada de outra prateleira, a dica da de trás pode
+ser recusada na separação (a frase manda reabrir a janela); o filtro da Fila não muda a divisão (**D (266)** do documento de novidades).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 265 — A transferência de peça com número de série e a Saída que sai da prateleira da série (ENTREGUE — 2026-11-26)
 
