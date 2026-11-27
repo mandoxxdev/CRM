@@ -4504,6 +4504,23 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             { status: 400 });
           }
           compensarBloqueada = -mov.quantidade; // Etapa 118 (C238, RN-02)
+          // Etapa 272 (C504, RN-272.01..04): com lote, o lote tem de ter as pecas para bloquear de novo — sem isto, estornada a entrada do
+          // lote (ou saida a peca), o bloqueio voltava apontando para o lote vazio. A regua do Bloquear indicando o lote (249) pela projecao
+          // do ajuste (caixa no lote, inspecao, bloqueado no lote, reprovado, terceiros): o claim do livro ja rodou (este DESBLOQUEIO esta
+          // `cancelado = 1`), entao o bloqueado do lote ja conta o que volta. Depois do material (RN-272.04) e com o `compensarBloqueada`
+          // armado: a recusa sai pelo catch, que devolve o bloqueado do material e o claim. Dentro da secao (`naTravaDoMaterial`).
+          if (mov.lote_id) {
+            const proj = await projecaoDoLoteNoAjuste(db, mov.material_id, mov.lote_id, 0);
+            if (proj.piso > proj.atual + Q.QTD_FOLGA) {
+              const lt = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [mov.lote_id]);
+              const livre = Q.qtd(Math.max(0, proj.atual - (proj.piso - Number(mov.quantidade))));
+              const un = material.unidade || 'UN';
+              throw Object.assign(new Error(`Não é possível estornar o desbloqueio: o lote ${lt ? lt.codigo : mov.lote_id} tem ${livre} ${un} `
+                + `${livre > Q.QTD_FOLGA && livre < 2 - Q.QTD_FOLGA ? 'livre' : 'livres'} para bloquear de novo e o estorno bloquearia `
+                + `${Q.qtd(mov.quantidade)} ${un} nele — o bloqueio ficaria apontando para peças que não estão no lote. Para bloquear de novo, `
+                + 'use Bloquear Material escolhendo um lote que tenha as peças.'), { status: 400 });
+            }
+          }
         }
 
         await gravarLivroDoEstorno();
