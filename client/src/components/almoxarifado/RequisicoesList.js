@@ -425,6 +425,48 @@ const propriaNoPar = (itens, materialId, valor) => (itens || [])
 // a guarda dos irmãos (B1407). Estático: se o irmão sai nesta mesma entrega a porta conta o que ele pede, e o rótulo pode prometer menos,
 // nunca mais.
 const irmaosNoPar = (itens, item, valor) => propriaNoPar((itens || []).filter((i) => Number(i.id) !== Number(item.id)), item.material_id, valor);
+// Etapa 268 (RN-268.10, B1636): quanto o OUTRO item `j` desta entrega tira de um lugar (`casa(valor)` diz se a escolha é dali). Com o "Sai
+// de" numa prateleira da lista: a quantidade dele, se é dali. Sem escolha (ou "Planejada da separação") e sem automático, o servidor aplica a
+// planejada até a parte: min(quantidade, parte), se a planejada é dali. Automático ou "Escolha de onde sai": 0 (o teto pode prometer mais).
+const saiDoLugarNaEntrega = (j, casa, quantidades, origens) => {
+  const q = Math.max(0, parseFloat((quantidades || {})[j.id]) || 0);
+  if (!(q > 0)) return 0;
+  const esc = (origens || {})[j.id];
+  if (esc?.valor && lerValorOrigem(esc.valor)) return casa(esc.valor) ? q : 0;
+  const aplicaPlanejada = (!esc?.valor || esc.valor === VALOR_PLANEJADA_SEM_SALDOS) && !esc?.automatico;
+  return aplicaPlanejada && temPlanejada(j) && casa(valorPlanejada(j)) ? Math.min(q, pendentePlanejado(j)) : 0;
+};
+// O que o outro item `j` ocupa no lugar: a parte que FICA guardada lá no pior caso (parte − o que ele entrega agora; o servidor guarda
+// min(parte, caixa − troca), nunca menos) + o que ele tira de lá nesta entrega.
+const ocupadoNaEntrega = (j, guardaAqui, casa, quantidades, origens) => {
+  const q = Math.max(0, parseFloat((quantidades || {})[j.id]) || 0);
+  const fica = temPlanejada(j) && guardaAqui(j) ? Math.max(0, pendentePlanejado(j) - q) : 0;
+  return fica + saiDoLugarNaEntrega(j, casa, quantidades, origens);
+};
+// Etapa 268 (RN-268.10/13, B1635/B1636/B1638; D (251) 1, B1579): o TETO do que pode sair da opção escolhida no "Sai de" da entrega, na régua
+// da E1 do servidor (a sobra do par menos o que os outros itens desta requisição ocupam nele) e, com peça presa no lote (`lote_livre`), na da
+// 218 (o livre do lote menos o que os outros itens ocupam no lote). Na própria origem da separação (o par exato) a porta só confere a E1 acima
+// da parte: o teto é o maior entre a parte e a conta. null = sem limite (automático, escolha especial, opção impedida ou fora da lista).
+export const limiteDaOrigemNaEntrega = (item, valor, saldos, itens, quantidades, origens) => {
+  if (!valor || !lerValorOrigem(valor)) return null;
+  const opcao = (saldos || []).find((s) => valorOrigem(s) === valor);
+  if (!opcao || opcaoImpedida(opcao)) return null;
+  const outros = (itens || []).filter((j) => Number(j.id) !== Number(item.id) && Number(j.material_id) === Number(item.material_id));
+  const noPar = outros.reduce((s, j) => s + ocupadoNaEntrega(j, (x) => valorPlanejada(x) === valor, (v) => v === valor,
+    quantidades, origens), 0);
+  let teto = sobraDaOpcao(opcao) - noPar;
+  const livreDoLote = loteLivreDaOpcao(opcao);
+  if (livreDoLote !== null && opcao.lote_id != null) {
+    const lote = Number(opcao.lote_id);
+    const noLote = outros.reduce((s, j) => s + ocupadoNaEntrega(j,
+      (x) => x.lote_separacao_id != null && Number(x.lote_separacao_id) === lote,
+      (v) => Number(lerValorOrigem(v)?.lote_id || 0) === lote, quantidades, origens), 0);
+    teto = Math.min(teto, livreDoLote - noLote);
+  }
+  teto = Math.max(0, r6(teto));
+  const propriaOrigem = temPlanejada(item) && pendentePlanejado(item) > 1e-9 && valorPlanejada(item) === valor;
+  return propriaOrigem ? Math.max(teto, r6(pendentePlanejado(item))) : teto;
+};
 // M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas) — o `fmtQtd` de utils/coletaTexto.js (T3).
 const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
@@ -1440,6 +1482,14 @@ const RequisicoesList = () => {
     const aplicaPlanejada = !esc || esc.valor === valorPlanejada(i) || (!esc.valor && !esc.automatico)
       || esc.valor === VALOR_PLANEJADA_SEM_SALDOS;
     return aplicaPlanejada && planejadaPendenteImpedida(i, null, true);
+  });
+  // Etapa 268 (RN-268.10/12): o teto da opção escolhida no "Sai de" de cada item (null = sem limite) e se algum item passa dele.
+  const limiteNaJanela = (item, quantidades = quantidadesEntrega, origens = origensEntrega) => limiteDaOrigemNaEntrega(item,
+    origens[item.id]?.valor, saldosEntrega[item.material_id], detalhe?.itens, quantidades, origens);
+  const entregaAcimaDaOrigem = () => (detalhe?.itens || []).some((i) => {
+    if (maxQtdEntrega(i) <= 0) return false;
+    const lim = limiteNaJanela(i);
+    return lim !== null && (parseFloat(quantidadesEntrega[i.id]) || 0) > lim + 1e-9;
   });
   // Etapa 231 (C532, B1520): os itens que apagam o botão de um clique.
   const entregaDiretaImpedida = detalhe ? itensEntregaDiretaImpedida(detalhe.itens) : [];
@@ -2963,10 +3013,20 @@ const RequisicoesList = () => {
                         value={origensEntrega[item.id]?.valor || ''}
                         onChange={e => {
                           const valor = e.target.value;
+                          const novas = {
+                            ...origensEntrega,
+                            [item.id]: { valor, codigo: valor ? (origensEntrega[item.id]?.codigo || '') : '', automatico: !valor },
+                          };
                           setOrigensEntrega(o => ({
                             ...o,
                             [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '', automatico: !valor },
                           }));
+                          // Etapa 268 (RN-268.11, B1637): escolhida uma prateleira que não tem tudo, a quantidade desce para o que sai
+                          // dali (o almoxarife vê o número mudar). Teto 0: fica — zerar tiraria o item da entrega sem ele ver.
+                          const lim = limiteNaJanela(item, quantidadesEntrega, novas);
+                          if (lim !== null && lim > 1e-9 && qtdEntregar > lim + 1e-9) {
+                            setQuantidadesEntrega(q => ({ ...q, [item.id]: lim }));
+                          }
                         }}>
                         {/* Etapa 231 (B1518): só enquanto está escolhida — escolhido outro endereço, ela sai. */}
                         {origensEntrega[item.id]?.valor === VALOR_ESCOLHER_ORIGEM && (
@@ -2994,6 +3054,25 @@ const RequisicoesList = () => {
                         return frase && (
                           <div id={`entrega-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
                             {frase}
+                          </div>
+                        );
+                      })()}
+                      {/* Etapa 268 (RN-268.12, B1637): o que pode sair da prateleira escolhida, quando é menos que o máximo do item; acima
+                          disso, o aviso (e o Confirmar Entrega apagado). */}
+                      {(() => {
+                        const lim = limiteNaJanela(item);
+                        const maxHoje = maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega),
+                          entregandoOutrosDoLote(detalhe.itens, item, quantidadesEntrega));
+                        const acima = lim !== null && qtdEntregar > lim + 1e-9;
+                        if (lim === null || (!acima && lim + 1e-9 >= maxHoje)) return null;
+                        const un = item.unidade || item.material_unidade;
+                        const n = `${fmtQtd(lim)}${un ? ` ${un}` : ''}`;
+                        return (
+                          <div id={`entrega-limite-origem-${item.id}`} role={acima ? 'alert' : undefined}
+                            style={{ fontSize: '0.75rem', marginTop: 4, color: acima ? 'var(--gmp-warning, #b45309)' : 'var(--gmp-text-light)' }}>
+                            {acima
+                              ? `Daqui só podem sair ${n} nesta entrega. Diminua a quantidade ou escolha outro endereço.`
+                              : `Daqui podem sair até ${n}.`}
                           </div>
                         );
                       })()}
@@ -3118,7 +3197,11 @@ const RequisicoesList = () => {
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
-                      max={maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega), entregandoOutrosDoLote(detalhe.itens, item, quantidadesEntrega))}
+                      max={(() => {
+                        const maxHoje = maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega), entregandoOutrosDoLote(detalhe.itens, item, quantidadesEntrega));
+                        const lim = limiteNaJanela(item); // Etapa 268 (RN-268.10)
+                        return lim === null ? maxHoje : Math.min(maxHoje, lim);
+                      })()}
                       value={quantidadesEntrega[item.id] ?? ''}
                       onChange={e => setQuantidadesEntrega(q => ({ ...q, [item.id]: e.target.value }))} />
                     <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', textAlign: 'right', marginTop: 2 }}>{item.unidade}</div>
@@ -3132,8 +3215,10 @@ const RequisicoesList = () => {
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
               <button className="btn-almox-primary" onClick={handleEntregar}
-                disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente() || entregaEsperaEscolha()}
-                title={entregaEsperaEscolha() ? 'Escolha de onde sai cada item com o lote da separação impedido' : undefined}>
+                disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente() || entregaEsperaEscolha()
+                  || entregaAcimaDaOrigem()}
+                title={entregaEsperaEscolha() ? 'Escolha de onde sai cada item com o lote da separação impedido'
+                  : (entregaAcimaDaOrigem() ? 'Diminua a quantidade: o endereço escolhido não tem tudo isso' : undefined)}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
               </button>
             </div>
