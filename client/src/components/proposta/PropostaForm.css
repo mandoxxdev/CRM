@@ -903,3 +903,41 @@
 
 /* Preço do item do catálogo editável (24/11/2026): o preço de tabela fica como referência, embaixo do campo. */
 .proposta-form-preco-tabela { display: block; margin-top: 4px; font-size: 11.5px; color: var(--gmp-text-light, #64748b); }
+
+/* ── Tela mais limpa (27/11/2026) ─────────────────────────────────────────────────────────── */
+/* Número e status ao lado do título da tela */
+.proposta-form-titulo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.proposta-form-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.proposta-form-chip {
+  display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: #eef2f7; color: #334155; white-space: nowrap;
+}
+.proposta-form-chip.vazio { font-weight: 500; color: #94a3b8; }
+.proposta-form-chip.status { background: #e8f1ff; color: #0b5bd3; }
+.proposta-form-chip.status-aprovada { background: #e7f7ee; color: #12804a; }
+.proposta-form-chip.status-rejeitada { background: #fdecec; color: #c0392b; }
+.proposta-form-chip.status-desconto_aprovado { background: #fff4e0; color: #a25d00; }
+
+/* O essencial: cliente e título mais largos, tipo e responsável ao lado */
+.proposta-form-grid-essencial { grid-template-columns: 2fr 2fr 1fr 1.2fr; margin-bottom: 0; }
+.proposta-form-grid-essencial .proposta-form-field { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .proposta-form-grid-essencial { grid-template-columns: 1fr 1fr; }
+  .proposta-form-field-cliente, .proposta-form-field-titulo { grid-column: 1 / -1; }
+}
+
+/* Blocos recolhidos: o título e um resumo de uma linha; abre com um clique */
+.proposta-form-recolhivel > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; position: relative;
+  padding-right: 28px; user-select: none;
+}
+.proposta-form-recolhivel > summary::-webkit-details-marker { display: none; }
+.proposta-form-recolhivel > summary::after {
+  content: ''; position: absolute; right: 6px; top: 50%; width: 8px; height: 8px; margin-top: -6px;
+  border-right: 2px solid #94a3b8; border-bottom: 2px solid #94a3b8; transform: rotate(45deg); transition: transform .2s ease;
+}
+.proposta-form-recolhivel[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.proposta-form-recolhivel > summary h2 { margin: 0 !important; }
+.proposta-form-recolhivel[open] > summary { margin-bottom: 1rem; }
+.proposta-form-resumo { font-size: 13px; color: #64748b; }
+.proposta-form-recolhivel[open] .proposta-form-resumo { display: none; }

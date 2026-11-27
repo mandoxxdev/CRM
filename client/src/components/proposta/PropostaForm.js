@@ -6,7 +6,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { fetchComercialResponsaveis } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
 import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
-import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip, FiPercent, FiSend } from 'react-icons/fi';
+import { FiSave, FiX, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip, FiPercent, FiSend } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
 import {
   opcoesStatusProposta,
@@ -178,6 +178,9 @@ export default function PropostaForm() {
   }, [familiasFromApi]);
 
   const exigeMotivo = STATUS_EXIGE_MOTIVO.includes(form.status);
+  // Blocos recolhidos (27/11/2026). Abrem sozinhos, ao carregar, quando já têm algo preenchido; o motivo da não venda força o
+  // acompanhamento aberto (campo obrigatório escondido trava o salvar sem aviso).
+  const [secoes, setSecoes] = useState({ fora: false, acompanhamento: false });
 
   const gerarNumeroProposta = useCallback(async (clienteId, responsavelId) => {
     if (!clienteId) return;
@@ -272,6 +275,10 @@ export default function PropostaForm() {
         });
         setStatusGravado(data.status ?? 'rascunho');
         setClienteRotulo(data.cliente_nome || data.cliente_nome_fantasia || data.razao_social || '');
+        setSecoes({
+          fora: idiomaDoBanco(data.idioma) !== 'pt-BR' || moedaDoBanco(data.moeda) !== 'BRL' || Boolean(String(data.incoterm || '').trim()),
+          acompanhamento: Boolean(data.lembrete_data || String(data.lembrete_mensagem || '').trim()),
+        });
         setPdfAnexo(data.pdf_proposta_cliente || null);
         setPdfNome(data.pdf_proposta_nome || data.pdf_proposta_cliente || '');
         setItens((data.itens || []).map((i) => {
@@ -623,12 +630,29 @@ export default function PropostaForm() {
     return `No documento: ${v} (cotação ${rotuloDaCotacao(moedaTela, porUnTela)})`;
   };
 
+  const rotuloStatus = (opcoesStatusProposta(statusGravado).find((s) => s.value === form.status) || {}).label || form.status;
+  const rotuloDe = (lista, v) => (lista.find((o) => o.value === v) || {}).label || v;
+  const resumoFora = [rotuloDe(IDIOMAS_PROPOSTA, form.idioma), rotuloDe(MOEDAS_PROPOSTA, form.moeda), String(form.incoterm || '').trim()].filter(Boolean).join(' · ');
+  const resumoAcompanhamento = [
+    rotuloStatus,
+    `${Number(form.probabilidade) || 0}% de chance`,
+    form.lembrete_data ? `lembrete em ${String(form.lembrete_data).split('-').reverse().join('/')}` : '',
+  ].filter(Boolean).join(' · ');
+
   if (loadingData) return <div className="proposta-form"><p className="proposta-form-loading">Carregando...</p></div>;
 
   return (
     <div className="proposta-form">
       <header className="proposta-form-header">
-        <h1>{isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
+        <div className="proposta-form-titulo">
+          <h1>{isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
+          <div className="proposta-form-chips">
+            <span className={`proposta-form-chip${form.numero_proposta && !gerandoNumero ? '' : ' vazio'}`} title="Número da proposta (gerado pelo sistema ao escolher o cliente)">
+              {gerandoNumero ? 'Gerando número…' : (form.numero_proposta ? `Nº ${form.numero_proposta}` : 'Nº sai ao escolher o cliente')}
+            </span>
+            <span className={`proposta-form-chip status status-${form.status}`}>{rotuloStatus}</span>
+          </div>
+        </div>
         <div className="proposta-form-header-actions">
           {isEdit && !['rascunho', 'desconto_aprovado'].includes(form.status) && (
             <>
@@ -672,186 +696,36 @@ export default function PropostaForm() {
       </header>
 
       <form id="proposta-form-form" onSubmit={handleSubmit} className="proposta-form-form">
-        <section className="proposta-form-section">
-          <h2><FiUser /> Dados gerais</h2>
-          <div className="proposta-form-grid">
-            <div className="proposta-form-field">
-              <label>Número da proposta</label>
-              <input
-                type="text"
-                value={form.numero_proposta}
-                readOnly
-                placeholder={isEdit ? 'Número da proposta' : 'Selecione um cliente para gerar'}
-                style={{ color: gerandoNumero ? '#94a3b8' : undefined, fontStyle: gerandoNumero ? 'italic' : undefined }}
-              />
-              <span className="proposta-form-hint">Gerado automaticamente ao selecionar o cliente (padrão do sistema)</span>
-            </div>
-            <div className="proposta-form-field">
+        {/* Tela mais limpa (27/11/2026: "to achando ela feia e confusa, muita informação"): primeiro o essencial e os itens; o
+            número e o status no topo; o que é usado só às vezes (fora do Brasil, acompanhamento) recolhido, com o resumo de uma linha. */}
+        <section className="proposta-form-section proposta-form-essencial">
+          <div className="proposta-form-grid proposta-form-grid-essencial">
+            <div className="proposta-form-field proposta-form-field-cliente">
               <label htmlFor="proposta-cliente">Cliente *</label>
               <SeletorCliente valor={form.cliente_id ? String(form.cliente_id) : ''} rotulo={clienteRotulo} onEscolher={handleClienteChange} />
-              <span className="proposta-form-hint">UF e segmento vêm do cadastro do cliente (gráficos do dashboard)</span>
+            </div>
+            <div className="proposta-form-field proposta-form-field-titulo">
+              <label htmlFor="proposta-titulo">Título *</label>
+              <input id="proposta-titulo" type="text" value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} required placeholder="Ex.: Moinho de esferas 500 L" />
             </div>
             <div className="proposta-form-field">
-              <label>Título *</label>
-              <input type="text" value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} required placeholder="Ex.: Proposta comercial" />
-            </div>
-            <div className="proposta-form-field">
-              <label>Tipo</label>
-              <select value={form.tipo_proposta} onChange={(e) => setForm((f) => ({ ...f, tipo_proposta: e.target.value }))}>
+              <label htmlFor="proposta-tipo">Tipo</label>
+              <select id="proposta-tipo" value={form.tipo_proposta} onChange={(e) => setForm((f) => ({ ...f, tipo_proposta: e.target.value }))}>
                 <option value="">—</option>
                 {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
             <div className="proposta-form-field">
-              <label>Responsável (vendedor)</label>
+              <label htmlFor="proposta-responsavel">Responsável</label>
               <select
+                id="proposta-responsavel"
                 value={form.responsavel_id}
                 onChange={(e) => handleResponsavelChange(e.target.value)}
                 disabled={!usuariosReady}
               >
-                <option value="">{usuariosReady ? '—' : 'Carregando responsáveis...'}</option>
+                <option value="">{usuariosReady ? '—' : 'Carregando...'}</option>
                 {usuariosReady && usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
               </select>
-            </div>
-          </div>
-          <div className="proposta-form-field">
-            <label>Descrição</label>
-            <textarea value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={2} />
-          </div>
-          <div className="proposta-form-grid">
-            <div className="proposta-form-field">
-              <label>Condições de pagamento</label>
-              <input type="text" value={form.condicoes_pagamento} onChange={(e) => setForm((f) => ({ ...f, condicoes_pagamento: e.target.value }))} />
-            </div>
-            <div className="proposta-form-field">
-              <label>Prazo entrega</label>
-              <input type="text" value={form.prazo_entrega} onChange={(e) => setForm((f) => ({ ...f, prazo_entrega: e.target.value }))} />
-            </div>
-            <div className="proposta-form-field">
-              <label>Garantia</label>
-              <input type="text" value={form.garantia} onChange={(e) => setForm((f) => ({ ...f, garantia: e.target.value }))} />
-            </div>
-          </div>
-        </section>
-
-        <section className="proposta-form-section">
-          <h2>Cliente de fora do Brasil</h2>
-          <p className="proposta-form-section-desc">
-            Em outro idioma, o documento sai em duas colunas: português à esquerda e a outra língua à direita. O que for escrito em
-            português é traduzido sozinho ao abrir a pré-visualização no Chrome, e a tradução pode ser corrigida ali.
-          </p>
-          <div className="proposta-form-grid">
-            <div className="proposta-form-field">
-              <label htmlFor="proposta-idioma">Idioma do documento</label>
-              <select id="proposta-idioma" value={form.idioma} onChange={(e) => setForm((f) => ({ ...f, idioma: e.target.value }))}>
-                {IDIOMAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="proposta-form-field">
-              <label htmlFor="proposta-moeda">Moeda</label>
-              <select id="proposta-moeda" value={form.moeda} onChange={(e) => trocarMoeda(e.target.value)}>
-                {MOEDAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            {form.moeda !== 'BRL' && (
-              <div className="proposta-form-field">
-                <label htmlFor="proposta-taxa-cambio">Cotação (R$ por {form.moeda === 'EUR' ? '€' : 'US$'})</label>
-                <input
-                  id="proposta-taxa-cambio"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.taxa_cambio}
-                  onChange={(e) => setForm((f) => ({ ...f, taxa_cambio: e.target.value }))}
-                  placeholder="Ex.: 5,8573"
-                />
-                <small className="proposta-form-preco-tabela">
-                  {cotacaoSugerida ? `Banco Central (PTAX) de ${cotacaoSugerida.data.split('-').reverse().join('/')}: ${rotuloDaCotacao(form.moeda, cotacaoSugerida.valor)}. ` : ''}
-                  O painel converte o valor desta proposta para real por esta cotação.
-                </small>
-              </div>
-            )}
-            <div className="proposta-form-field">
-              <label htmlFor="proposta-incoterm">Incoterm</label>
-              <select
-                id="proposta-incoterm"
-                value={separarIncoterm(form.incoterm).codigo}
-                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(e.target.value, separarIncoterm(f.incoterm).local) }))}
-              >
-                <option value="">—</option>
-                {INCOTERMS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="proposta-form-field">
-              <label htmlFor="proposta-incoterm-local">Local de entrega (incoterm)</label>
-              <input
-                id="proposta-incoterm-local"
-                type="text"
-                value={separarIncoterm(form.incoterm).local}
-                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(separarIncoterm(f.incoterm).codigo, e.target.value) }))}
-                placeholder="Ex.: Porto de Santos"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="proposta-form-section proposta-form-section-dashboard">
-          <h2><FiBarChart2 /> Pipeline e dashboard</h2>
-          <p className="proposta-form-section-desc">Campos vinculados aos gráficos do dashboard comercial (funil, origem, família, motivos de perda e lembretes).</p>
-          <div className="proposta-form-grid">
-            <div className="proposta-form-field">
-              <label>Status da proposta *</label>
-              <select value={form.status} onChange={(e) => handleStatusChange(e.target.value)}>
-                {opcoesStatusProposta(statusGravado).map((s) => (
-                  <option key={s.value} value={s.value} disabled={s.disabled} title={s.title}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="proposta-form-field">
-              <label>Origem da busca (marketing)</label>
-              <select value={form.origem_busca} onChange={(e) => setForm((f) => ({ ...f, origem_busca: e.target.value }))}>
-                <option value="">Selecione...</option>
-                {form.origem_busca && !ORIGENS_BUSCA.includes(form.origem_busca) && (
-                  <option value={form.origem_busca}>{form.origem_busca}</option>
-                )}
-                {ORIGENS_BUSCA.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div className="proposta-form-field">
-              <label>Família de produto / equipamento</label>
-              <select value={form.familia_produto} onChange={(e) => setForm((f) => ({ ...f, familia_produto: e.target.value }))}>
-                <option value="">Selecione...</option>
-                {form.familia_produto && !familiasProduto.includes(form.familia_produto) && (
-                  <option value={form.familia_produto}>{form.familia_produto}</option>
-                )}
-                {familiasProduto.map((fam) => <option key={fam} value={fam}>{fam}</option>)}
-              </select>
-            </div>
-            <div className="proposta-form-field">
-              <label>Probabilidade de fechamento (%)</label>
-              <input type="number" min={0} max={100} value={form.probabilidade} onChange={(e) => setForm((f) => ({ ...f, probabilidade: e.target.value }))} />
-              <span className="proposta-form-hint">Usado na previsão de fechamento do dashboard de vendas</span>
-            </div>
-            <div className="proposta-form-field">
-              <label>Data de fechamento</label>
-              <input type="date" value={form.data_fechamento} onChange={(e) => setForm((f) => ({ ...f, data_fechamento: e.target.value }))} />
-              <span className="proposta-form-hint">Preenchida automaticamente ao marcar como ganha ou perdida</span>
-            </div>
-            {exigeMotivo && (
-              <div className="proposta-form-field proposta-form-field-required">
-                <label>Motivo da não venda *</label>
-                <select value={form.motivo_nao_venda} onChange={(e) => setForm((f) => ({ ...f, motivo_nao_venda: e.target.value }))} required>
-                  <option value="">Selecione o motivo...</option>
-                  {MOTIVOS_NAO_VENDA.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-            )}
-            <div className="proposta-form-field">
-              <label>Data do lembrete</label>
-              <input type="date" value={form.lembrete_data} onChange={(e) => setForm((f) => ({ ...f, lembrete_data: e.target.value }))} />
-            </div>
-            <div className="proposta-form-field full">
-              <label>Mensagem do lembrete</label>
-              <textarea value={form.lembrete_mensagem} onChange={(e) => setForm((f) => ({ ...f, lembrete_mensagem: e.target.value }))} rows={2} placeholder="Aviso para follow-up desta cotação..." />
             </div>
           </div>
         </section>
@@ -1105,9 +979,166 @@ export default function PropostaForm() {
           )}
         </section>
 
+
+        <section className="proposta-form-section">
+          <h2>Condições comerciais</h2>
+          <div className="proposta-form-grid">
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-condicoes">Condições de pagamento</label>
+              <input id="proposta-condicoes" type="text" value={form.condicoes_pagamento} onChange={(e) => setForm((f) => ({ ...f, condicoes_pagamento: e.target.value }))} />
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-prazo">Prazo de entrega</label>
+              <input id="proposta-prazo" type="text" value={form.prazo_entrega} onChange={(e) => setForm((f) => ({ ...f, prazo_entrega: e.target.value }))} />
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-garantia">Garantia</label>
+              <input id="proposta-garantia" type="text" value={form.garantia} onChange={(e) => setForm((f) => ({ ...f, garantia: e.target.value }))} />
+            </div>
+          </div>
+          <div className="proposta-form-field">
+            <label htmlFor="proposta-descricao">Observações</label>
+            <textarea id="proposta-descricao" value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} rows={2} />
+          </div>
+        </section>
+
+        <details
+          className="proposta-form-section proposta-form-recolhivel"
+          open={secoes.fora}
+          onToggle={(e) => { const aberto = e.currentTarget.open; setSecoes((x) => (x.fora === aberto ? x : { ...x, fora: aberto })); }}
+        >
+          <summary>
+            <h2>Proposta para fora do Brasil</h2>
+            <span className="proposta-form-resumo">{resumoFora}</span>
+          </summary>
+          <p className="proposta-form-section-desc">
+            Em outro idioma o documento sai em duas colunas: português e a outra língua. Valores digitados em reais, convertidos pela cotação.
+          </p>
+          <div className="proposta-form-grid">
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-idioma">Idioma do documento</label>
+              <select id="proposta-idioma" value={form.idioma} onChange={(e) => setForm((f) => ({ ...f, idioma: e.target.value }))}>
+                {IDIOMAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-moeda">Moeda</label>
+              <select id="proposta-moeda" value={form.moeda} onChange={(e) => trocarMoeda(e.target.value)}>
+                {MOEDAS_PROPOSTA.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            {form.moeda !== 'BRL' && (
+              <div className="proposta-form-field">
+                <label htmlFor="proposta-taxa-cambio">Cotação (R$ por {form.moeda === 'EUR' ? '€' : 'US$'})</label>
+                <input
+                  id="proposta-taxa-cambio"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.taxa_cambio}
+                  onChange={(e) => setForm((f) => ({ ...f, taxa_cambio: e.target.value }))}
+                  placeholder="Ex.: 5,8573"
+                />
+                {cotacaoSugerida && (
+                  <small className="proposta-form-preco-tabela">
+                    {`Banco Central (PTAX) de ${cotacaoSugerida.data.split('-').reverse().join('/')}: ${rotuloDaCotacao(form.moeda, cotacaoSugerida.valor)}`}
+                  </small>
+                )}
+              </div>
+            )}
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-incoterm">Incoterm</label>
+              <select
+                id="proposta-incoterm"
+                value={separarIncoterm(form.incoterm).codigo}
+                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(e.target.value, separarIncoterm(f.incoterm).local) }))}
+              >
+                <option value="">—</option>
+                {INCOTERMS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-incoterm-local">Local de entrega</label>
+              <input
+                id="proposta-incoterm-local"
+                type="text"
+                value={separarIncoterm(form.incoterm).local}
+                onChange={(e) => setForm((f) => ({ ...f, incoterm: montarIncoterm(separarIncoterm(f.incoterm).codigo, e.target.value) }))}
+                placeholder="Ex.: Porto de Santos"
+              />
+            </div>
+          </div>
+        </details>
+
+        <details
+          className="proposta-form-section proposta-form-recolhivel"
+          open={secoes.acompanhamento || exigeMotivo}
+          onToggle={(e) => { const aberto = e.currentTarget.open; setSecoes((x) => (x.acompanhamento === aberto ? x : { ...x, acompanhamento: aberto })); }}
+        >
+          <summary>
+            <h2><FiBarChart2 /> Acompanhamento e lembrete</h2>
+            <span className="proposta-form-resumo">{resumoAcompanhamento}</span>
+          </summary>
+          <div className="proposta-form-grid">
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-status">Status *</label>
+              <select id="proposta-status" value={form.status} onChange={(e) => handleStatusChange(e.target.value)}>
+                {opcoesStatusProposta(statusGravado).map((s) => (
+                  <option key={s.value} value={s.value} disabled={s.disabled} title={s.title}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            {exigeMotivo && (
+              <div className="proposta-form-field proposta-form-field-required">
+                <label htmlFor="proposta-motivo">Motivo da não venda *</label>
+                <select id="proposta-motivo" value={form.motivo_nao_venda} onChange={(e) => setForm((f) => ({ ...f, motivo_nao_venda: e.target.value }))} required>
+                  <option value="">Selecione o motivo...</option>
+                  {MOTIVOS_NAO_VENDA.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-probabilidade">Chance de fechar (%)</label>
+              <input id="proposta-probabilidade" type="number" min={0} max={100} value={form.probabilidade} onChange={(e) => setForm((f) => ({ ...f, probabilidade: e.target.value }))} />
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-familia">Família de produto</label>
+              <select id="proposta-familia" value={form.familia_produto} onChange={(e) => setForm((f) => ({ ...f, familia_produto: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {form.familia_produto && !familiasProduto.includes(form.familia_produto) && (
+                  <option value={form.familia_produto}>{form.familia_produto}</option>
+                )}
+                {familiasProduto.map((fam) => <option key={fam} value={fam}>{fam}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-origem">Como o cliente chegou</label>
+              <select id="proposta-origem" value={form.origem_busca} onChange={(e) => setForm((f) => ({ ...f, origem_busca: e.target.value }))}>
+                <option value="">Selecione...</option>
+                {form.origem_busca && !ORIGENS_BUSCA.includes(form.origem_busca) && (
+                  <option value={form.origem_busca}>{form.origem_busca}</option>
+                )}
+                {ORIGENS_BUSCA.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-fechamento">Data de fechamento</label>
+              <input id="proposta-fechamento" type="date" value={form.data_fechamento} onChange={(e) => setForm((f) => ({ ...f, data_fechamento: e.target.value }))} />
+              <span className="proposta-form-hint">Preenchida sozinha ao marcar ganha ou perdida</span>
+            </div>
+            <div className="proposta-form-field">
+              <label htmlFor="proposta-lembrete-data">Lembrete em</label>
+              <input id="proposta-lembrete-data" type="date" value={form.lembrete_data} onChange={(e) => setForm((f) => ({ ...f, lembrete_data: e.target.value }))} />
+            </div>
+            <div className="proposta-form-field full">
+              <label htmlFor="proposta-lembrete-msg">Mensagem do lembrete</label>
+              <textarea id="proposta-lembrete-msg" value={form.lembrete_mensagem} onChange={(e) => setForm((f) => ({ ...f, lembrete_mensagem: e.target.value }))} rows={2} placeholder="Aviso para o follow-up desta cotação..." />
+            </div>
+          </div>
+        </details>
+
         <section className="proposta-form-section">
           <h2><FiPaperclip /> PDF enviado ao cliente</h2>
-          <p className="proposta-form-section-desc">Anexe o PDF da proposta que foi enviada ao cliente (substitui o arquivo anterior ao enviar um novo).</p>
+          <p className="proposta-form-section-desc">O PDF que foi enviado ao cliente; um novo substitui o anterior.</p>
           {!isEdit ? (
             <p className="proposta-form-empty">Salve a proposta para poder anexar o PDF.</p>
           ) : (
