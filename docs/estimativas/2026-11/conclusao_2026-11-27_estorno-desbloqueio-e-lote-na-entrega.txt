@@ -1,0 +1,7 @@
+*Concluído — estorno do desbloqueio com lote e conferência do lote na entrega*
+_27/11/2026_
+
+1. Estornar um desbloqueio de lote confere se o lote ainda tem as peças — estimado 45min · realizado 30min
+2. A entrega com dois itens do mesmo lote dá o mesmo resultado em qualquer ordem — estimado 1h · realizado 30min
+
+*Total: estimado 1h45 · realizado 1h*
