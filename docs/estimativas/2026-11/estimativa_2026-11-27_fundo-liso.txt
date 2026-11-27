@@ -5,5 +5,10 @@ _27/11/2026_
 O fundo do aplicativo deixa de ter as manchas coloridas que se mexem (azul e ciano no celular, azul e roxo bem fracos no computador) e passa a ser um cinza-claro liso, com os cartões brancos por cima; no tema escuro, preto. Junto, no painel do celular, os valores grandes param de quebrar no meio do número (R$ 17.015. / 772).
 Tempo estimado: *45min*
 
-*Total estimado: 45min*
+*2. Celular mais compacto, no estilo do iPhone*
+As listas de clientes e de propostas passam a ser um cartão só, com as linhas separadas por um fio fino, em vez de um cartão grande para cada item; os campos de busca ficam no cinza do iPhone, os botões do topo menores e os cartões do painel mais justos. Uma linha de cliente passa de 129 para 76 pontos de altura.
+Tempo estimado: *1h*
+
+*Total estimado: 1h45*
+_Revisado: entrou o item 2, pedido depois do primeiro (espaços grandes demais no celular)._
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
