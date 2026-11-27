@@ -108,7 +108,7 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
 
 ## Tasks (sort topológico)
 
-- [x] **T1 (tronco, motor)** — (hash no commit do T1; 13/13; sabotagens: desvio da passada 1 → 5 caem; `mesmoSemPeca` → 3; o pulo "sem guarda"
+- [x] **T1 (tronco, motor)** — `72783704` (13/13, +1 na Fase 5 `ce2b489b`; sabotagens: desvio da passada 1 → 5 caem; `mesmoSemPeca` → 3; o pulo "sem guarda"
   → 3; a conferência das prateleiras → 3; o desconto do estrito → 1; o do só lote anterior → 1) — RN-267.10..16: `requisitionService.js` (a conferência do lote na passada da 218 para o só lote; `fatiasDoSoLote` na
   passada 1). Testes: `server/tests/api/entregaSoLoteRespeitaSeparado.api.test.js` (rota + serviço + corrida). Atualizar o RN-200.07 de
   `entregaSaiDeRespeitaSeparado.api.test.js` (ele registrava o C471: *"so lote: tira de XB-01 sem olhar a guarda"*). Controle positivo: tirar o
@@ -117,7 +117,7 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
   caem, a da entrega → 1, "não mexeu" → 1, `doAlmoxarife` → 1, a expressão → 1, a sugestão nova → 3) — RN-267.01..04: `RequisicoesList.js` +
   `client/src/components/almoxarifado/RequisicoesSaiDeReleNaRecusa.test.js`. Controle positivo: tirar a chamada na recusa da separação e da entrega;
   tirar a condição do "não mexeu" (o trocado à mão é reescolhido); trocar a expressão (a recusa do lote não relê).
-- [ ] **T3** — Fase 5; documentos (`fechar-etapa`), suítes, estimativa.
+- [x] **T3** — Fase 5 `ce2b489b`; documentos (`fechar-etapa`), suítes, estimativa.
 
 ## Fase 2 (revisor fresco, uma passada, sobre o plano `9574960b`)
 
@@ -126,7 +126,7 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
   mesma conta da baixa e recusa antes (frase nova). Testes `[RN-267.13]`, `[RN-267.13 parte que fica]`, `[RN-267.13 ja pedido]`, `[RN-267.13 dois so
   lote]` (os dois últimos vieram do controle positivo: sem eles, tirar o desconto do estrito e o do só lote anterior não derrubava nada).
 - **(2) importante, absorvido** — a baixa dividida em pedaços pela reserva: cada pedaço lê o livre de novo; com a conferência garantindo o total,
-  o "como hoje" na baixa fica só como defesa (inalcançável no que foi medido).
+  o "como hoje" na baixa fica só como defesa (inalcançável no que foi medido). *(**Estava errado** — a Fase 5 alcançou com peça em inspeção no lote: a baixa lia a lista sem `todos`; consertado em `ce2b489b`.)*
 - **(3) importante, absorvido** — a expressão da tela deixava de fora a recusa física *"O saldo em X (2) não cobre a quantidade (4)"* (a da Fase 0)
   e o singular *"já separada dele"*. → B1631: a régua é *"não cobre a quantidade"*, que toda frase de saldo tem.
 - **(4) menor, absorvido** — a releitura com a sequência da abertura descartaria uma carga ainda em curso → sequência própria (`releituraSeqRef`).
@@ -144,3 +144,66 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
 - Na tela, a pré-seleção roda num efeito que depende de `sugestaoSeparacao`, `preSelecao`, `origensSeparacao` e `saldosEntrega`: a releitura
   aplica os quatro de uma vez (depois das duas leituras) para o efeito decidir com a lista nova.
 - Testes antigos do só lote podem mudar de prateleira esperada — conferir caso a caso que a expectativa antiga era a do C471.
+
+## Fase 5 (um revisor fresco, sondas `zzf5-267-*`, apagadas, sobre `72783704` e `cb16239e`)
+
+1. **[importante, reproduzido]** Só lote com peça em inspeção no lote e a guarda que fica do próprio item: a conferência (com `todos`) passava e a
+   baixa (`fatiasDoSoLote` sem `todos`) não achava o lote (min(livre − presa, usável) = 0), caía no "como hoje" e o motor tirava de *XB-01*, a
+   guarda de R1. → **consertado** `ce2b489b`: a baixa lê a mesma lista. Cenário `[RN-267.10 Fase 5]`; sem o `todos` ele cai.
+2. **[médio, reproduzido]** A prateleira escolhida que esvaziou some da lista relida; o select mostrava "automático" e o clique seguinte
+   mandava a prateleira sumida (recusada de novo). → **consertado** `ce2b489b`: a escolha que sumiu vira o automático (entrega e separação).
+   Dois cenários; sabotar a correção derruba os dois.
+- Tentado e não quebrou: reserva em pedaços e exclusão depois (4/2/3 de volta, sem linha sem lote), segunda rodada, lote vencido liberado, dois
+  materiais, irmão com guarda fora da entrega, a releitura depois de fechar a janela (descartada), a entrega de um clique (não relê), a escolha
+  feita antes de a sugestão chegar.
+
+## Divergências do plano
+
+- **RN-267.13** dizia "como hoje" quando as prateleiras livres não cobrem — errado (Fase 2, item 1): a conferência do lote passava e o motor
+  levava a guarda de outra requisição. Virou recusa antes de qualquer baixa, com frase nova (`fraseSoLoteSemPrateleiraLivre`), e a conferência lê
+  a mesma conta da baixa (`lotesParaOAutomatico` com `todos`, menos estritos e só lote anteriores).
+- **B1631** casava só a frase do separado de outras — errado (Fase 2, item 3). A expressão final é *"não cobre a quantidade"* (toda frase de
+  saldo do servidor termina assim); a primeira alternativa da expressão ficou redundante e saiu (a sabotagem dela não derrubava nada — inalcançável).
+- A baixa do só lote lia `lotesParaOAutomatico` sem `todos` e a conferência com — a Fase 5 achou o caminho em que os dois discordavam (peça presa +
+  a guarda que fica do próprio item).
+- O teste RN-200.07 (`entregaSaiDeRespeitaSeparado`) registrava o C471 e passou a esperar a recusa.
+- **CLAUDE.md:** nenhuma linha ficou errada — a conferência e a baixa nova do só lote rodam dentro das duas travas da entrega, como o resto dela.
+
+## Próxima tarefa detalhada
+
+Os itens **16 e 17** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`):
+
+1. **Item 16 — "Sai de" com lote desconta o que está separado sem lote (C498, B1410; 1h15, motor + rótulo).** `requisitionService.js`: a E1 da
+   entrega (passada do caso (c), `parteGuardadaDeOutras`/`guardaDosIrmaosNoPar`, régua `ir.lote_separacao_id IS ?`) e a C1 da separação casam o
+   lote **exato**: a parte separada de *A* **sem lote** (`lote_separacao_id NULL`) não conta quando o **Sai de** é (*A*, *L1*). Caminho reversível
+   do C498: a parte sem lote ocupa o endereço inteiro — descontar do total do endereço (todas as linhas de *A*), não de um lote. Sonda antes:
+   material com lote, R1 separa 4 de *A* sem lote (como? a separação com `localizacao_origem_id` e sem `lote_id` grava lote NULL), *A* com L1 4 e L2
+   2; R2 entrega 4 com **Sai de** (*A*, *L1*) → hoje 200 e R1 toma "não serve mais". Atenção: o rótulo do Sai de (`parteGuardadaDeOutrasPorPar`,
+   `separado_outras`, chave `${origem}|${lote}`) tem de mostrar o mesmo número; e a dica da Fila (`sugestaoDeColeta`, `jaIndicado.porPar`) usa a
+   mesma chave por par. Roda sob as duas travas (separação e entrega).
+2. **Item 17 — Janela de entrega limita a quantidade de outra prateleira (D (251) 1, B1579; 45 min, tela).** `RequisicoesList.js`: a divisão do
+   entregável (Etapa 251, `quantidade_entregavel` por lote) supõe a saída da prateleira separada; escolhendo outro endereço no **Sai de**, a janela
+   aceita mais do que a entrega deixa (a entrega recusa sem baixar). Molde: `maxSeparavelNaTela` (a separação já limita pela opção escolhida, a
+   sobra `sobra`/`separado_outras` da linha). Medir antes com teste de tela.
+- **O que já está pronto e não reabre:** a releitura do "Sai de" na recusa (esta etapa — a recusa nova do item 16 termina em "não cobre a
+  quantidade" e já dispara a releitura); o só lote pelas prateleiras livres.
+- Candidatos fora da estimativa: série com só o lote (D (267) 1); conferir as séries na origem escolhida (D (265) 1); o estorno do Desbloquear com
+  lote (C504).
+
+## Verificação (medida sobre o código final, `ce2b489b`; os documentos não mudam código)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`): **676/678 arquivos OK** — os 2 que falham são os já conhecidos de
+  proposta, de outra máquina (`propostaBilingueTemplate`, `propostaPdfExigeLogin`); o mais lento: `propostaClausulasGrava`, 79,8 s.
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- Jest da tela (`--maxWorkers=2`, sobre `ce2b489b`): **257/257 suítes, 3377/3377 testes**. `CI=true npx react-scripts build`: **Compiled successfully.**
+- `entregaSoLoteRespeitaSeparado` 14/14; `RequisicoesSaiDeReleNaRecusa` 10/10; o subconjunto de entrega/lote/separação (106 arquivos) verde antes
+  da Fase 5. Sabotagens: 7 no servidor, 7 na tela (âncora contada = 1, cópia, md5 sabotado ≠ original e restaurado = original).
+- Nenhum clique no navegador (F (267)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 2 (Fase 2 — a conferência das prateleiras livres e a expressão da tela; Fase 5 — o `todos` da baixa e a escolha
+  que some).
+- Achados: Fase 2 — 3 importantes e 1 menor absorvidos, menores registrados; Fase 5 — 2 reproduzidos e consertados, nenhum ruído.
+- Paralelismo: T1 e T2 em série (um executor só); as revisões rodaram enquanto o código e os documentos andavam.
+- Defeito que escapou: (preencher na etapa seguinte). Da 266: nenhum apontado.
