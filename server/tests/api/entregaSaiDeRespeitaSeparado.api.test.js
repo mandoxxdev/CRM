@@ -220,14 +220,19 @@ process.on('exit', (code) => {
     await recusaSemGravar(m, r1, L1, L2, [{ item_id: r1.ids[0], quantidade_atendida: 4 }], naoServeMais(m));
   });
 
-  await test('[RN-200.04 (b\')] guardada SEM lote em XB-01 e "Sai de" XB-01 com L1 -> mesmo par, nao desconta: 200', async () => {
-    const { m, L1, L2, r2 } = await c468();
+  // Etapa 268 (RN-268.05, B1638): este cenario registrava o C498 pela propria peca — "mesmo par, nao desconta: 200" levava as 4 de R1 em
+  // XB-01/L1 (a guarda sem lote de R2 esta na linha sem lote, e o motor baixa a do lote). Agora e o caso (c): a E1 do par escolhido.
+  await test('[RN-200.04 (b\')] guardada SEM lote em XB-01 e "Sai de" XB-01 com L1 -> E1 do par escolhido (Etapa 268, B1638): 400; com 2 -> 200', async () => {
+    const { m, L1, L2, r1, r2 } = await c468();
     await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = ?, lote_separacao_id = NULL, quantidade_origem_separacao = 4
       WHERE id = ?`, [B01.id, r2.ids[0]]);
-    await entOk(r2.R, [saiDe(r2.ids[0], 4, L1)]);
-    assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
-    assert.strictEqual(await saldoDe(m, P01.id, L2), 9);
+    await recusaSemGravar(m, r2, L1, L2, [saiDe(r2.ids[0], 4, L1)],
+      e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+    await entOk(r2.R, [saiDe(r2.ids[0], 2, L1)]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 4);
     assert.deepStrictEqual(await trocas(r2.R), []);
+    await entOk(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 0);
   });
 
   // ---------------------------------------------------------------- RN-200.05

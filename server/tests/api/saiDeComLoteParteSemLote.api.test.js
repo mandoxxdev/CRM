@@ -187,6 +187,55 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(linhas, ['SL-A/-:3|3|0', 'SL-A/L1:4|0|4', 'SL-B/L1:5|0|5']);
   });
 
+  // ── RN-268.05 (Fase 2, achado 3): a origem guardada SEM lote e o Sai de com lote no mesmo endereco ───────────────────────────────
+  // A Etapa 63 trata (A, sem lote) como "qualquer lote em A" para a troca: escolher (A, L1) nao era outro par, e a entrega so conferia o
+  // fisico de (A, L1) — levava a guarda que R3 separou de (A, L1) (R1 200, A/L1 1; R3 depois "nao serve mais"). Agora a E1 do par escolhido.
+  const cenario05 = async () => {
+    const { m, L1 } = await comLinhaSemLote();
+    const r1 = await reqDireta([[m.id, 3]]); const r3 = await reqDireta([[m.id, 2]]);
+    await ok(separar(r1.R, [deA(r1.ids[0], 3)]));
+    await ok(separar(r3.R, [deA(r3.ids[0], 2, { lote_id: L1 })]));
+    return { m, L1, r1, r3 };
+  };
+  const fotoDe = async (m, R) => ({
+    itens: await dbAll(db, `SELECT quantidade_entregue, origem_separacao_id, lote_separacao_id, quantidade_origem_separacao
+      FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [R]),
+    saldo: await retrato(m),
+    mov: Number((await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ?', [m.id])).n),
+  });
+  await test('[RN-268.05] R1 guardou 3 em (A, sem lote); R3 guardou 2 em (A, L1); R1 entrega 3 Sai de (A, L1) -> 400 E1, nada gravado', async () => {
+    const { m, L1, r1, r3 } = await cenario05();
+    const antes = await fotoDe(m, r1.R);
+    const r = await entregar(r1.R, [saiDe(r1.ids[0], 3, A, { lote_id: L1 })]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    const num3 = (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [r3.R])).numero;
+    assert.strictEqual(r.body.error, `${m.nome}: em SL-A, lote L1 há 4 para esta entrega, mas 2 já está separado dali para outra requisição `
+      + `(${num3}); sobra 2, que não cobre a quantidade (3). Escolha outro endereço ou deixe "Qualquer endereço (automático)"`);
+    assert.deepStrictEqual(await fotoDe(m, r1.R), antes, 'nada gravado');
+  });
+  await test('[RN-268.05 depois] R1 entrega 2 Sai de (A, L1) -> 200; R3 num clique -> 200 (a guarda dele ficou); R1 o resto num clique -> 200', async () => {
+    const { m, L1, r1, r3 } = await cenario05();
+    await ok(entregar(r1.R, [saiDe(r1.ids[0], 2, A, { lote_id: L1 })]));
+    await ok(entregar(r3.R, [clique(r3.ids[0], 2)]));
+    await ok(entregar(r1.R, [clique(r1.ids[0], 1)]));
+    assert.deepStrictEqual(await retrato(m), { linhas: ['SL-A/-=2', 'SL-B/L1=5'], fisico: 7 });
+  });
+  await test('[RN-268.05 servico] o mesmo pelo entregarRequisicao: 3 de (A, L1) recusado; a planejada (A, sem lote) num clique -> 200', async () => {
+    const { m, L1, r1 } = await cenario05();
+    const ALMOX = { ...USERS.ALMOX };
+    await assert.rejects(requisitionService.entregarRequisicao(db, r1.R, [saiDe(r1.ids[0], 3, A, { lote_id: L1 })], ALMOX, null),
+      (e) => e.status === 400 && /sobra 2, que não cobre a quantidade \(3\)/.test(e.message));
+    await requisitionService.entregarRequisicao(db, r1.R, [clique(r1.ids[0], 3)], ALMOX, null);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['SL-A/L1=4', 'SL-B/L1=5'], fisico: 9 });
+  });
+  await test('[RN-268.05 sem guarda] sem a guarda de R3: R1 entrega 3 Sai de (A, L1) -> 200 (nenhuma recusa nova sem guarda que conte)', async () => {
+    const { m, L1 } = await comLinhaSemLote();
+    const r1 = await reqDireta([[m.id, 3]]);
+    await ok(separar(r1.R, [deA(r1.ids[0], 3)]));
+    await ok(entregar(r1.R, [saiDe(r1.ids[0], 3, A, { lote_id: L1 })]));
+    assert.deepStrictEqual(await retrato(m), { linhas: ['SL-A/-=3', 'SL-A/L1=1', 'SL-B/L1=5'], fisico: 9 });
+  });
+
   terminou = true;
   await close();
   console.log(`\n  ${passed} passou, ${failed} falhou\n`);

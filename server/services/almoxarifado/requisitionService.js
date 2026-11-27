@@ -2886,7 +2886,12 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // Etapa 208 (B1408): o mesmo par ACIMA da propria parte tambem e do caso (c) — o excesso tira do par o que outra caixa guardou
     // (conferir so o excesso e a mesma conta da E1 com a quantidade inteira: a parte propria cancela). Sem excesso, nao (o dado
     // antigo sobrecomprometido, B1338). `parte` e a de antes da baixa (`:parte` acima).
-    const marcaC = !!origemId && (!saiDaOrigem || (!!item.origem_separacao_id && qtdComOrigem - parte > Q.QTD_FOLGA));
+    // Etapa 268 (RN-268.05, B1638; Fase 2, achado 3): a origem guardada SEM lote e o "Sai de" com lote no mesmo endereco. Para a troca
+    // (Etapa 63) e a mesma origem ("qualquer lote ali"), mas o motor baixa a linha do LOTE escolhido, nao a sem lote onde a parte esta —
+    // so o fisico era conferido e a entrega levava a guarda de outra caixa em (A, L1). Agora e caso (c): a E1 do par escolhido. Fora: a
+    // planejada aplicada num clique com o lote vindo das series (D (268)).
+    const loteForaDaGuarda = saiDaOrigem && !planejada && !!item.origem_separacao_id && item.lote_separacao_id == null && loteId != null;
+    const marcaC = !!origemId && (!saiDaOrigem || loteForaDaGuarda || (!!item.origem_separacao_id && qtdComOrigem - parte > Q.QTD_FOLGA));
     // Etapa 208 (Fase 2, item 2): o fisico dos itens (c) e conferido DEPOIS dos (a)/(b) sem excesso — com as duas pecas juntas (a tela
     // pre-seleciona a origem do irmao) a recusa fisica cai em quem escolheu a mao, nao no irmao que ninguem mexeu. Nenhum TEXTO de recusa
     // e novo, mas QUAL recusa sai muda em algumas entregas (Fase 5, B1415): o mesmo par acima da parte agora e (c) e e adiado tambem; com
