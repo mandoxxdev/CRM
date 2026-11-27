@@ -3330,6 +3330,22 @@ async function recusaDaDevolucaoEmQuarentena(db, mov, dev, unidade) {
 }
 
 /**
+ * Etapa 273 (C556, RN-273.04) — o bloqueado COM LOTE do material `alias`: a soma, por lote, do livro (BLOQUEIO/DESBLOQUEIO com lote) na
+ * regua "que mais bloqueia" (o BLOQUEIO conta enquanto o estorno dele nao concluiu; o DESBLOQUEIO so com `cancelado = 0`), cada lote no
+ * MAX(0, ...). E o que o total (`quantidade_bloqueada`) ja deve a lotes: a reprovacao de um lote so conta no que sobra alem disso (o teto
+ * por familia da 264). Uma regua so para os dois estornos (a entrada, 264; o Desbloquear com lote, 272 Fase 5): com o teto pelo bloqueado
+ * de UM lote, o bloqueio de outro lote devolvia a reprovacao ja liberada pelo "Sem lote" e o estorno era recusado com as pecas no lote.
+ * Nao confundir com `bloqueioPorLote.bloqueadoComLoteSql` (a soma LIQUIDA, sem o MAX(0) por lote e com `cancelado = 0` no BLOQUEIO), que as
+ * guardas do "Sem lote" usam (Fase 2 da 273, achado 1).
+ */
+function bloqueadoPorLotePositivoSql(alias) {
+  return `(SELECT COALESCE(SUM(MAX(0, pl.q)), 0) FROM (SELECT SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END) AS q
+        FROM movimentacoes_almoxarifado b WHERE b.material_id = ${alias}.id AND b.lote_id IS NOT NULL
+          AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0))
+        GROUP BY b.lote_id) pl)`;
+}
+
+/**
  * Etapa 264 (C547, RN-264.06/.08; B1622, revista pela Fase 2 achado 2) — a recusa do estorno da ENTRADA com lote quando, sem ela, o lote
  * ficaria com menos pecas que as PRESAS nele, ou null. As parcelas cruas que apontam para o lote (a regua do Bloquear com lote, 249): o
  * bloqueado do livro (BLOQUEIO/DESBLOQUEIO com o lote) na regua "que mais bloqueia" — a lição do claim provisorio da 262: o BLOQUEIO conta
@@ -3346,6 +3362,7 @@ async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
         FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
           AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
         AS no_lote,
+      ${bloqueadoPorLotePositivoSql('mq')} AS com_lote,
       ${rdl.reprovadoDoLoteSql('lq')} AS repr, ${rdl.terceirosDoLoteSql('mq', 'lq')} AS terc,
       (SELECT COALESCE(SUM(s.quantidade), 0) FROM estoque_saldo_almoxarifado s WHERE s.material_id = mq.id AND s.lote_id = lq.id) AS saldo,
       lq.codigo AS codigo
@@ -3353,10 +3370,12 @@ async function recusaDoEstornoDeEntradaDoLoteBloqueado(db, mov, unidade) {
   if (!r) return null;
   const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
   const bloq = Q.qtd(Math.max(0, Math.min(Number(r.total) || 0, Number(r.no_lote) || 0)));
-  // Fase 5 da 264 (achado 1): a reprovacao so conta no que o bloqueado do material ainda cobre depois do bloqueio do lote (a reprovacao ja
+  // Fase 5 da 264 (achado 1): a reprovacao so conta no que o bloqueado do material ainda cobre depois do bloqueio com lote (a reprovacao ja
   // liberada pelo "Sem lote" deixa o documento sem carimbo — C501 — e mandaria para uma NC que nao destrava); terceiros, no que o material
-  // ainda tem em terceiros. O mesmo teto por familia de `lotesComRetidoSql` (B1436), aplicado por parcela.
-  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, (Number(r.total) || 0) - bloq)));
+  // ainda tem em terceiros. O mesmo teto por familia de `lotesComRetidoSql` (B1436), aplicado por parcela. Etapa 273 (C556, RN-273.01): o
+  // teto desconta o bloqueado de TODOS os lotes (`bloqueadoPorLotePositivoSql`), nao so deste — com 4 bloqueadas no L2, a reprovacao de 2 ja
+  // liberada no L1 voltava a contar e o estorno da entrada do L1 era recusado mandando para a NC, que nao destrava nada.
+  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, (Number(r.total) || 0) - Math.max(bloq, Number(r.com_lote) || 0))));
   const terc = Q.qtd(Math.min(n(r.terc), n(r.em_terceiros)));
   const presa = Q.qtd(bloq + repr + terc);
   if (!(presa > Q.QTD_FOLGA)) return null;
@@ -3401,10 +3420,7 @@ async function presoNoLoteParaEstorno(db, materialId, loteId) {
         FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
           AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
         AS no_lote,
-      (SELECT COALESCE(SUM(MAX(0, pl.q)), 0) FROM (SELECT SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END) AS q
-        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id IS NOT NULL
-          AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0))
-        GROUP BY b.lote_id) pl) AS com_lote,
+      ${bloqueadoPorLotePositivoSql('mq')} AS com_lote,
       COALESCE((SELECT SUM(ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado ri
         WHERE ri.lote_id = lq.id AND COALESCE(ri.quantidade_em_inspecao, 0) > 0), 0) AS insp,
       ${rdl.reprovadoDoLoteSql('lq')} AS repr, ${rdl.terceirosDoLoteSql('mq', 'lq')} AS terc,
