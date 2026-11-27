@@ -1574,6 +1574,19 @@ function fraseLivreDoLote({ gesto = 'separacao', lote, saldo, podeSair, retido =
 }
 
 /**
+ * Etapa 267 (Fase 2, B1633, RN-267.13) — a frase do so lote (lote sem endereco) cujas prateleiras livres nao cobrem: o resto do lote esta separado
+ * para outras requisicoes ou outras pecas desta, em prateleira bloqueada ou na linha sem endereco. Sem o prefixo do material. Singular quando
+ * 0 < x < 2 (a regua de `fraseLivreDoLote`).
+ */
+function fraseSoLoteSemPrateleiraLivre({ lote, pode, qty }) {
+  const r6 = (x) => Math.round(x * 1e6) / 1e6;
+  const um = pode > Q.QTD_FOLGA && pode < 2 - Q.QTD_FOLGA;
+  return `no lote ${lote} só ${r6(pode)} ${um ? 'pode' : 'podem'} sair de prateleira livre nesta entrega — o resto do lote está separado `
+    + 'para outras requisições ou outras peças desta, em prateleira bloqueada ou sem endereço; '
+    + `não cobre a quantidade (${qty}). Escolha a prateleira no "Sai de" ou deixe "Qualquer endereço (automático)"`;
+}
+
+/**
  * Etapa 218 (B1444): a parte guardada (`PARTE_ORIGEM_SQL`) das caixas vivas de OUTRAS requisicoes no LOTE, em qualquer endereco (a
  * `parteGuardadaDeOutras` e por par). `requisicaoId` null = todas. Mesma folga por requisicao da 198.
  */
@@ -1595,7 +1608,8 @@ async function guardadoNoLoteDeOutras(db, materialId, loteId, requisicaoId = nul
  */
 function memoLotesComPecaPresa(db) {
   const porMaterial = new Map();
-  return async (materialId, loteId) => {
+  // Etapa 267 (B1633): `mesmoSemPeca` devolve a situacao do lote mesmo sem peca presa (o so lote confere a guarda de outras caixas).
+  return async (materialId, loteId, { mesmoSemPeca = false } = {}) => {
     const k = String(materialId);
     if (!porMaterial.has(k)) {
       const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
@@ -1603,7 +1617,7 @@ function memoLotesComPecaPresa(db) {
         ? await situacaoDosLotes(db, materialId) : new Map());
     }
     const sit = loteId ? porMaterial.get(k).get(Number(loteId)) : null;
-    return sit && sit.retido + sit.inspecao > Q.QTD_FOLGA ? sit : null;
+    return sit && (mesmoSemPeca || sit.retido + sit.inspecao > Q.QTD_FOLGA) ? sit : null;
   };
 }
 
@@ -2205,7 +2219,7 @@ async function guardaDosIrmaosNoPar(db, requisicaoId, itemId, materialId, origem
  *    guardada (a padrao primeiro, depois a maior). Lote sem guarda: uma fatia pelo lote, como na T0.
  * Lido dentro da secao que a entrega segura (trava por requisicao e por material): nenhuma porta nova.
  */
-async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem, { todos = false } = {}) {
   const lotes = (await lotService.listarLotesDoMaterial(db, materialId, { apenasComSaldo: true }))
     .filter((l) => l.elegivel && Number(l.saldo) > Q.QTD_FOLGA);
   if (!lotes.length) return [];
@@ -2281,7 +2295,23 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
     const livreUsavel = usaveis.reduce((s2, x) => s2 + x.livre, 0);
     return { lote_id: loteId, saldo: Q.qtd(Math.min(livreDoLote, livreUsavel)),
       linhas: usaveis.map((x) => ({ localizacao_id: Number(x.localizacao_id), saldo: Q.qtd(x.livre) })) };
-  }).filter((l) => l.saldo > Q.QTD_FOLGA);
+  }).filter((l) => todos || l.saldo > Q.QTD_FOLGA); // Etapa 267 (Fase 2): `todos` mantem o lote com guarda sem livre (o so lote confere)
+}
+
+/**
+ * Etapa 267 (C471, B1633, RN-267.10/12/13) — as fatias por prateleira do SO LOTE (lote escolhido sem endereco): o lote com guarda que conta
+ * (`lotesParaOAutomatico` devolve `linhas` so para ele — o livre de cada prateleira usavel, saldo menos a guarda ali, na ordem do claim)
+ * divide `quantidade` pelas linhas. `null` = como hoje (uma SAIDA pelo lote): lote sem guarda que conte, fora da lista, ou as prateleiras
+ * usaveis nao cobrem (o livre na linha sem endereco ou em prateleira bloqueada — tudo ou como hoje, o molde da B1398). So le; dentro das
+ * duas travas da entrega.
+ */
+async function fatiasDoSoLote(db, materialId, loteId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  const l = (await lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem))
+    .find((x) => Number(x.lote_id) === Number(loteId));
+  if (!l || !Array.isArray(l.linhas)) return null;
+  const { fatias, resto } = dividirPorLotes([{ ...l, saldo: quantidade }], quantidade);
+  if (resto > Q.QTD_FOLGA || !fatias.length) return null;
+  return fatias.map((f) => ({ localizacao_id: f.localizacao_id, quantidade: f.quantidade }));
 }
 
 /**
@@ -2943,8 +2973,12 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       const jaPedido = Q.qtd(jaNoLote.get(k) || 0);
       jaNoLote.set(k, jaPedido + num(c.qtdComOrigem));
       // eslint-disable-next-line no-await-in-loop
-      const sit = await lotePreso(c.item.material_id, c.loteId);
+      // Etapa 267 (C471, B1633, RN-267.11): o SO LOTE (sem endereco) confere o lote tambem sem peca presa — o motor escolhe a prateleira
+      // do lote e, sem esta conta, levava a parte que outra requisicao separou ali. So quando ha guarda no lote (abaixo); sem ela, como hoje.
+      const soLote = !c.origemId;
+      const sit = await lotePreso(c.item.material_id, c.loteId, { mesmoSemPeca: soLote });
       if (!sit) continue;
+      const presa = sit.retido + sit.inspecao > Q.QTD_FOLGA;
       // eslint-disable-next-line no-await-in-loop
       const proprias = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
         WHERE ir.requisicao_id = ? AND ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ?
@@ -2954,6 +2988,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       const ficaPropria = proprias.reduce((acc, g) => acc + guardaQueConta(g, new Map(), fica), 0);
       // eslint-disable-next-line no-await-in-loop
       const guardado = Q.qtd((await guardadoNoLoteDeOutras(db, c.item.material_id, c.loteId, requisicaoId)) + ficaPropria);
+      if (!presa && guardado <= Q.QTD_FOLGA) continue; // Etapa 267: so lote sem peca presa e sem guarda — nenhuma conferencia nova
       const podeSair = Q.qtd(Math.max(0, sit.livre - guardado - jaPedido));
       if (podeSair + Q.QTD_FOLGA >= num(c.qtdComOrigem)) continue;
       // eslint-disable-next-line no-await-in-loop
@@ -2967,6 +3002,37 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         msg = `${c.item.material_nome}: a origem da separação (${loc ? loc.codigo : c.origemId}) não serve mais (${frase}) — entregue escolhendo de onde sai`;
       }
       const err = new Error(msg);
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  // Etapa 267 (Fase 2 da 267, B1633, RN-267.13): o SO LOTE (sem serie) com guarda que conta no lote sai so de prateleira livre (`fatiasDoSoLote`
+  // na passada 1) — a conferencia tem de ler a MESMA conta antes de qualquer baixa: o livre por prateleira do automatico (saldo da linha menos a
+  // guarda ali, sem a linha sem endereco e sem prateleira bloqueada), menos o que os estritos desta entrega pedem de cada par, menos o que os
+  // so lote anteriores do mesmo lote pedem. A do lote (218, acima) le o lote inteiro e deixa a parte que fica do proprio item de fora (B1446):
+  // passava, a baixa nao cobria e o "como hoje" do motor levava a guarda de outra requisicao (o C471 de volta). Lote sem guarda: como hoje.
+  const soLoteConf = conferidasNoLote.filter((c) => !c.origemId && !seriesPorItem.has(c.item.id));
+  if (soLoteConf.length) {
+    const fica = parteQueFicaPorItem();
+    const lotesPorMaterial = new Map();
+    const jaSoLote = new Map();
+    for (const c of soLoteConf) {
+      const mid = c.item.material_id;
+      // eslint-disable-next-line no-await-in-loop
+      if (!lotesPorMaterial.has(mid)) lotesPorMaterial.set(mid, await lotesParaOAutomatico(db, mid, new Map(), fica, { todos: true }));
+      const l = lotesPorMaterial.get(mid).find((x) => Number(x.lote_id) === Number(c.loteId));
+      if (!l || !Array.isArray(l.linhas)) continue;
+      const livre = l.linhas.reduce((acc, ln) => acc
+        + Math.max(0, num(ln.saldo) - num(pedidoPorOrigem.get(`${mid}|${ln.localizacao_id}|${c.loteId}`))), 0);
+      const k = `${mid}|${c.loteId}`;
+      const ja = num(jaSoLote.get(k));
+      jaSoLote.set(k, ja + num(c.qtdComOrigem));
+      const pode = Q.qtd(Math.max(0, livre - ja));
+      if (pode + Q.QTD_FOLGA >= num(c.qtdComOrigem)) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]);
+      const err = new Error(`${c.item.material_nome}: ${fraseSoLoteSemPrateleiraLivre({ lote: lote.codigo, pode, qty: c.qtdComOrigem })}`);
       err.status = 400;
       throw err;
     }
@@ -3294,6 +3360,21 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               for (const f of fs) {
                 // eslint-disable-next-line no-await-in-loop
                 await baixar(plano, baixa, f.serie_ids.length, null, f.localizacao_id);
+              }
+              continue;
+            }
+          }
+          // Etapa 267 (C471, B1633, RN-267.10/12/13): o SO LOTE (passada 1: lote sem endereco), sem serie — com guarda que conta no lote, sai
+          // pelas prateleiras livres (o livre por prateleira do automatico), uma SAIDA por prateleira com o endereco. Sem guarda, ou sem
+          // prateleira usavel que cubra: como hoje (o motor escolhe a linha).
+          if (baixa.comOrigem && baixa.passada === 1 && !seriesPorItem.has(item.id)) {
+            // eslint-disable-next-line no-await-in-loop
+            const fs = await fatiasDoSoLote(db, item.material_id, origemPorItem.get(item.id).loteId, baixa.quantidade,
+              saiuDaOrigemPorItem(), parteQueFicaPorItem());
+            if (fs) {
+              for (const f of fs) {
+                // eslint-disable-next-line no-await-in-loop
+                await baixar(plano, baixa, f.quantidade, null, f.localizacao_id);
               }
               continue;
             }

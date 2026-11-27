@@ -331,14 +331,17 @@ process.on('exit', (code) => {
   await test('[RN-200.06 (iii) B antes de A] item (c) de id maior -> a mesma E1 no A', () => caso3(false));
 
   // ---------------------------------------------------------------- RN-200.07
-  await test('[RN-200.07] automatico e so lote nao mudam: R2 automatico 4 -> 200 (2 L1 + 2 L2); R3 so lote L1 4 -> 200 (C471)', async () => {
+  await test('[RN-200.07] automatico nao muda: R2 automatico 4 -> 200 (2 L1 + 2 L2); so lote L1 4 -> 400 (Etapa 267, C471 resolvido)', async () => {
     const { m, L1, L2, r1, r2 } = await c468();
     await entOk(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
     assert.strictEqual(await saldoDe(m, B01.id, L1), 4);
     assert.strictEqual(await saldoDe(m, P01.id, L2), 7);
     const b = await c468();
-    await entOk(b.r2.R, [{ item_id: b.r2.ids[0], quantidade_atendida: 4, lote_id: b.L1 }]);
-    assert.strictEqual(await saldoDe(b.m, B01.id, b.L1), 2, 'so lote: tira de XB-01 sem olhar a guarda (registra o C471)');
+    // Etapa 267 (RN-267.11): este assert registrava o C471 ("so lote: tira de XB-01 sem olhar a guarda", saldo 2) — o so lote passou a
+    // descontar a guarda de R1 no lote (6 - 4 = 2 < 4) e recusa antes de baixar, com a frase da 218.
+    await recusaSemGravar(b.m, b.r2, b.L1, b.L2, [{ item_id: b.r2.ids[0], quantidade_atendida: 4, lote_id: b.L1 }],
+      `${b.m.nome}: no lote L1 há 6 PC, mas só 2 podem sair nesta entrega: 4 PC já separadas dele para outras requisições ou outras peças `
+      + 'desta; não cobre a quantidade (4). Escolha outro lote ou deixe "Qualquer endereço (automático)"');
     assert.ok(r1.R && b.r1.R);
   });
 

@@ -30,9 +30,11 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
 
 ## Decisões
 
-- **B1631 (item 14)** — a releitura dispara só na recusa que diz que a prateleira (ou o lote) está separada para outra requisição — a frase da
-  separação/entrega (*"… já está separado dali para outra requisição …"*, *"… já estão separados dali para outras requisições …"*, *"… para outra
-  peça desta requisição"*) e a do lote (*"… já separadas dele para outras requisições …"*). **Descartado:** reler em toda recusa — a recusa por
+- **B1631 (item 14)** — a releitura dispara só na recusa **por saldo**: toda frase de saldo do servidor termina em *"não cobre a quantidade"* — a
+  do separado de outras (*"… já está separado dali para outra requisição …; sobra 2, que não cobre a quantidade (4) …"*), a do lote (*"… já
+  separadas dele …; não cobre a quantidade (4)"*) e a física (*"O saldo em XB-01 (2) não cobre a quantidade (4) …"*, também dentro do envelope
+  *"não serve mais"*). *(Fase 2: a primeira redação casava só a frase do separado de outras — deixava de fora a física, que é justamente a que a
+  Fase 0 mediu para R1, e o singular "já separada dele".)* **Descartado:** reler em toda recusa — a recusa por
   motivo, quantidade ou permissão não muda saldo e refazer a sugestão nesses casos trocaria a pré-seleção sem razão. **Reversível** (uma
   expressão na tela).
 - **B1632 (item 14)** — na separação, a releitura **refaz a pré-seleção** só do item cujo **Sai de** ainda é o que a sugestão escolheu (o
@@ -44,8 +46,11 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
   218 passa a rodar também sem peça presa quando há parte guardada no lote (de outras requisições, ou que fica de outras peças desta) — se o lote
   não cobre, 400 antes de qualquer baixa com a **mesma frase** da 218; (2) a baixa sai pelas prateleiras do lote descontando a parte guardada de
   cada uma (o livre por prateleira do automático, `lotesParaOAutomatico`), uma SAÍDA por prateleira com o endereço. Lote sem guarda que conte:
-  como hoje. As prateleiras usáveis não cobrem (o livre está na linha sem endereço ou em prateleira bloqueada): como hoje (tudo ou como hoje, o
-  molde da B1398). **Série com só lote** (o lote vindo das séries, Sai de automático): como hoje — as séries dizem quais peças, não de qual
+  como hoje. *(Fase 2: a primeira redação dizia "as prateleiras usáveis não cobrem: como hoje (tudo ou como hoje, o molde da B1398)" — **estava
+  errado**: a conferência do lote passava, a baixa não cobria e o motor levava a guarda da outra requisição, o C471 de volta — com o livre em
+  prateleira bloqueada ou sem endereço, com a parte que fica do próprio item (troca 0) e com o estrito desta entrega na mesma prateleira. Agora
+  (3) a conferência lê a mesma conta da baixa — o livre por prateleira menos o que os estritos desta entrega pedem de cada uma menos o que os só
+  lote anteriores do mesmo lote pedem — e recusa antes de qualquer baixa com uma frase nova (RN-267.13).)* **Série com só lote** (o lote vindo das séries, Sai de automático): como hoje — as séries dizem quais peças, não de qual
   prateleira; fica na **D (267)**. **Descartado:** (a) recusar sempre que o motor iria à prateleira guardada sem tentar as outras (o almoxarife
   escolheu o lote, não a prateleira — sair da livre é o que ele quis); (b) mudar o claim do motor (todas as saídas usam; a entrega já sabe a
   guarda). **Reversível** (uma condição na conferência e um desvio na passada 1).
@@ -54,7 +59,7 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
 
 ### Item 14 — o "Sai de" relido na recusa (tela)
 
-- **RN-267.01** Janela de separação: **Confirmar Separação** recusado (400) com a frase do separado de outras → a janela continua aberta, o toast
+- **RN-267.01** Janela de separação: **Confirmar Separação** recusado (400) com uma frase de saldo (B1631) → a janela continua aberta, o toast
   mostra a mensagem do servidor, e a lista do **Sai de** de cada material da janela é relida (`GET /almoxarifado/estoque/:material/saldos?
   requisicao_id=<id>`): a opção passa a dizer a sobra (*"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"*, rótulo da 201). As quantidades ficam.
 - **RN-267.02** Na mesma recusa a sugestão é relida (`GET /requisicoes/:id/sugestao-coleta`) e o item **sem planejada** cujo **Sai de** ainda é o
@@ -79,7 +84,12 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
   mesmo lote por endereço, a parcela *"⟨n⟩ PC já pedidas nesta entrega"* entra (a régua da 218). Lote **sem** guarda que conte: nenhuma
   conferência nova.
 - **RN-267.12** Lote sem guarda que conte → como hoje (uma SAÍDA pelo lote; o motor escolhe a linha) — o livro igual ao de antes.
-- **RN-267.13** Guarda que conta, mas as prateleiras usáveis não cobrem (o livre está na linha sem endereço ou em prateleira bloqueada) → como hoje.
+- **RN-267.13 (reescrita na Fase 2)** Guarda que conta, a conferência do lote passa, mas as prateleiras livres não cobrem (o livre está em prateleira
+  bloqueada ou na linha sem endereço; a parte que fica do próprio item; o que os estritos desta entrega ou os só lote anteriores do mesmo lote
+  levam) → **400 antes de qualquer baixa**, nada gravado: *"⟨material⟩: no lote L1 só 0 podem sair de prateleira livre nesta entrega — o resto do
+  lote está separado para outras requisições ou outras peças desta, em prateleira bloqueada ou sem endereço; não cobre a quantidade (2). Escolha a
+  prateleira no "Sai de" ou deixe "Qualquer endereço (automático)""* (singular *"só 1 pode"*). Vale também com saldo negativo permitido (como a E1
+  da 200). Na baixa, cada pedaço (excedente e reservas) lê o livre de novo — a conferência garante o total.
 - **RN-267.14** Com série: como hoje (B1633, D (267)).
 - **RN-267.15 (integração, rota e serviço)** R1 separa 4 de *XB-01/L1* pela rota da tela (`PUT /separacao`); R2 separa 2 no automático; R2 entrega 2
   só *L1* → 200 de *XB-02*; R1 entrega no um clique (a planejada) → 200; o livro: SAÍDA 2 de *XB-02/L1* e SAÍDA 4 de *XB-01/L1*. O mesmo pelo
@@ -98,14 +108,32 @@ livres no lote) → **200**, XB-01 0, XB-02 2: levou as 4 de R1.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, motor)** — RN-267.10..16: `requisitionService.js` (a conferência do lote na passada da 218 para o só lote; `fatiasDoSoLote` na
+- [x] **T1 (tronco, motor)** — (hash no commit do T1; 13/13; sabotagens: desvio da passada 1 → 5 caem; `mesmoSemPeca` → 3; o pulo "sem guarda"
+  → 3; a conferência das prateleiras → 3; o desconto do estrito → 1; o do só lote anterior → 1) — RN-267.10..16: `requisitionService.js` (a conferência do lote na passada da 218 para o só lote; `fatiasDoSoLote` na
   passada 1). Testes: `server/tests/api/entregaSoLoteRespeitaSeparado.api.test.js` (rota + serviço + corrida). Atualizar o RN-200.07 de
   `entregaSaiDeRespeitaSeparado.api.test.js` (ele registrava o C471: *"so lote: tira de XB-01 sem olhar a guarda"*). Controle positivo: tirar o
   desvio da passada 1 (RN-267.10/15 caem: sai de XB-01); tirar o `mesmoSemPeca` (RN-267.11 cai: 200).
-- [ ] **T2 (galho, tela; independente do T1 — contrato de mensagens já existente)** — RN-267.01..04: `RequisicoesList.js` +
+- [x] **T2 (galho, tela; independente do T1 — contrato de mensagens já existente)** — `cb16239e` (8/8; sabotagens: a chamada da separação → 3
+  caem, a da entrega → 1, "não mexeu" → 1, `doAlmoxarife` → 1, a expressão → 1, a sugestão nova → 3) — RN-267.01..04: `RequisicoesList.js` +
   `client/src/components/almoxarifado/RequisicoesSaiDeReleNaRecusa.test.js`. Controle positivo: tirar a chamada na recusa da separação e da entrega;
   tirar a condição do "não mexeu" (o trocado à mão é reescolhido); trocar a expressão (a recusa do lote não relê).
 - [ ] **T3** — Fase 5; documentos (`fechar-etapa`), suítes, estimativa.
+
+## Fase 2 (revisor fresco, uma passada, sobre o plano `9574960b`)
+
+- **(1) importante, absorvido** — conferência passa e baixa não cobre: o "como hoje" da RN-267.13 levava a guarda de outra requisição (o C471 de
+  volta) com a parte que fica do próprio item (troca 0), com prateleira bloqueada ou linha sem endereço. → RN-267.13 reescrita: a conferência lê a
+  mesma conta da baixa e recusa antes (frase nova). Testes `[RN-267.13]`, `[RN-267.13 parte que fica]`, `[RN-267.13 ja pedido]`, `[RN-267.13 dois so
+  lote]` (os dois últimos vieram do controle positivo: sem eles, tirar o desconto do estrito e o do só lote anterior não derrubava nada).
+- **(2) importante, absorvido** — a baixa dividida em pedaços pela reserva: cada pedaço lê o livre de novo; com a conferência garantindo o total,
+  o "como hoje" na baixa fica só como defesa (inalcançável no que foi medido).
+- **(3) importante, absorvido** — a expressão da tela deixava de fora a recusa física *"O saldo em X (2) não cobre a quantidade (4)"* (a da Fase 0)
+  e o singular *"já separada dele"*. → B1631: a régua é *"não cobre a quantidade"*, que toda frase de saldo tem.
+- **(4) menor, absorvido** — a releitura com a sequência da abertura descartaria uma carga ainda em curso → sequência própria (`releituraSeqRef`).
+- **menores registrados:** o exemplo do rótulo na RN-267.01 (*"sobra 2 de 6"* é o do cenário de 6 na prateleira); saldo negativo permitido — a
+  conferência vale (dito na RN-267.13); a troca do próprio item "só pelo lote" continua sem endereço no registro (RN-252.03, intencional); o item com
+  planejada recusado na própria planejada não é decidido de novo (regra da 65 — a lista relida mostra a sobra).
+- T1 e T2 independentes: confirmado (T2 lê frases que já existiam).
 
 ## Pontos de atenção
 
