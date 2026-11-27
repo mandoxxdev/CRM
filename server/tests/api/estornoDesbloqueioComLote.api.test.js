@@ -192,6 +192,42 @@ const E1 = (L, livre, q) => `Não é possível estornar o desbloqueio: o lote ${
     assert.strictEqual(await bloqueadoNoLote(m, L1), 4);
   });
 
+  // ---------------------------------------------------------------- Fase 5
+  await test('[RN-272.03 teto, Fase 5 achado 1] o mesmo, com 4 bloqueadas no L2 (motivo proprio): o estorno do Desbloquear do L1 ainda passa', async () => {
+    const m = await material();
+    await entrar(m, 6, 'L1'); await entrar(m, 4, 'L2');
+    const L1 = await loteId(m, 'L1'); const L2 = await loteId(m, 'L2');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 2 WHERE id = ?', [m.id]);
+    const rec = await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero, status, nota_fiscal) VALUES (?,?,?)', [`REC-272F-${m.id}`, 'RECEBIDO', 'NF-272F']);
+    const it = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, lote) VALUES (?,?,?,?,?,?)`, [rec.lastID, m.id, 2, 2, L1, 'L1']);
+    await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado (recebimento_item_id, conforme, quantidade_aprovada, quantidade_reprovada,
+      responsavel_id, responsavel_nome) VALUES (?,?,?,?,?,?)`, [it.lastID, 0, 0, 2, 9, 'Q']);
+    await ok(desbloquear(m, 2, undefined));
+    await ok(bloquear(m, 4, L1));
+    await ok(desbloquear(m, 4, L1));
+    const d = await ultimo(m, 'DESBLOQUEIO');
+    await ok(bloquear(m, 4, L2));
+    await ok(saida(m, 1, { lote_id: L1 }), 201);
+    await ok(estornar(d));
+    assert.strictEqual(await bloqueadoNoLote(m, L1), 4);
+  });
+  await test('[RN-272.03 inspecao, Fase 5 achado 2] L1 4 com 2 em inspecao no lote: estornar o Desbloquear de 4 -> 400 E1 "2 UN livres"', async () => {
+    const { m, d, L1 } = await montar();
+    const rec = (await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero) VALUES (?)', [`REC-272I-${m.id}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+      quantidade_recebida, lote_id, quantidade_em_inspecao) VALUES (?, ?, 2, 2, ?, 2)`, [rec, m.id, L1]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 2 WHERE id = ?', [m.id]);
+    await recusa(m, estornar(d), E1('L1', 2, 4));
+  });
+  await test('[RN-272.03 terceiros, Fase 5 achado 2] L1 4 com 3 com terceiro: estornar o Desbloquear de 4 -> 400 E1 "1 UN livre"', async () => {
+    const { m, d, L1 } = await montar();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 3 WHERE id = ?', [m.id]);
+    await dbRun(db, `INSERT INTO itens_remessa_terceiro_almoxarifado (remessa_id, material_id, quantidade, quantidade_retornada, lote_id, enviado_em)
+      VALUES (999, ?, 3, 0, ?, CURRENT_TIMESTAMP)`, [m.id, L1]);
+    await recusa(m, estornar(d), E1('L1', 1, 4));
+  });
+
   // ---------------------------------------------------------------- RN-272.06
   await test('[RN-272.06 corrida] 15 rodadas: Saida de 4 do L1 x estorno do Desbloquear ao mesmo tempo -> nunca os dois', async () => {
     for (let i = 0; i < 15; i++) {

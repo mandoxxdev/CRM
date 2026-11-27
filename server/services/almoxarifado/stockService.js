@@ -3401,6 +3401,10 @@ async function presoNoLoteParaEstorno(db, materialId, loteId) {
         FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id = lq.id
           AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0)))
         AS no_lote,
+      (SELECT COALESCE(SUM(MAX(0, pl.q)), 0) FROM (SELECT SUM(CASE WHEN b.tipo = 'BLOQUEIO' THEN b.quantidade ELSE -b.quantidade END) AS q
+        FROM movimentacoes_almoxarifado b WHERE b.material_id = mq.id AND b.lote_id IS NOT NULL
+          AND ((b.tipo = 'BLOQUEIO' AND NOT ${estornoConcluidoSql('b')}) OR (b.tipo = 'DESBLOQUEIO' AND COALESCE(b.cancelado, 0) = 0))
+        GROUP BY b.lote_id) pl) AS com_lote,
       COALESCE((SELECT SUM(ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado ri
         WHERE ri.lote_id = lq.id AND COALESCE(ri.quantidade_em_inspecao, 0) > 0), 0) AS insp,
       ${rdl.reprovadoDoLoteSql('lq')} AS repr, ${rdl.terceirosDoLoteSql('mq', 'lq')} AS terc,
@@ -3411,7 +3415,9 @@ async function presoNoLoteParaEstorno(db, materialId, loteId) {
   const n = (v) => Q.qtd(Math.max(0, Number(v) || 0));
   const total = Number(r.total) || 0;
   const bloq = Q.qtd(Math.max(0, Math.min(total, Number(r.no_lote) || 0)));
-  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, total - bloq)));
+  // Fase 5 (achado 1): a reprovacao so no que o total cobre alem do bloqueado de TODOS os lotes (nao so deste) — com o bloqueio de outro lote
+  // no total, a reprovacao ja liberada pelo "Sem lote" deste voltava a contar e o estorno era recusado com as pecas no lote.
+  const repr = Q.qtd(Math.min(n(r.repr), Math.max(0, total - Math.max(bloq, Number(r.com_lote) || 0))));
   const terc = Q.qtd(Math.min(n(r.terc), n(r.em_terceiros)));
   // eslint-disable-next-line global-require
   const caixa = Q.qtd(await require('./requisitionService').guardadoNoLoteDeOutras(db, materialId, loteId, null));
