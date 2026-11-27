@@ -253,6 +253,44 @@ function sufixoDisponivelNegativo(nomeMaterial, unidade, saldo) {
 }
 
 /**
+ * Etapa 269 (B1639, RN-269.01..05; Fase 2 achados 3 e 5) — a recusa da E1 da entrega diz quando o que falta esta EM INSPECAO. So quando a
+ * inspecao e o que limita: `maxSemInspecao` (o maximo com a inspecao somada ao disponivel) passa de `max` — com o limite no pendente ou na
+ * caixa, decidir a inspecao nao muda nada e o sufixo nao sai. Com o disponivel negativo o E190 (`sufixoDisponivelNegativo`) ja nomeia a
+ * inspecao e vence. `lotes` = [{ codigo, q }] da inspecao com lote, na ordem do codigo; o resto do material (`em_inspecao` − Σ) e "sem
+ * lote". Um lote com tudo: "(lote L1)"; mais de uma parte: "(lotes L1 2, L2 1)" / "(lote L1 2, sem lote 1)"; nenhum lote: sem parentese.
+ * Fora do caso devolve '' (a recusa byte a byte a de antes). Pura.
+ */
+function sufixoInspecaoNaEntrega(unidade, saldo, max, maxSemInspecao, lotes) {
+  if (!saldo.permite_negativo && num(saldo.disponivel_material) < -Q.QTD_FOLGA) return '';
+  const insp = Q.qtd(num(saldo.em_inspecao));
+  if (!(insp > Q.QTD_FOLGA) || !(num(maxSemInspecao) > num(max) + Q.QTD_FOLGA)) return '';
+  const qu = (q) => [Q.qtd(q), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  const comLote = (lotes || []).filter((l) => num(l.q) > Q.QTD_FOLGA);
+  const semLote = Q.qtd(insp - comLote.reduce((s, l) => s + num(l.q), 0));
+  let onde = '';
+  if (comLote.length === 1 && !(semLote > Q.QTD_FOLGA)) onde = ` (lote ${comLote[0].codigo})`;
+  else if (comLote.length) {
+    onde = ` (${comLote.length > 1 ? 'lotes' : 'lote'} ${comLote.map((l) => `${l.codigo} ${Q.qtd(num(l.q))}`).join(', ')}`
+      + `${semLote > Q.QTD_FOLGA ? `, sem lote ${semLote}` : ''})`;
+  }
+  return ` — ${qu(insp)} em inspeção${onde} só saem depois de decidida a inspeção`;
+}
+
+/**
+ * Etapa 269 (B1639): o sufixo da inspecao para a recusa da E1 — o maximo com a inspecao somada (a mesma `maxEntregar`/`tetoDaLeitura`,
+ * o disponivel + a inspecao) e os lotes da inspecao (o item do recebimento, a regua de `lotesParaOAutomatico`). So le; dentro das travas.
+ */
+async function sufixoInspecaoDaRecusa(db, item, saldo, disponivel, max) {
+  const insp = num(saldo.em_inspecao);
+  if (!(insp > Q.QTD_FOLGA)) return '';
+  const maxSem = maxEntregar(item, num(disponivel) + insp, tetoDaLeitura(item, { ...saldo, disponivel: num(saldo.disponivel) + insp }));
+  const lotes = await dbAll(db, `SELECT l.codigo, COALESCE(SUM(ri.quantidade_em_inspecao), 0) as q
+    FROM recebimentos_material_itens_almoxarifado ri JOIN lotes_almoxarifado l ON l.id = ri.lote_id
+    WHERE ri.material_id = ? AND COALESCE(ri.quantidade_em_inspecao, 0) > 0 GROUP BY l.codigo ORDER BY l.codigo`, [item.material_id]);
+  return sufixoInspecaoNaEntrega(item.unidade, saldo, max, maxSem, lotes);
+}
+
+/**
  * Etapa 135 (RN-01) — o que a entrega de `quantidade` de um item tira do material, para a previa contar os irmaos seguintes: do
  * disponivel, o que passa da reserva do item (a reserva sai primeiro e nao mexe no disponivel — o laco de baixa e o motor); da caixa
  * sem reserva, quanto a do item cai (a caixa cai q, ou a zero na segunda rodada, que sobe o separado ate o entregue; a reserva cai q).
@@ -3075,6 +3113,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         `${item.material_nome}: não é possível entregar ${qty} ${item.unidade || ''}. `
         + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
         + sufixoDisponivelNegativo(item.material_nome, item.unidade, saldo) // Etapa 98 (T3): E190, ou ''
+        + await sufixoInspecaoDaRecusa(db, item, saldo, disponivel, max) // Etapa 269 (B1639): a inspecao que limita, ou ''
       );
       err.status = 400;
       throw err;
@@ -3139,6 +3178,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         `${item.material_nome}: não é possível entregar ${qtyEntregar} ${item.unidade || ''}. `
         + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
         + sufixoDisponivelNegativo(item.material_nome, item.unidade, saldo) // Etapa 98 (T3): E190, ou ''
+        + await sufixoInspecaoDaRecusa(db, item, saldo, disponivel, max) // Etapa 269 (B1639, Fase 2 achado 4): a leitura fresca tambem
       );
       err.status = 400;
       throw err;
@@ -4072,6 +4112,7 @@ module.exports = {
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
   lotesParaOAutomatico, // Etapa 217 (B1439): exportada para o teste da regua
+  sufixoInspecaoNaEntrega, // Etapa 269 (B1639): exportada para o teste da frase
   fraseLivreDoLote, guardadoNoLoteDeOutras, // Etapa 218 (B1444/B1451): a literal e o guardado no lote (teste e rota da janela)
   guardaQueConta, // Etapa 207 (B1396)
   guardaDosIrmaosNoPar, // Etapa 208 (B1407)
