@@ -1,0 +1,9 @@
+*Concluído — entrega com série de lote impedido e dica da Fila de separação*
+_26/11/2026_
+
+1. Entrega confere o lote das séries antes de começar — estimado 1h15 · realizado 30 min
+2. Dica da Fila não manda duas requisições ao mesmo lugar — estimado 1h15 · realizado 30 min
+
+*Total: estimado 2h30 · realizado 1h*
+
+No item 1, a conferência pedida já existia: a entrega já recusava a série de lote bloqueado, reprovado ou vencido antes de qualquer item sair. Ficou a prova automática desse comportamento.
