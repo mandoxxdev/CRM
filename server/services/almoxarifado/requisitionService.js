@@ -17,7 +17,7 @@ const travaPorMaterial = require('./travaPorMaterial');
 // Etapa 171 (T2, RN-171.12 b): a reserva da OS que a requisicao da OS converte na aprovacao (modulo sem ciclo).
 const reservaDaOs = require('./reservaDaOs');
 // Etapa 117 (C236, B759): a devolucao viva (a entrada nao estornada) — a mesma regua do estorno e da tela de Devolucoes.
-const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
+const { DEVOLUCAO_VIVA_SQL, MOTIVO_DA_EXCLUSAO } = require('./devolucaoViva');
 // Etapa 205 (B1368): o saldo de lote impedido (modulo so com quantidade e diaLocal — sem ciclo).
 const { loteImpedidoSql, fraseLoteImpedido, predicadoLoteImpedidoSql } = require('./loteImpedido'); // Etapa 251: o lote da separacao impedido no teto
 const { retidoPorLote, situacaoDosLotes } = require('./retidoDoLote'); // Etapa 217 (B1439) / 218 (B1444): o bloqueado do lote
@@ -3987,7 +3987,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
   // Aqui a nova tentativa pula, por material e na ordem fixa das partes (saidas por id, linhas na ordem do claim), o que as ENTRADAs vivas
   // desta exclusao ja creditaram. Material com serie fica de fora: as series que ja voltaram nao estao mais Entregue e a validacao acima
   // ja recusa (nao credita de novo).
-  const motivoDaExclusao = `Estorno exclusão requisição ${reqRow.numero}`;
+  // Etapa 271 (C553): a mesma chave que a devolucao usa para contar o que a exclusao interrompida ja devolveu (`exclusaoInterrompidaSql`).
+  const motivoDaExclusao = `${MOTIVO_DA_EXCLUSAO}${reqRow.numero}`;
   const jaEntrou = await dbAll(db, `SELECT material_id, SUM(quantidade) AS q FROM movimentacoes_almoxarifado
     WHERE requisicao_id = ? AND tipo = 'ENTRADA' AND motivo = ? AND COALESCE(cancelado, 0) = 0 GROUP BY material_id`,
   [requisicaoId, motivoDaExclusao]);

@@ -48,4 +48,54 @@ const seriesQueVoltaramSql = (saidaSql) => `(SELECT COUNT(DISTINCT sea.serie_id)
   WHERE sea.saida_anterior_id = ${saidaSql} AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
     WHERE d.movimentacao_saida_id = ${saidaSql} AND sea.movimentacao_entrada_id = ${ENTRADA_DA_DEVOLUCAO_SQL}))`;
 
-module.exports = { DEVOLUCAO_VIVA_SQL, ENTRADA_DA_DEVOLUCAO_SQL, estornoConcluidoSql, seriesQueVoltaramSql };
+/**
+ * Etapa 271 (C553, RN-271.01..05) — o que uma exclusao da requisicao INTERROMPIDA ja devolveu ao estoque desta saida. A exclusao
+ * credita uma ENTRADA por linha da saida, sem transacao: uma falha inesperada no meio deixa as primeiras gravadas com a requisicao
+ * ativa. A nova exclusao ja pula o que entrou (B1609, `requisitionService.excluirSemTrava`), mas a Devolucao citando a saida nao via
+ * essas ENTRADAs: A 3, B 5, entrega de 6, a 2a ENTRADA falha, Devolucao de 6 aceita, excluir de novo -> fisico 11 (certo 8).
+ *
+ * A ENTRADA da exclusao nao cita a saida: a chave e a da B1609 (`requisicao_id`, tipo ENTRADA, o motivo da exclusao com o numero,
+ * viva). O total `E` dela (por requisicao e material) e repartido pelas saidas da requisicao na ordem da exclusao — por id, cada uma
+ * pelo liquido (entregue - devolucao viva): exclusao(s) = max(0, min(liquido(s), E - soma dos liquidos das saidas de id menor)).
+ * A ENTRADA da exclusao que trouxe serie fica fora de `E` (RN-271.05): as series reativadas ja contam em `seriesQueVoltaramSql`
+ * (a reativacao grava a saida de onde sairam) — contar as duas descontaria em dobro.
+ *
+ * Fase 2 (achado 2): a saida cujas pecas tem serie (vinculada, ou que voltou com a serie — a linha da reativacao guarda a saida) fica
+ * fora da reparticao, dos dois lados: a exclusao credita essas partes com serie (contadas nas series) e a B1609 nao as pula. Sem isto,
+ * com uma saida com serie e outra antiga sem serie do mesmo material, o que a exclusao devolveu da antiga caia na com serie (ja zerada
+ * pelas series) e a antiga aceitava devolver de novo.
+ *
+ * `semDevolucaoId` (opcional, um id numerico): a devolucao que NAO entra no liquido — a reconferencia dentro da trava passa a propria
+ * linha, ja gravada. Sem isto a conta e circular: a linha recem-gravada zera o liquido e a parte da exclusao some (dev 6 + exclusao 0
+ * nunca passa de 6 — medido na RN-271.06 b: fisico 11). As outras devolucoes entram: as que vieram depois da exclusao ja foram
+ * limitadas por esta conta, entao o liquido nunca cai abaixo do que a exclusao devolveu.
+ *
+ * Usada pelas quatro contas da devolucao (`returnService`). NAO pela exclusao (ela ja pula o que entrou: contaria duas vezes) nem
+ * pelo estorno da saida pelo livro (a saida de requisicao ja e recusada la). `saidaSql` aparece uma vez (`?` ou coluna); devolve um
+ * numero, 0 sem exclusao interrompida.
+ */
+const MOTIVO_DA_EXCLUSAO = 'Estorno exclusão requisição ';
+const devolvidaVivaDa = (alias, sem) => `(SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
+  WHERE d.movimentacao_saida_id = ${alias}.id AND ${DEVOLUCAO_VIVA_SQL}${sem ? ` AND d.id <> ${sem}` : ''})`;
+const saidaComSerieSql = (alias) => `(EXISTS (SELECT 1 FROM series_almoxarifado ssx WHERE ssx.movimentacao_saida_id = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM series_entrada_anterior_almoxarifado sey WHERE sey.saida_anterior_id = ${alias}.id))`;
+const exclusaoInterrompidaSql = (saidaSql, semDevolucaoId) => {
+  const sem = semDevolucaoId == null ? null : Number(semDevolucaoId);
+  if (sem !== null && !Number.isInteger(sem)) throw new Error('exclusaoInterrompidaSql: semDevolucaoId tem de ser inteiro');
+  return `COALESCE((SELECT MAX(0, MIN(MAX(0, sxa.quantidade - ${devolvidaVivaDa('sxa', sem)}),
+    (SELECT COALESCE(SUM(ex.quantidade), 0) FROM movimentacoes_almoxarifado ex
+      JOIN requisicoes_almoxarifado rqe ON rqe.id = ex.requisicao_id
+      WHERE ex.requisicao_id = sxa.requisicao_id AND ex.material_id = sxa.material_id AND ex.tipo = 'ENTRADA'
+        AND COALESCE(ex.cancelado, 0) = 0 AND ex.motivo = '${MOTIVO_DA_EXCLUSAO}' || rqe.numero
+        AND NOT EXISTS (SELECT 1 FROM series_entrada_anterior_almoxarifado sez WHERE sez.movimentacao_entrada_id = ex.id))
+    - (SELECT COALESCE(SUM(MAX(0, sp.quantidade - ${devolvidaVivaDa('sp', sem)})), 0) FROM movimentacoes_almoxarifado sp
+      WHERE sp.requisicao_id = sxa.requisicao_id AND sp.material_id = sxa.material_id AND sp.tipo = 'SAIDA'
+        AND COALESCE(sp.cancelado, 0) = 0 AND sp.id < sxa.id AND NOT ${saidaComSerieSql('sp')})))
+  FROM movimentacoes_almoxarifado sxa
+  WHERE sxa.id = ${saidaSql} AND sxa.requisicao_id IS NOT NULL AND sxa.tipo = 'SAIDA' AND COALESCE(sxa.cancelado, 0) = 0
+    AND NOT ${saidaComSerieSql('sxa')}), 0)`;
+};
+
+module.exports = {
+  DEVOLUCAO_VIVA_SQL, ENTRADA_DA_DEVOLUCAO_SQL, estornoConcluidoSql, seriesQueVoltaramSql, exclusaoInterrompidaSql, MOTIVO_DA_EXCLUSAO,
+};

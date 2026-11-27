@@ -87,7 +87,8 @@ const lista = (app, m, antes) => request(app).get(`${API}/devolucoes/saidas-eleg
     const z = r.body.find((x) => x.id === E[29]);
     assert.strictEqual(z.saldo_devolvivel, 0, 'a zerada sumiu ou mudou');
     assert.deepStrictEqual(Object.keys(r.body[0]).sort(), ['created_at', 'id', 'lote', 'lote_id', 'os_id', 'projeto_id',
-      'quantidade', 'quantidade_devolvida', 'quantidade_reentrada', 'requisicao_id', 'requisicao_numero', 'saldo_devolvivel',
+      // Etapa 271 (RN-271.03): + quantidade_exclusao (o que uma exclusao interrompida da requisicao ja devolveu).
+      'quantidade', 'quantidade_devolvida', 'quantidade_exclusao', 'quantidade_reentrada', 'requisicao_id', 'requisicao_numero', 'saldo_devolvivel',
       'series', 'tipo', 'usuario_nome'].sort());
     const vazio = await request(app).get(`${API}/devolucoes/saidas-elegiveis?material_id=${M1}&antes_de=`);
     assert.deepStrictEqual(vazio.body, r.body, '?antes_de= vazio tem de ser igual a ausente');

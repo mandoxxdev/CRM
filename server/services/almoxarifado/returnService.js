@@ -10,7 +10,7 @@ const diaLocal = require('../diaLocal');
 const trava = require('./travaPorMaterial');
 // Etapa 117 (C236, B759): so a devolucao viva (a entrada nao estornada) conta no que ja voltou da saida.
 // Etapa 121 (C253, B783): e a serie que voltou por outra entrada tambem nao se devolve de novo.
-const { DEVOLUCAO_VIVA_SQL, seriesQueVoltaramSql } = require('./devolucaoViva');
+const { DEVOLUCAO_VIVA_SQL, seriesQueVoltaramSql, exclusaoInterrompidaSql } = require('./devolucaoViva');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
 // dois por completo antes desta linha rodar, entao aqui e so cache-hit.
@@ -75,13 +75,17 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   // Etapa 121 (C253, B783): as series desta saida que voltaram por uma entrada que nao a cita (Entrada avulsa, devolucao
   // avulsa) tambem ja voltaram — com a serie desligada, devolve-las de novo contava em dobro (2 pecas, fisico 4).
   const { voltaram } = await dbGet(db, `SELECT ${seriesQueVoltaramSql('?')} AS voltaram`, [movimentacaoSaidaId, movimentacaoSaidaId]);
+  // Etapa 271 (C553, RN-271.01): o que uma exclusao da requisicao interrompida no meio ja devolveu desta saida — sem isto a
+  // devolucao aceitava de novo (A 3, B 5, entrega de 6, a 2a ENTRADA da exclusao falha, Devolucao de 6: fisico 11 depois de excluir).
+  const { pelaExclusao } = await dbGet(db, `SELECT ROUND(${exclusaoInterrompidaSql('?')}, 6) AS pelaExclusao`, [movimentacaoSaidaId]);
+  const exclusao = Q.qtd(Number(pelaExclusao) || 0);
   // Etapa 96 (C176, Fase 2 I1): o restante e uma DIFERENCA (0,3 - 0,1 = 0.19999999999999998) — arredondado, e a
   // comparacao com folga; a mensagem diz os numeros arredondados (R2). Nunca negativo: a devolucao que nao leva serie
   // (RETRABALHO, SUCATA sem serie, a devolucao sem serie da B755) deixa as series "Entregue", e uma Entrada de uma delas
   // depois soma nas duas contas. Fase 2 da 121 (I1, B785): a SOMA fica, de proposito — nao ha como saber se a peca que voltou
   // e a mesma da devolucao sem serie (entao restaria a outra) ou a outra (entao nao resta nada); o MAIOR dos dois devolveria
   // em dobro no segundo caso. Recusar nunca conta em dobro; a peca que de fato esta fora volta pela devolucao avulsa.
-  const restante = Math.max(0, Q.qtd(saida.quantidade - devolvida - Number(voltaram || 0)));
+  const restante = Math.max(0, Q.qtd(saida.quantidade - devolvida - Number(voltaram || 0) - exclusao));
   // `>` com a folga, e nao `!Q.cabe`: quantidade nao numerica (NaN) continua passando daqui para a recusa de sempre do
   // motor, em vez de virar "acima do entregue".
   if (Q.qtd(quantidade) > restante + Q.QTD_FOLGA) {
@@ -90,8 +94,12 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
     const porFora = Number(voltaram || 0) > 0
       ? `, ${voltaram} ${voltaram > 1 ? 'já voltaram' : 'já voltou'} ao estoque por uma entrada que não cita esta saída`
       : '';
+    // Etapa 271 (RN-271.01, E1): o trecho so aparece quando a exclusao devolveu algo — sem ela a literal nao muda.
+    const pelaExclusaoTexto = exclusao > Q.QTD_FOLGA
+      ? `, ${exclusao} ${exclusao > 1 ? 'já voltaram' : 'já voltou'} ao estoque pela exclusão interrompida da requisição`
+      : '';
     throw erro400(`Devolução acima do entregue: a saída ${movimentacaoSaidaId} entregou ${Q.qtd(saida.quantidade)}, `
-      + `já foram devolvidos ${Q.qtd(devolvida)}${porFora} e restam ${restante}`);
+      + `já foram devolvidos ${Q.qtd(devolvida)}${porFora}${pelaExclusaoTexto} e restam ${restante}`);
   }
   return saida;
 }
@@ -279,7 +287,8 @@ async function registrarDevolucao(db, user, data) {
         AND ${requisicaoNaoExcluidaSql('s')}
         AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee WHERE ee.movimentacao_id = s.id)
         AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
-          WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) - ${seriesQueVoltaramSql('s.id')}, 6)
+          WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) - ${seriesQueVoltaramSql('s.id')}
+          - ${exclusaoInterrompidaSql('s.id')}, 6)
           >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
     [...valores, movimentacao_saida_id, Q.qtd(quantidade)])
     : await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas} VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, valores);
@@ -368,9 +377,11 @@ async function registrarDevolucao(db, user, data) {
       const c = await dbGet(db, `SELECT s.quantidade AS q,
           (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
             WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) AS dev,
-          ${seriesQueVoltaramSql('s.id')} AS volt
+          ${seriesQueVoltaramSql('s.id')} AS volt,
+          ${exclusaoInterrompidaSql('s.id', r.lastID)} AS excl
         FROM movimentacoes_almoxarifado s WHERE s.id = ?`, [movimentacao_saida_id]);
-      if (c && Q.qtd(Number(c.dev) + Number(c.volt)) > Q.qtd(c.q) + Q.QTD_FOLGA) {
+      // Etapa 271 (RN-271.06 b): a exclusao interrompida enquanto a devolucao esperava a trava (a linha ja gravada) — medido: fisico 11.
+      if (c && Q.qtd(Number(c.dev) + Number(c.volt) + Number(c.excl)) > Q.qtd(c.q) + Q.QTD_FOLGA) {
         throw erro400(`A saída ${movimentacao_saida_id} mudou enquanto a devolução era gravada — nada foi gravado. Tente de novo.`);
       }
     }
@@ -619,7 +630,8 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId, b
            req.numero AS requisicao_numero,
            COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d
                       WHERE d.movimentacao_saida_id = mv.id AND ${DEVOLUCAO_VIVA_SQL}), 0) AS quantidade_devolvida,
-           ${seriesQueVoltaramSql('mv.id')} AS quantidade_reentrada
+           ${seriesQueVoltaramSql('mv.id')} AS quantidade_reentrada,
+           ROUND(${exclusaoInterrompidaSql('mv.id')}, 6) AS quantidade_exclusao
       FROM movimentacoes_almoxarifado mv
       LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
      WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})
@@ -648,7 +660,9 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId, b
     out.push({
       ...s,
       // Etapa 121 (C253): a mesma conta da validacao — menos o que voltou por uma entrada que nao cita a saida.
-      saldo_devolvivel: Math.max(0, Number((s.quantidade - s.quantidade_devolvida - s.quantidade_reentrada).toFixed(4))),
+      // Etapa 271 (RN-271.03): e menos o que uma exclusao interrompida da requisicao ja devolveu.
+      saldo_devolvivel: Math.max(0, Number((s.quantidade - s.quantidade_devolvida - s.quantidade_reentrada
+        - (Number(s.quantidade_exclusao) || 0)).toFixed(4))),
       series,
     });
   }
