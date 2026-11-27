@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 268 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 269 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 268 fechada — 2026-11-26.** **A peça separada sem lote que escolhe na entrega um lote do mesmo
+> **O desenvolvimento parou aqui: Etapa 269 fechada — 2026-11-26.** **A recusa da entrega diz quando o que falta está em inspeção, e a
+> Entrada num lote vencido avisa mesmo sem digitar a validade** (itens 18 e 21 da estimativa de 23/11). **Sem consulta antes do deploy.**
+> **Nenhum clique foi dado** (roteiro na seção da 269). **Onde parou, exatamente:** a **269 está fechada**; a próxima são os itens 19 e 20 da
+> estimativa de 23/11, juntos (separar de duas prateleiras — fim do plano da 269).
+>
+> *(Antes:)* **Etapa 268 fechada — 2026-11-26.** **A peça separada sem lote que escolhe na entrega um lote do mesmo
 > endereço passa pela conferência do separado, e a janela de entrega diz e limita quanto sai da prateleira escolhida** (itens 16 e 17 da
 > estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 268). **Onde parou, exatamente:** a
 > **268 está fechada**; a próxima é o item 18 da estimativa de 23/11 (fim do plano da 268).
@@ -7485,6 +7490,41 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 269 — A entrega diz quando o que falta está em inspeção, e a Entrada num lote vencido avisa (ENTREGUE — 2026-11-26)
+
+**Em uma frase:** quando a entrega é recusada porque parte das peças ainda está **em inspeção**, a mensagem passa a dizer quantas estão em
+inspeção e em que lote; e, na tela **Movimentações**, a **Entrada** num lote que já existe e está **vencido** avisa mesmo sem digitar a
+validade — e o lote antigo com a validade em branco passa a receber a validade digitada, em vez de recusar com uma data vazia.
+
+| Antes | Agora |
+|---|---|
+| Entrega recusada com *"… Máximo: 0 (pendente: 3, disponível: 0)"* e nada mais | *"… Máximo: 0 (pendente: 3, disponível: 0) — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"* |
+| Entrada num lote vencido, validade em branco → só *"Movimentação registrada!"* | Também o aviso amarelo *"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* |
+| Lote antigo com a validade em branco + Entrada com a data → *"O lote ⟨L⟩ já tem validade . …"* | A Entrada passa e grava a validade: *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) …"* |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **administrador**. Em **Almoxarifado → Lotes e Séries**, num material com **Controle por lote**, escolha um lote com saldo e use
+   **Corrigir validade** para uma data de **ontem** (lote *LV*).
+2. **Movimentações → Nova movimentação → Entrada**, o mesmo material, lote *LV*, quantidade 1, **validade em branco** → **Confira:**
+   *"Movimentação registrada!"* e o aviso amarelo, que não fecha sozinho, *"O lote LV entrou já vencido (validade DD/MM/AAAA). A saída para
+   consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."*.
+3. Em **Lotes e Séries**, **Liberar vencimento** de *LV* e repita a Entrada → **Confira:** *"O lote LV entrou já vencido (validade DD/MM/AAAA);
+   o vencimento já foi liberado para consumo."*.
+4. Repita com um lote de validade futura → **Confira:** só *"Movimentação registrada!"*.
+5. (A inspeção — precisa de peça em inspeção, que só nasce no recebimento de material **crítico** com a inspeção de material crítico ligada.)
+   Material com **Controle por lote**, crítico: Entrada de 1 com lote *L1*; receba 3 dele pelo recebimento, lote *L1* (ficam em inspeção);
+   desmarque o crítico no cadastro. Requisição de 4 aprovada; separe 1 e entregue 1. **Completar Entrega** com 3 → **Confira:** *"⟨material⟩: não
+   é possível entregar 3 un. Máximo: 0 (pendente: 3, disponível: 0) — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"*, nada
+   sai.
+
+**O que esta etapa NÃO cobre:** o registro antigo de inspeção (marcado só no item do recebimento) continua deixando a entrega sair "sem
+lote"; a separação com peça em inspeção continua recusando só com *"Máximo"*; o lançamento rápido da tela **Materiais** e as entradas que o
+sistema faz sozinho não avisam o lote vencido (**D (269)** do documento de novidades).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão. O lote com a validade em branco só existe em cadastro antigo — a tela não o cria.
 
 ## Etapa 268 — A peça separada "sem lote" e o "Sai de" com lote, e a janela de entrega que limita a outra prateleira (ENTREGUE — 2026-11-26)
 

@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-26):** **Etapa 268 fechada** (**a peça separada sem lote que escolhe um lote do endereço passa pela
+> **Onde o desenvolvimento está (2026-11-26):** **Etapa 269 fechada** (**a recusa da entrega diz quando o que falta está em inspeção, e a Entrada
+> num lote vencido avisa mesmo sem a validade digitada** — itens 18 e 21 da estimativa de 23/11; o **C485** estava errado no caso da inspeção
+> registrada pelo sistema; **C457** e **C460** resolvidos; decisões **B1639** a **B1642**; limitação **D (269)**; verificação **F (269)**; sem
+> consulta antes do deploy). **Próxima:** os itens 19 e 20 da estimativa de 23/11 (separar de duas prateleiras), juntos.
+> Antes: **Etapa 268 fechada** (**a peça separada sem lote que escolhe um lote do endereço passa pela
 > conferência do separado, e a janela de entrega limita a quantidade da prateleira escolhida** — itens 16 e 17 da estimativa de 23/11; o **C498**
 > estava errado no caso descrito e existia por outro caminho, resolvido; decisões **B1634** a **B1638**; aviso **C555**; limitação **D (268)**; verificação
 > **F (268)**; sem consulta antes do deploy). **Próxima:** o item 18 da estimativa de 23/11 (a entrega com o lote ainda em inspeção).
@@ -4919,7 +4923,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13865,6 +13869,8 @@ responde à data **digitada**. O mesmo motor recebe as entradas internas (devolu
 entrada em lote vencido vazaria para respostas que não o esperam e mudaria o que essas telas mostram. Quem lança num lote vencido vê o lote
 como *(vencido)* na saída e na tela de Lotes e Séries (**C457**). **Descartado:** avisar toda entrada em lote vencido (alcance maior que a
 etapa). **Reversível** (uma condição no motor, limitada à rota da Entrada se for o caso).
+*(**Revista na Etapa 269** — `ee8394e1` (**B1641**): a Entrada da tela **Movimentações** num lote existente vencido passa a avisar mesmo sem a
+data digitada; as entradas internas e a v1 continuam sem o aviso, pela razão acima.)*
 
 **B1289 (NOVA, da Etapa 191, revisão do plano; decisão do agente) — corrigir um lote vencido para uma data futura não exige segundo
 aprovador.** Quem corrige já precisa do perfil de inspeção — os mesmos perfis de quem libera o vencimento: exigir mais seria mais rígido que
@@ -14556,6 +14562,9 @@ lote e saldo sem lote **positivo** (estoque de antes de ligar o controle): o aut
 **B1386 (NOVA, da Etapa 206; decisão do agente) — só recusa quando o que falta está em lote impedido.** Falta sem saldo em lote impedido
 (por exemplo, o lote bom está em inspeção ou na parte guardada de outra caixa) segue como antes: sai sem lote, negativo — **C485**.
 **Descartado:** recusar toda falta — mudaria uma regra que a etapa não mediu, e a mensagem não teria lote para nomear. **Reversível.**
+*(**Etapa 269:** o exemplo "o lote bom está em inspeção" **estava errado** para a inspeção registrada pelo sistema — o disponível já a
+desconta e a entrega é recusada antes, pela conta do disponível, que agora diz a inspeção (**B1639**). A falta vinda de inspeção só passa
+por aqui com um registro antigo (**B1640**: fica como está).)*
 `ccbce184` (teste RN-206.15 c).
 
 **B1387 (NOVA, da Etapa 206; decisão do agente) — recusa a entrega inteira; não entrega sozinha a parte que cabe.** É a regra que a entrega
@@ -15697,6 +15706,33 @@ pé (à mão, ou a quarentena de outra devolução), a quarentena já liberada �
 cada peça bloqueada fora dos lotes; o estorno do bloqueio já tinha esse limite — **D (262)** 1). **Descartado:** estornar as duas
 linhas juntas (o operador espera, mas o estorno passaria a desfazer duas movimentações — o mesmo descartado da **B760** da Sucata); recusar
 sempre que o bloqueio não foi estornado (prenderia a quarentena liberada, a razão da B761). **Reversível** (é a guarda). `7d5367ce`.
+
+**B1639 (NOVA, da Etapa 269; decisão do agente) — a recusa da entrega diz quando o que falta está em inspeção.** **Medido:** com a peça em
+inspeção registrada pelo sistema (o recebimento), o disponível já a desconta e a entrega é recusada antes de qualquer baixa — mas só com
+*"Máximo: 1 (pendente: 4, disponível: 1)"*. **Escolhido:** quando é a inspeção que limita (somada ao disponível, o máximo do item seria
+maior), a recusa termina em *" — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"* (*"(lotes L1 2, L2 1)"*, *"(lote L1 2,
+sem lote 1)"*, sem parêntese sem lote). Com o limite no pendente ou na caixa, nada muda; com o disponível negativo vale o trecho da Etapa 98,
+que já nomeia a inspeção. **Descartado:** mudar o "Máximo" (está certo) e uma recusa nova antes desta (duas frases para o mesmo fato).
+**Reversível.** `7c41a4e9`, `5ccaf85f`.
+
+**B1640 (NOVA, da Etapa 269, com a revisão do plano; decisão do agente) — o registro antigo de inspeção fica como está.** Só um registro
+antigo (a peça em inspeção marcada no item do recebimento sem estar no material — nenhuma porta de hoje grava assim) deixa a entrega sair
+"sem lote", negativa (**C485**). O plano previa recusá-la como o lote impedido; a revisão reproduziu que, nesse registro, a **decisão da
+inspeção é recusada sempre** (*"Quantidade em inspeção insuficiente: 0"*), então a recusa mandaria esperar uma decisão impossível e prenderia o
+item. **Escolhido:** como antes. **Descartado:** a recusa (trava sem saída) e corrigir o registro sozinho (mexer no que está retido fora de
+uma decisão). Se quiser o conserto, ele começa por uma consulta que ache esses registros e por um acerto deles. **Reversível.**
+
+**B1641 (NOVA, da Etapa 269; decisão do agente; revê a B1282) — a Entrada num lote vencido avisa sem a data digitada, só na tela
+Movimentações.** **Escolhido:** a Entrada da tela **Movimentações** num lote que já existe e está vencido (validade antes de hoje, no horário
+de Brasília) avisa com as frases que já existiam (*"… entrou já vencido …"*, ou *"…; o vencimento já foi liberado para consumo."*), mesmo com
+a validade em branco. Só a data completa conta (validade em branco não vence). **Descartado:** avisar em toda entrada (devolução, estorno,
+nota e o lançamento rápido da tela Materiais receberiam um aviso que essas telas não mostram — a razão da B1282). **Reversível** (uma opção
+na rota). `ee8394e1`.
+
+**B1642 (NOVA, da Etapa 269; decisão do agente) — a validade em branco é "sem validade" na Entrada.** **Escolhido:** o lote antigo com a
+validade gravada em branco (ou só espaços) recebe a validade digitada na Entrada, como o lote sem validade (*"O lote ⟨L⟩ não tinha validade;
+ela foi gravada agora (…)"*); a auditoria grava o que havia. **Descartado:** recusar com outra frase (o lote não tem validade: não há
+conflito). O recebimento fica como estava (já avisa o branco, **B1301**). **Reversível.** `ee8394e1`.
 
 **B1634 (NOVA, da Etapa 268; decisão do agente) — o C498 estava errado no caso que ele descrevia.** **Medido:** num material com controle por
 lote, a separação com endereço e **sem** lote confere o saldo **sem lote** daquele endereço (com tudo em lotes: *"O saldo em A (0) não cobre a
@@ -19903,6 +19939,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 457. **NOVO (da Etapa 190) — a entrada num lote vencido sem digitar a validade não avisa.** O aviso de vencido sai só quando a data é
      digitada (**B1282**). Com o campo em branco, a entrada é registrada calada num lote cuja saída para consumo está barrada. **O que fazer:**
      o seletor de lote da **Saída** e a tela **Lotes e Séries** mostram o lote como *(vencido)*; para consumi-lo, **Liberar vencimento**.
+     *(**✅ RESOLVIDO NA ETAPA 269** — `ee8394e1` (**B1641**): a Entrada da tela **Movimentações** num lote existente vencido avisa mesmo com a
+     validade em branco (*"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). …"*). O lançamento rápido da tela **Materiais** e as entradas
+     internas continuam sem o aviso — **D (269)** 2.)*
 458. **NOVO (da Etapa 191, revisão adversarial; o comportamento é anterior) — a movimentação antiga pela integração tira material sem lote,
      inclusive de um lote vencido.** A rota antiga de movimentação (a do modal rápido de entrada/saída da tela de **Materiais**) não repassa
      o lote ao motor de estoque. Reproduzido: material **sem** controle de lote com um lote vencido *LV* de saldo 5; uma Saída por essa rota
@@ -19922,6 +19961,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Corrigir validade** em **Lotes e Séries** (a correção da 191 trata o branco como "sem validade") e repetir a Entrada sem a data ou com
      a mesma. *(O número 459 ficou sem uso: a C459 que o plano da 194 propunha — "a nota com validade vencida não avisa" — foi resolvida
      antes do código, na revisão do plano; ver **B1301**.)*
+     *(**✅ RESOLVIDO NA ETAPA 269** — `ee8394e1` (**B1642**): a validade em branco passa a ser "sem validade" na Entrada — a data digitada é
+     gravada no lote, com o aviso *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) …"*.)*
 461. **NOVO (da Etapa 196) — separar a 2ª vez de OUTRO endereço escolhido faz essa parte sair no automático na entrega.** O item guarda uma
      origem só (**B1313**): com 3 separados de A-01 e os outros 3 separados escolhendo B-02, a entrega tira 3 de A-01 e os 3 restantes pela
      regra automática (endereço padrão, depois os de mais saldo) — não necessariamente de B-02 (**B1316**). A janela avisa na separação: *"Já
@@ -20134,6 +20175,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      linha fica negativa. Reproduzido no teste *"[RN-206.15 c]"* (falta vinda de inspeção no lote bom). **O que fazer:** esperar a inspeção
      ou entregar a outra requisição antes; acertar depois por **Ajuste** com localização (**C487**). Conserto: recusar toda falta da parte
      automática em material com lote — muda uma regra que a etapa não mediu (a parte guardada da 197); não medido.
+     *(**Estava errado no caso da inspeção — Etapa 269**, `7c41a4e9` (**B1639**, **B1640**): com a inspeção registrada pelo sistema (o
+     recebimento grava o item e o material), o disponível já desconta a peça em inspeção e a entrega é recusada **antes** de qualquer baixa —
+     o negativo não nasce; a recusa agora diz *"… — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"*. O teste
+     *"[RN-206.15 c]"* reproduzia com um registro **antigo** (a inspeção só no item do recebimento, sem estar no material), que nenhuma porta
+     de hoje grava: só ele ainda sai "sem lote", negativo — e fica assim, porque nesse registro a decisão da inspeção é recusada e uma
+     recusa da entrega prenderia o item (**B1640**). **Continua valendo** para a parte guardada da caixa de outra requisição.)*
 486. **NOVO (da Etapa 206; o comportamento é anterior) — série em lote impedido é recusada só na hora da baixa.** A conferência das séries da
      entrega não olha o lote; quem recusa a série de um lote bloqueado é o motor, na baixa — com vários itens, **depois** de outros já terem
      saído (entrega pela metade). Item com série fica fora da conferência nova. **O que fazer:** em material com série, não marcar série de
@@ -21895,6 +21942,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(269) A inspeção na entrega e o lote vencido na Entrada, o que ficou de fora.** (1) O registro **antigo** de inspeção (a peça marcada em
+  inspeção no item do recebimento sem estar no material) continua deixando a entrega sair "sem lote", negativa (**B1640**, **C485**). (2) O aviso
+  de lote vencido sem a data é só da tela **Movimentações**: o lançamento rápido da tela **Materiais** e as entradas internas (devolução,
+  estorno, nota) não avisam (**B1641**). (3) O estorno da Entrada que preencheu uma validade em branco não volta o branco (como no lote sem
+  validade). (4) A separação com peça em inspeção continua recusando só com *"Máximo: …"* (o trecho novo é da entrega). (5) A parte separada de
+  outra requisição que deixa o automático sem lote continua como estava (**C485**). (6) Com o registro antigo de inspeção (1) num lote e outra
+  inspeção sem lote no material, o trecho pode nomear o lote errado (*"(lote L2)"*, sendo que L2 não segura nada) — os lotes vêm do recebimento
+  e o total, do material; quando os lotes somam mais que o total, o trecho sai sem o parêntese (revisão final). (7) Um lote antigo com a
+  validade gravada só com **espaços** é barrado na saída como vencido (*"Lote ⟨L⟩ vencido em    …"*) e a Entrada nele, sem a data, não avisa;
+  com a data digitada, a Entrada grava a validade (**B1642**).
 - **(268) A peça sem lote e o limite da janela, o que ficou de fora.** (1) A entrega **num clique** de peça com número de série separada
   de um endereço sem lote, com as séries de um lote: a entrega tira do lote das séries conferindo só o saldo dele (a conferência do separado
   não roda nela). (2) O número da janela de entrega é um **teto**: quando outro item desta requisição sai junto de outro lugar, a entrega guarda
@@ -23630,6 +23687,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(269) Nenhum clique foi dado.** A recusa da entrega foi provada pela rota real e pelo serviço (9 cenários); a Entrada, pela rota real (8
+  cenários) e o aviso na tela, com a resposta do servidor simulada (1 cenário). Vale 5 minutos: o roteiro da Etapa 269 no guia — a Entrada num
+  lote vencido sem digitar a validade (o aviso amarelo) e, com um material que tenha peça em inspeção, a recusa da segunda rodada da entrega.
 
 **(268) Nenhum clique foi dado.** A peça sem lote foi provada pela rota real e pelo serviço (10 cenários); o limite da janela, pela tela
   com as respostas do servidor simuladas (9 cenários). Vale 5 minutos: o roteiro da Etapa 268 no guia — escolher no **Sai de** de uma entrega
@@ -45532,12 +45593,78 @@ antes).
 - A quantidade só desce no gesto de escolher a prateleira; relido o detalhe com a janela aberta (voltar para a aba), um item que volta com o
   número cheio mostra o aviso e apaga o botão, sem descer sozinho — **D (268)** 3.
 
+## Etapa 269 — A entrega diz quando o que falta está em inspeção, e a Entrada num lote vencido avisa (2026-11-26)
+
+Dois pedidos da semana, os dois sobre lote. **(1)** Na entrega de material com peça ainda **em inspeção**, a recusa só dizia *"Máximo: 1"* —
+quem entregava não sabia que as outras peças estavam esperando a inspeção. A medição mostrou também que o aviso **C485** estava errado no caso
+da inspeção: com a inspeção registrada pelo próprio sistema (o recebimento), a entrega **já** era recusada antes de qualquer baixa, e o saldo
+"sem lote" não ficava negativo — isso só acontece com um registro antigo de inspeção que o sistema de hoje não grava. Agora a recusa diz
+quanto está em inspeção e em que lote (a peça em inspeção vem do recebimento de material crítico; o trecho aparece, por exemplo, na
+segunda rodada da entrega de um material que deixou de ser crítico com a inspeção pendente). **(2)** Na tela **Movimentações**, a Entrada num lote que já existe e está **vencido** era registrada
+sem nenhum aviso quando a validade não era digitada; e num lote antigo com a validade **em branco**, a Entrada com a data era recusada com uma
+data vazia na mensagem. Agora a primeira avisa e a segunda grava a validade. Decisões do agente: **B1639** a **B1642**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Lote *L1* com 4, 3 em inspeção; entregar 4 → *"⟨material⟩: não é possível entregar 4 un. Máximo: 1 (pendente: 4, disponível: 1)"* | *"⟨material⟩: não é possível entregar 4 un. Máximo: 1 (pendente: 4, disponível: 1) — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"* (nada sai; o detalhe oferece 1) |
+| O aviso **C485** dizia que, com o lote bom em inspeção, a entrega saía "sem lote" e deixava o saldo negativo | **Estava errado** para a inspeção registrada pelo sistema: a entrega já era recusada antes. Vale só para um registro antigo de inspeção (e para a parte separada de outra requisição) |
+| Entrada num lote vencido, validade em branco → *"Movimentação registrada!"* e nada mais | Também o aviso amarelo, que não fecha sozinho: *"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* |
+| Lote antigo com a validade em branco; Entrada com a data → *"O lote ⟨L⟩ já tem validade . A validade é do lote, não da entrada: …"* (recusada) | Registrada; a validade é gravada no lote: *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* |
+
+### As regras, com o cenário exato
+
+Preparação: administrador. Peça **em inspeção** só nasce no recebimento de material **crítico** com a inspeção de material crítico
+ligada (14.6 do manual) — e a entrega de material crítico já para no que foi separado e conferido. Então: um material com **Controle por
+lote**, marcado como crítico; Entrada de 1 na prateleira *A* com lote *L1*; receba 3 dele pelo recebimento, lote *L1* (ficam *em inspeção*);
+desmarque o crítico. Requisição de 4 aprovada; separe 1 e entregue 1.
+
+**1. A recusa diz a inspeção (RN-269.07/01/02, B1639).** **Entregar** 3 (a segunda rodada) → *"⟨material⟩: não é possível entregar 3 un.
+Máximo: 0 (pendente: 3, disponível: 0) — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"*. Nada sai; o detalhe oferece 0.
+A mesma frase sai na primeira rodada quando o separado passa do disponível (por exemplo, 4 separadas e 3 delas depois marcadas em inspeção):
+*"… Máximo: 1 (pendente: 4, disponível: 1) — 3 un em inspeção (lote L1) …"*. Com a inspeção em dois lotes: *"(lotes L1 2, L2 1)"*; parte num lote e parte sem: *"(lote L1 2, sem lote
+1)"*; sem lote: sem o parêntese.
+
+**2. Só quando a inspeção é o que segura (RN-269.03/05).** Item de 1 com 4 digitado → *"… Máximo: 1 (pendente: 1, disponível: 1)"*, sem o
+trecho (decidir a inspeção não mudaria nada). Sem inspeção: a recusa de sempre. Com o disponível negativo vale o trecho que já existia
+(*"— o disponível de ⟨material⟩ está negativo (… em inspeção) …"*).
+
+**3. Dois itens do mesmo material (RN-269.04).** Itens de 2 e 2, 3 em inspeção: entregar 1 + 2 → recusa do segundo com *"… Máximo: 0
+(pendente: 2, disponível: 0) — 3 un em inspeção (lote L1) só saem depois de decidida a inspeção"*, nada sai.
+
+**4. Entrada num lote vencido sem digitar a validade (RN-269.10/11, B1641).** Em **Lotes e Séries**, um lote *LV* com validade de ontem (ou
+**Corrigir validade** para uma data passada). **Movimentações → Nova → Entrada**, lote *LV*, validade em branco → *"Movimentação registrada!"* e
+o aviso *"O lote LV entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e
+Séries."*. Depois de **Liberar vencimento**: *"O lote LV entrou já vencido (validade DD/MM/AAAA); o vencimento já foi liberado para
+consumo."*. Lote que vence hoje, com validade futura, sem validade ou novo: sem aviso.
+
+**5. Lote antigo com a validade em branco (RN-269.12, B1642).** Só existe em cadastro antigo (a tela não grava validade em branco). Entrada
+nele com a validade digitada → registrada, *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que
+já estava nele."*; a auditoria do lote mostra *Validade preenchida*. Com a data no passado, também o aviso de vencido.
+
+### O que esta etapa NÃO cobre
+
+- O registro **antigo** de inspeção (a peça em inspeção marcada só no item do recebimento, sem estar no material) continua deixando a entrega
+  sair "sem lote", negativa — **D (269)** 1. Recusar prenderia o item: nesse registro a decisão da inspeção é recusada (**B1640**).
+- A parte separada de outra requisição que deixa o automático sem lote continua como estava (**C485**, a outra metade).
+- O aviso de vencido sem a data é só da tela **Movimentações**: o lançamento rápido da tela **Materiais** e as entradas que o sistema faz
+  sozinho (devolução, estorno, nota) não avisam — **D (269)** 2.
+- O estorno da Entrada que preencheu a validade em branco não volta o branco (como no lote sem validade) — **D (269)** 3.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 269 entregue (2026-11-26):** **a recusa da entrega diz quando o que falta está em inspeção, e a Entrada num lote vencido avisa
+  mesmo sem a validade digitada; o lote antigo com a validade em branco passa a receber a validade** (itens 18 e 21 da estimativa de 23/11; o
+  **C485** estava errado no caso da inspeção registrada pelo sistema; **C457** e **C460** resolvidos). Commits `50eb2998` (plano), `7c41a4e9`
+  (a entrega), `ee8394e1` (a Entrada), `5ccaf85f` (a prova da segunda rodada) e o fechamento. **O que é seu:** as **B1639** a **B1642**
+  (reversíveis; a B1640 mantém o registro antigo de inspeção como estava, e a B1641 revê a B1282); a limitação **(269)** em D e a verificação
+  **(269)** em F. Sem consulta antes do deploy. **Próxima:** os itens 19 e 20 da estimativa de 23/11 (fim do plano da 269).
 
 - **Etapa 268 entregue (2026-11-26):** **a peça separada sem lote que escolhe na entrega um lote do mesmo endereço passa pela conferência do
   separado, e a janela de entrega diz e limita quanto sai da prateleira escolhida** (itens 16 e 17 da estimativa de 23/11; o **C498** estava

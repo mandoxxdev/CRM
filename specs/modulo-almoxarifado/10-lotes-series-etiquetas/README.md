@@ -1,5 +1,8 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 269 (2026-11-26, `ee8394e1`): a Entrada da tela Movimentações num lote existente vencido avisa mesmo sem a validade digitada
+> (C457, B1641 — revê a B1282), e o lote antigo com a validade em branco recebe a validade digitada em vez de recusar com a data vazia (C460,
+> B1642).** Ver "Etapa 269" no fim.
 > **+ Etapa 265 (2026-11-26, `c2db75d4`, `7a7c8a71`, `2ddb325d`, Fase 5 `30070e78`): o endereço da série passa a acompanhar a peça — a
 > Transferência pede as séries e muda a prateleira de cada uma (o estorno as devolve), e a Saída de peça com série sem origem sai da prateleira
 > da série quando o registro dela bate com o saldo (C76, C545; B1624–B1626).** Ver "Etapa 265" no fim e a feature 11. A seção "As cinco flags" e
@@ -1243,7 +1246,9 @@ manual (190), a correção (191) e o `PUT /fiscal` sem mudança.
   item que entrou já foi preenchido e o reprocessar responde sem aviso (reproduzido por sonda; não consertado). A etiqueta do recebimento
   lê `data_validade_lote` do item (a data da nota); o estorno não desfaz o preenchimento (B1301); lote vazio com outra validade só avisa
   (B1302); sem e-mail, sem não conformidade, sem prévia por tecla (B1303). Anterior, registrado e não consertado: lote `''` legado recusa a
-  Entrada manual com a data em branco (`stockService` trata `''` como gravada — C460).
+  Entrada manual com a data em branco (`stockService` trata `''` como gravada — C460). *(**Resolvido na Etapa 269** — `ee8394e1` (B1642): o
+  branco é "sem validade" e a data digitada preenche o lote. Esta linha também dizia "com a data em branco" — **estava errado**: a recusa era
+  da Entrada **com** a data, num lote de validade em branco.)*
 
 **Correção à vista:** o comentário da régua em `lotService.js` e a RN-194.06 do plano diziam que o lote novo nasce "com o texto da nota" — era
 verdade sobre o código e **estava errado como regra** (G1); o comentário foi reescrito dizendo que mudou na Fase 5. E a seção da Etapa 190
@@ -1666,3 +1671,20 @@ Testes: `saidaEEstornoComLoteBloqueado.api.test.js` (27); `bloquearIndicandoOLot
   `7a7c8a71`, Fase 5 `30070e78`. Senão, como antes.
 - [x] RN-265.12 — o estorno da Saída devolve a cada prateleira (registro da 257) — provado em `saidaDaPrateleiraDaSerie.api.test.js`.
 - [ ] Conferir as séries na origem escolhida (Saída, entrega, devolução ao cliente) — fora, **D (265)** 1.
+
+## Etapa 269 — a Entrada num lote vencido avisa e a validade em branco (C457, C460) (2026-11-26)
+
+Plano: `docs/superpowers/plans/2026-11-26-almoxarifado-etapa269-lote-em-inspecao-e-lote-vencido.md` (RN-269.10 a .13; B1641, B1642). Item
+21 da estimativa de 23/11.
+
+- [x] **RN-269.10/11 (C457, B1641)** — a Entrada pela v2 (opção `avisaLoteVencido` do motor, só no 4º argumento) num lote existente vencido,
+  sem `data_validade`, responde `aviso_validade` com `AVISO_VENCIDO`/`AVISO_VENCIDO_LIBERADO` e a data do lote; vence hoje, futura, sem
+  validade, lote novo, sem lote, a v1 e o motor sem a opção: sem aviso; com a mesma data digitada, um aviso só — `ee8394e1`.
+- [x] **RN-269.12 (C460, B1642)** — `''` (ou espaços) é "sem validade": PREENCHER, a guarda do preencher casa nulo ou branco, a auditoria grava o
+  anterior, a corrida com o branco vira `AVISO_FALHA` — `ee8394e1`.
+- [x] **RN-269.13** — a tela mostra o `aviso_validade` da Entrada sem data (prova; a tela não mudou) — `ee8394e1`.
+- [ ] **Fora (declarado, D (269)):** o lançamento rápido da tela Materiais (v1) e as entradas internas não avisam; o estorno não volta o
+  branco; a validade só com espaços é vencida para a saída (`isVencido`) e a Entrada sem data não avisa.
+
+Testes: `entradaLoteVencidoAvisa.api.test.js` (8); `MovimentacoesValidadeLote.test.js` (9, +1). Sabotagens: rota sem a opção → 3 caem; motor
+sem o branco → 2; guarda do preencher → 2; auditoria → 1; tela sem o aviso → 1.
