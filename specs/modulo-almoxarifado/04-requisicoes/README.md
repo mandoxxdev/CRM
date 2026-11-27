@@ -1,5 +1,8 @@
 # 04 — Requisições de Materiais
 
+> **+ Etapa 271 (2026-11-27, `ae64f9a5`, `6c1c9021`): depois de uma exclusão interrompida, a Devolução conta o que a exclusão já devolveu
+> (C553 resolvido; B1646, B1647)** — a regra mora na spec 12 (seção "Etapa 271"). Continua 🟢.
+
 > **+ Etapa 260 (2026-11-23, `5ca40351`, `af583d26`, Fase 5 `682fb1ae`): o formulário ganha o campo Projeto (vem da OS cadastrada; o servidor
 > confere o projeto com a OS — B1611)** — ver a seção "Etapa 260", no fim. Continua 🟢.
 
@@ -507,8 +510,10 @@ saída sem origem no livro (a parte automática da entrega, que baixa de várias
 - [x] **RN-259.06** — recusas e mensagens iguais, menos a da padrão bloqueada quando nada vai para ela (Fase 2, achado 4) — `e1f4dc82`, `8b5de9df`.
 - [x] **RN-259.07 / B1609** — a nova tentativa depois de uma falha no meio pula o que as ENTRADAs vivas da exclusão já creditaram, por material
   (sem série; com série a validação das séries já recusa) — `8b5de9df`.
-- [ ] **C553** (Fase 5, achado 1; anterior com duas entregas): depois de uma falha inesperada no meio, a Devolução ainda aceita o que a
-  exclusão já devolveu (a régua de `devolucaoViva.js` não conhece a ENTRADA parcial) — declarado; o caminho é excluir de novo logo.
+- [x] ~~**C553** (Fase 5, achado 1; anterior com duas entregas): depois de uma falha inesperada no meio, a Devolução ainda aceita o que a
+  exclusão já devolveu (a régua de `devolucaoViva.js` não conhece a ENTRADA parcial) — declarado; o caminho é excluir de novo logo.~~
+  **Resolvido na Etapa 271** (`ae64f9a5`, `6c1c9021`; B1646): `exclusaoInterrompidaSql` nas quatro contas da devolução (spec 12, Etapa 271).
+  A exclusão **não** usa a conta nova — ela já pula o que entrou (B1609); fica o residual da **D (271)** 1.
 - [x] ~~**C552** (anterior): estornar pelo livro a entrada de uma devolução depois da exclusão tira as peças duas vezes — declarado.~~ **Resolvido na Etapa 262** (`7d5367ce`, B1618): o estorno é recusado (spec 12, Etapa 262).
 - [ ] Entrega anterior à 257 (sem registro): como antes — declarado (D (259)).
 

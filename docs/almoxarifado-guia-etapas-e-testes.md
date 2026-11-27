@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 270 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 271 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 270 fechada — 2026-11-27.** **Separar parte de uma prateleira e parte de outra: a separação
+> **O desenvolvimento parou aqui: Etapa 271 fechada — 2026-11-27.** **Depois de uma exclusão de requisição interrompida por um erro
+> inesperado, a Devolução conta o que a exclusão já devolveu** (item 22 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum
+> clique foi dado** (roteiro na seção da 271). **Onde parou, exatamente:** a **271 está fechada**; a estimativa de 23/11 não tem mais item do
+> almoxarifado — os candidatos medidos estão no fim do plano da 271.
+>
+> *(Antes:)* **Etapa 270 fechada — 2026-11-27.** **Separar parte de uma prateleira e parte de outra: a separação
 > guarda as duas, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** (itens 19 e 20 da estimativa de 23/11).
 > **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 270). **Onde parou, exatamente:** a **270 está fechada**; a
 > próxima é o item 22 da estimativa de 23/11 (a devolução depois de uma exclusão interrompida — fim do plano da 270).
@@ -7495,6 +7500,34 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 271 — A Devolução depois de uma exclusão interrompida (ENTREGUE — 2026-11-27)
+
+**Em uma frase:** se a exclusão de uma requisição entregue for interrompida no meio por um erro inesperado (parte das peças já voltou e a
+requisição continua na lista), a **Devolução** da mesma entrega passa a contar o que a exclusão já devolveu — a peça não entra duas vezes no
+estoque.
+
+| Antes | Agora |
+|---|---|
+| Entrega de 6, a exclusão devolve 3 e para; **Devolução** de 6 → aceita (o estoque fica com 3 a mais) | Recusada: *"Devolução acima do entregue: a saída ⟨n⟩ entregou 6, já foram devolvidos 0, 3 já voltaram ao estoque pela exclusão interrompida da requisição e restam 3"* |
+| A lista da Devolução: *"devolvível 6"* | *"devolvível 3 · 3 já voltaram ao estoque pela exclusão interrompida da requisição"* |
+
+**Roteiro de teste manual (≈5 min) — o caminho normal, que não pode ter mudado:** a falha no meio da exclusão não tem gesto de tela (os
+testes automáticos a simulam).
+
+1. Entre como **administrador**. Um material sem lote com 3 em *A* (padrão) e 5 em *B*. Crie, aprove, separe e entregue uma requisição de 6.
+2. **Devoluções → Nova devolução**, o material → **Confira:** a entrega aparece com *"devolvível 6"* e **sem** a frase *"… pela exclusão
+   interrompida da requisição"*.
+3. Devolva 2 citando a entrega → registrada. Tente devolver 5 → **Confira:** *"Devolução acima do entregue: a saída ⟨n⟩ entregou 6, já foram
+   devolvidos 2 e restam 4"* (a mensagem de sempre, sem o trecho novo).
+4. **Excluir** a requisição → **Confira:** o estoque volta a 8.
+
+**O que esta etapa NÃO cobre:** com várias entregas na mesma requisição, se a entrada de uma devolução for estornada pelo livro **depois** da
+exclusão interrompida, a conta pode pôr o que voltou na entrega errada (**D (271)** 1 do documento de novidades) — depois de uma falha na
+exclusão, exclua de novo logo. Com número de série, excluir de novo depois da falha continua recusado: use **Encerrar**.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 270 — Separar parte de uma prateleira e parte de outra (ENTREGUE — 2026-11-27)
 

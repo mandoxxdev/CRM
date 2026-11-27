@@ -558,3 +558,29 @@ estimativa de 23/11; C239, C552).
 
 Continua 🟢. Testes: `estornoEntradaDevolucaoQuarentenaExcluida.api.test.js` (18: 16 no `7d5367ce` + 2 da Fase 5); `devolucaoViva` [R6] e `bloqueioSabeOLote`
 [RN-217.05] passaram a provar a recusa.
+
+## Etapa 271 — a devolução depois de uma exclusão interrompida (2026-11-27)
+
+Plano: `docs/superpowers/plans/2026-11-27-almoxarifado-etapa271-devolucao-depois-de-exclusao-interrompida.md` (item 22 da estimativa de
+23/11; C553, declarado na 259).
+
+- [x] **RN-271.01:** a validação desconta o que uma exclusão da requisição interrompida já devolveu da saída citada; a recusa ganha o trecho
+  *", N já voltou/voltaram ao estoque pela exclusão interrompida da requisição"* só quando há o que contar (B1647) — `ae64f9a5`.
+- [x] **RN-271.02:** devolver o que falta passa e a nova exclusão não credita mais nada (B1609 intacta) — `ae64f9a5`.
+- [x] **RN-271.03:** `GET /devolucoes/saidas-elegiveis` ganha `quantidade_exclusao` e desconta do `saldo_devolvivel`; a tela diz a frase no
+  rótulo da entrega — `ae64f9a5`, `6c1c9021`.
+- [x] **RN-271.04:** várias entregas: o que a exclusão devolveu é repartido na ordem da exclusão (saídas por id, cada uma pelo líquido) —
+  `ae64f9a5`. Dois materiais: cada um o seu (Fase 2, achado 5).
+- [x] **RN-271.05:** com série não conta em dobro — a ENTRADA da exclusão que trouxe série e a saída com série ficam fora (as séries já contam
+  em `seriesQueVoltaramSql`; Fase 2, achado 2) — `ae64f9a5`.
+- [x] **RN-271.06:** a mesma conta no `INSERT … WHERE EXISTS` e na reconferência dentro da trava, esta sem a própria linha no líquido — `ae64f9a5`.
+- [x] **Fase 5:** a conta responde 0 logo sem ENTRADA da exclusão (o caso de sempre) e o índice `idx_mov_almox_requisicao_material` — a lista de 30 com 20 mil movimentos de 250 ms para 3 ms — `4a9e4feb`.
+- [ ] **Fora:** com várias entregas, a entrada de uma devolução estornada pelo livro depois da exclusão interrompida desloca a repartição
+  (**D (271)** 1, **B1646** — o conserto exato é gravar a saída na ENTRADA da exclusão, descartado nesta etapa).
+
+**A régua "do que já voltou de uma saída" tinha duas peças (a devolução viva e as séries que voltaram por outra entrada); a cabeça de
+`devolucaoViva.js` dizia "uma régua só para as cinco contas" sem contar a ENTRADA da exclusão interrompida — ganhou a terceira peça.** A
+exclusão e o estorno da saída pelo livro **não** a usam (a exclusão já pula o que entrou; o estorno da saída de requisição é recusado).
+
+Continua 🟢. Testes: `devolucaoDepoisDeExclusaoInterrompida.api.test.js` (10; 7 de 8 vermelhos no código de antes), `DevolucoesAlmoxarifado.test.js`
+(+1, 32 no total); `devolucaoEntregasAntigas` (a lista de campos ganhou `quantidade_exclusao`).

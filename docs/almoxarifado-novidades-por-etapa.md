@@ -11,7 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-27):** **Etapa 270 fechada** (**separar parte de uma prateleira e parte de outra: a separação guarda
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 271 fechada** (**a Devolução depois de uma exclusão interrompida conta o que a exclusão
+> já devolveu** — item 22 da estimativa de 23/11; **C553** resolvido; decisões **B1646** e **B1647**; limitação **D (271)**; verificação **F (271)**; sem
+> consulta antes do deploy). **Próxima:** a estimativa de 23/11 não tem mais item do almoxarifado; os candidatos medidos estão no fim do plano da 271.
+> Antes: **Etapa 270 fechada** (**separar parte de uma prateleira e parte de outra: a separação guarda
 > as duas, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** — itens 19 e 20 da estimativa de 23/11;
 > **C461** resolvido; decisões **B1643** a **B1645**; limitação **D (270)**; verificação **F (270)**; sem consulta antes do deploy). **Próxima:**
 > o item 22 da estimativa de 23/11 (a devolução depois de uma exclusão interrompida).
@@ -4927,7 +4930,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15762,6 +15765,20 @@ vale com **Sai de** escolhido, com *"Qualquer endereço (automático)"* escolhid
 sai). **Descartado:** recusar quando a outra prateleira não tem mais as peças (seria recusa sem o almoxarife ter feito nada de errado; hoje
 sai). **Reversível.** `af99a506`, `4084f4b2`.
 
+**B1646 (NOVA, da Etapa 271, com a revisão do plano; decisão do agente) — o que a exclusão interrompida devolveu é contado pela ordem das
+entregas, sem gravar de qual entrega veio.** **Escolhido:** a Devolução soma as entradas da exclusão daquela requisição e material e reparte
+pelas entregas na mesma ordem da exclusão (a mais antiga primeiro, cada uma pelo que ainda faltava voltar dela); a entrada da exclusão que
+trouxe peça com série, e a entrega com série, ficam fora (a série já conta). **Descartado:** gravar na entrada da exclusão de qual entrega ela
+veio (coluna nova no histórico) — exato, mas mudaria o banco e o caminho da exclusão para um caso que só nasce de falha inesperada. **O preço**
+(**D (271)** 1): com várias entregas, a entrada de uma devolução estornada pelo livro depois da exclusão interrompida desloca a conta.
+**Reversível** (a coluna pode entrar depois sem desfazer nada). `ae64f9a5`.
+
+**B1647 (NOVA, da Etapa 271; decisão do agente) — a recusa e a lista dizem quanto voltou pela exclusão.** **Escolhido:** o trecho *", N já
+voltou/voltaram ao estoque pela exclusão interrompida da requisição"* na recusa *"Devolução acima do entregue: …"*, só quando há o que contar
+(sem exclusão interrompida a mensagem não muda), e o campo `quantidade_exclusao` na lista das entregas, com a mesma frase no rótulo da linha.
+**Descartado:** somar na parcela *"voltaram por outra entrada"* (a frase mentiria: a exclusão não é uma entrada que o operador fez) e recusar
+sem dizer o número. **Reversível.** `ae64f9a5`, `6c1c9021`.
+
 **B1634 (NOVA, da Etapa 268; decisão do agente) — o C498 estava errado no caso que ele descrevia.** **Medido:** num material com controle por
 lote, a separação com endereço e **sem** lote confere o saldo **sem lote** daquele endereço (com tudo em lotes: *"O saldo em A (0) não cobre a
 quantidade (4) …"*), e a entrega com **Sai de** (*A*, *L1*) só tira do lote *L1* — a peça de outro item separada de *A* sem lote fica intacta.
@@ -20603,6 +20620,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de novo → nada a devolver; físico **11** (o certo: 8). **O que fazer:** depois de uma falha na exclusão, **excluir de novo** logo em
      seguida (devolve só o que faltava — **B1609**), sem registrar devolução no meio. Conserto: a conta do que já voltou de uma saída passar a
      contar a entrada parcial da exclusão (a mesma conta serve a cinco lugares — fica para quando aparecer).
+     *(**✅ RESOLVIDO NA ETAPA 271** — `ae64f9a5`, `6c1c9021` (**B1646**, **B1647**): a Devolução, a lista das entregas e a conferência ao
+     gravar descontam o que a exclusão interrompida já devolveu, na ordem das entregas — *"… 3 já voltaram ao estoque pela exclusão interrompida
+     da requisição e restam 3"*. Fica o caso raro da **D (271)** 1.)*
 554. **NOVO (da Etapa 261) — o aviso do ajuste com material separado na caixa manda estornar o ajuste que baixou, e com outra contagem da
      mesma prateleira depois esse estorno é recusado.** Medido: 4 separados na caixa (tirados de *A*); Ajuste de *A* para 0 → aviso
      *"… estorne o ajuste que baixou o estoque …"*; Ajuste de *A* para 3 (mesmo aviso); **Estornar** o Ajuste para 0 → *"Não é possível
@@ -21986,6 +22006,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   há lá; na entrega sai o que houver e o resto no automático (revisão final). (8) Quando a entrega tira de uma outra prateleira só parte do que
   foi separado de lá (alguém tirou a peça antes, por uma Saída avulsa), o resto continua anotado nela até a próxima entrega, que o manda para o
   automático — o detalhe pode mostrar uma prateleira já vazia (revisão final).
+- **(271) A Devolução depois de uma exclusão interrompida, o que ficou de fora.** (1) Com **várias entregas** na mesma requisição, a entrada de
+  uma devolução **estornada pelo livro depois** da exclusão interrompida desloca a conta: entregas de 2 e 4, devolução de 2 da primeira, a
+  exclusão devolve 2 da segunda e para, a entrada da devolução é estornada → a primeira recusa os 2 que estão fora e a segunda aceita 4 (2 já
+  voltaram). Precisa de falha inesperada **e** do estorno; o caminho é excluir de novo logo (**B1646**). (2) A conta é pela ordem das entregas
+  (a exclusão não grava de qual entrega cada peça voltou). (3) Com número de série, excluir de novo depois da falha continua recusado (as
+  séries já voltaram — **D (259)**); o caminho é **Encerrar**. (4) A entrada da exclusão estornada não é vista pela conta — inalcançável hoje
+  (a entrada ligada à requisição não se estorna pelo livro).
 - **(269) A inspeção na entrega e o lote vencido na Entrada, o que ficou de fora.** (1) O registro **antigo** de inspeção (a peça marcada em
   inspeção no item do recebimento sem estar no material) continua deixando a entrega sair "sem lote", negativa (**B1640**, **C485**). (2) O aviso
   de lote vencido sem a data é só da tela **Movimentações**: o lançamento rápido da tela **Materiais** e as entradas internas (devolução,
@@ -23731,6 +23758,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(271) Nenhum clique foi dado.** A falha no meio da exclusão não tem gesto de tela; foi simulada nos testes automáticos (10 cenários pela
+  rota real, com duas corridas) e o rótulo da lista, com a resposta do servidor simulada (1 cenário). Vale 5 minutos: o caminho normal (devolver
+  e excluir sem falha) no roteiro da Etapa 271 do guia, para conferir que nada mudou.
 
 **(270) Nenhum clique foi dado.** A separação e a entrega foram provadas pela rota real e pelo serviço (23 cenários, com a exclusão no fim);
   a tela, com as respostas do servidor simuladas (10 cenários). Vale 5 minutos: o roteiro da Etapa 270 no guia — separar 3 de uma prateleira e
@@ -45157,7 +45188,7 @@ Administrador podem excluir requisições"*.
 - A entrega feita antes da Etapa 257 não tem o registro de onde tirou e é excluída como antes (**D (259)**).
 - A prateleira bloqueada ou inativa depois da entrega não recebe (**B1607**).
 - Estornar a entrada de uma devolução depois de excluir a requisição tira as peças duas vezes (**C552**).
-- Depois de uma falha inesperada no meio da exclusão, a Devolução ainda aceita o que a exclusão já devolveu — exclua de novo antes de registrar qualquer devolução (**C553**).
+- Depois de uma falha inesperada no meio da exclusão, a Devolução ainda aceita o que a exclusão já devolveu — exclua de novo antes de registrar qualquer devolução (**C553**). *(Resolvido na Etapa 271.)*
 - Não há tela nova: o que muda aparece no saldo por prateleira e no histórico.
 
 ## Etapa 260 — A busca de materiais acha pelo fornecedor, a requisição ganha o Projeto e a Fila de separação agrupa por setor ou projeto (2026-11-23)
@@ -45762,12 +45793,70 @@ a 5 e *B-02* a 5. A saída da entrega não se estorna sozinha (*"Movimentação 
 - A **Fila de separação** e a lista de coleta continuam mostrando só a origem (*"separado de A-01"*) — **D (270)** 3.
 - Item com número de série: a parte de outra prateleira sai pelas séries escolhidas, como antes — **D (270)** 4.
 
+## Etapa 271 — A Devolução depois de uma exclusão interrompida conta o que a exclusão já devolveu (2026-11-27)
+
+Excluir uma requisição entregue devolve as peças ao estoque, uma prateleira de cada vez. Se um erro inesperado (queda, disco) interrompe a
+exclusão no meio, parte das peças já voltou e a requisição continua na lista. Excluir de novo já devolvia só o que faltava, mas a **Devolução**
+citando a mesma entrega não sabia que parte já tinha voltado e aceitava devolver tudo de novo — a peça entrava duas vezes no estoque (o aviso
+**C553**). Agora a Devolução, a lista das entregas e a conferência na hora de gravar descontam o que a exclusão interrompida já devolveu, e a
+lista diz isso na linha da entrega. Decisões do agente: **B1646** e **B1647**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *A* 3, *B* 5; entrega de 6; a exclusão para depois de devolver *A*; **Devolução** de 6 citando a entrega → aceita (físico 11 depois de excluir de novo; o certo é 8) | Recusada: *"Devolução acima do entregue: a saída ⟨n⟩ entregou 6, já foram devolvidos 0, 3 já voltaram ao estoque pela exclusão interrompida da requisição e restam 3"* |
+| A lista da Devolução oferecia a entrega com *"devolvível 6"* | *"devolvível 3 · 3 já voltaram ao estoque pela exclusão interrompida da requisição"* |
+| A entrega que a exclusão interrompida devolveu inteira | Desabilitada, com *"2 já voltaram ao estoque pela exclusão interrompida da requisição"* (não *"já devolvido por inteiro"*) |
+| Devolver 3 (o que faltava) e excluir de novo | Igual: passa, e o físico fecha em 8 |
+
+### As regras, com o cenário exato
+
+Só acontece com uma falha **inesperada** no meio da exclusão — não há gesto de tela que a provoque. Os testes automáticos a simulam; na
+apresentação, mostre o caminho normal (que não mudou) ou um banco de teste onde a falha tenha sido provocada.
+
+**1. A recusa diz quanto voltou pela exclusão (RN-271.01).** Material sem lote, 3 em *A* (padrão) e 5 em *B*; requisição de 6 separada e
+entregue (3 de *A*, 3 de *B*); a exclusão falha depois de devolver *A*. **Devoluções → Nova devolução**, o material, a entrega, quantidade 6 →
+*"Devolução acima do entregue: a saída ⟨n⟩ entregou 6, já foram devolvidos 0, 3 já voltaram ao estoque pela exclusão interrompida da requisição e
+restam 3"*. Com uma peça só: *"1 já voltou ao estoque pela exclusão interrompida da requisição"*. Sem exclusão interrompida a mensagem é a de
+sempre, sem o trecho.
+
+**2. Devolver o que falta passa, e excluir de novo não devolve mais nada (RN-271.02).** Quantidade 3 → registrada; **Excluir** a requisição de
+novo → passa; o estoque fica em 8 (*A* 3, *B* 5). Com número de série, excluir de novo continua recusado (as séries já voltaram) — use
+**Encerrar**.
+
+**3. A lista diz o mesmo número (RN-271.03).** Na janela da devolução, a linha da entrega: *"devolvível 3 · 3 já voltaram ao estoque pela
+exclusão interrompida da requisição"*. A tela barra acima de 3 antes de enviar (*"Esta entrega ainda aceita 3 de devolução"*).
+
+**4. Várias entregas da mesma requisição (RN-271.04).** Entregas de 2 e depois 4; a exclusão devolve a primeira e para na segunda → a primeira
+fica desabilitada (*"2 já voltaram ao estoque pela exclusão interrompida da requisição"*), a segunda continua com *"devolvível 4"*. A exclusão
+devolve as entregas na ordem em que foram feitas; a Devolução conta na mesma ordem. Dois materiais na mesma requisição: cada um conta só o seu.
+
+**5. Com número de série não conta duas vezes (RN-271.05).** As peças com série que a exclusão devolveu já contam como *"já voltaram ao
+estoque por uma entrada que não cita esta saída"* — a conta nova não as soma de novo: S1 S2 em *A*, S3 S4 em *B*, a exclusão devolve S1 S2 e
+para → devolver S3 S4 citando a entrega passa.
+
+**6. Na corrida (RN-271.06).** Se a exclusão interrompida acontecer enquanto a devolução está sendo gravada: *"A saída ⟨n⟩ mudou enquanto a
+devolução era gravada — nada foi gravado. Tente de novo."* (ou a recusa com os números, item 1); nada fica gravado.
+
+### O que esta etapa NÃO cobre
+
+- Com várias entregas na mesma requisição, se a **entrada de uma devolução** for estornada pelo livro **depois** da exclusão interrompida, a
+  conta pode pôr o que a exclusão devolveu na entrega errada — uma recusa a mais numa e uma devolução em dobro possível na outra
+  (**D (271)** 1, **B1646**). Depois de uma falha na exclusão, o caminho continua sendo **excluir de novo** logo.
+- A exclusão não grava de qual entrega cada peça voltou: a conta é pela ordem das entregas (**B1646**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 271 entregue (2026-11-27):** **a Devolução depois de uma exclusão interrompida conta o que a exclusão já devolveu — na recusa, na
+  lista das entregas e na conferência ao gravar** (item 22 da estimativa de 23/11; **C553** resolvido). Commits `d8a9b974` (plano), `ae64f9a5`
+  (o servidor), `6c1c9021` (a tela), Fase 5 `4a9e4feb` (a lista não fica lenta) e o fechamento. **O que é seu:** as **B1646** e **B1647** (reversíveis); a limitação **(271)** em D e a
+  verificação **(271)** em F. Sem consulta antes do deploy. **Próxima:** os candidatos medidos fora da estimativa da semana (fim do plano da 271).
 
 - **Etapa 270 entregue (2026-11-27):** **separar parte de uma prateleira e parte de outra: a separação guarda cada prateleira e quanto
   saiu dela, o detalhe mostra as duas e a entrega de um clique tira cada parte de onde foi pega** (itens 19 e 20 da estimativa de 23/11;
