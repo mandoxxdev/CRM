@@ -1,0 +1,13 @@
+*Planejamento — estorno do desbloqueio com lote e conferência do lote na entrega*
+_27/11/2026_
+
+*1. Estornar um desbloqueio de lote confere se o lote ainda tem as peças*
+Hoje, estornar um Desbloquear feito num lote bloqueia de novo as peças mesmo quando elas já não estão mais no lote, e o bloqueio fica apontando para um lote vazio. Passa a recusar com uma mensagem dizendo quantas peças livres o lote tem e qual é o caminho para bloquear de novo.
+Tempo estimado: *45min*
+
+*2. A entrega com dois itens do mesmo lote dá o mesmo resultado em qualquer ordem*
+Num lote com peças presas (em inspeção ou bloqueadas), a mesma entrega de dois itens passava ou era recusada conforme a ordem em que os itens foram pedidos. Passa a dar sempre o mesmo resultado, o que deixa o lote sem peças prometidas a mais e faz a janela de entrega mostrar exatamente o que pode sair.
+Tempo estimado: *1h*
+
+*Total estimado: 1h45*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
