@@ -1,0 +1,13 @@
+*Planejamento — sucateamento depois da liberação do lote e entrega de dois itens do mesmo lote*
+_27/11/2026_
+
+*1. O sucateamento de uma reprovação depois de liberar pelo "Sem lote"*
+Quando a reprovação já foi liberada pelo "Sem lote" e há peças bloqueadas de outro lote, o sucateamento da reprovação ainda baixa peças livres do lote e tira o bloqueio do outro lote sem soltar as peças dele. Passa a ser recusado com uma mensagem clara, que diz o que fazer.
+Tempo estimado: *45min*
+
+*2. Entregar juntos dois itens da mesma requisição no caso do lote guardado*
+Confere a entrega de dois itens do mesmo material de uma vez, quando parte do lote está separada e as peças livres estão numa prateleira bloqueada. Se houver diferença entre o que a tela mostra e o que a entrega aceita, é corrigida; se não houver, fica provado por teste.
+Tempo estimado: *30min*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
