@@ -2658,11 +2658,14 @@ function fraseEntregaLoteImpedido(nomeMaterial, qtyDoItem, unidade, falta, imped
  * entrega so pelo que FICA depois dela (`guardaQueConta`, a regua do proprio automatico: o item que entrega a guarda inteira nao conta).
  * A mesma folga por item da 206. So le (dentro das travas da entrega).
  */
-async function outrasCaixasNoMaterial(db, materialId, requisicaoId, saiuSimulado, parteQueFicaPorItem) {
+async function outrasCaixasNoMaterial(db, materialId, requisicaoId, saiuSimulado, parteQueFicaPorItem, { daConferencia = false } = {}) {
   const viva = caixaVivaSql('r');
   // Fase 5 (achado 2): so o lote que TAMBEM tem saldo numa linha que o automatico pula (prateleira bloqueada ou sem endereco) — e o que
   // faz a falta; a guarda num lote sem essa linha nao explica a falta (a inspecao antiga de outro lote segue como antes, B1640).
-  const rows = await dbAll(db, `SELECT ir.id, ir.requisicao_id AS rid, lt.codigo, r.numero, ${PARTE_ORIGEM_SQL} as q
+  const rows = await dbAll(db, `SELECT ir.id, ir.requisicao_id AS rid, lt.codigo, r.numero, ${PARTE_ORIGEM_SQL} as q,
+      EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado pbs JOIN localizacoes_almoxarifado pblc ON pblc.id = pbs.localizacao_id
+        WHERE pbs.material_id = ir.material_id AND pbs.lote_id = ir.lote_separacao_id AND pbs.quantidade > ${Q.QTD_FOLGA}
+          AND COALESCE(pblc.bloqueada, 0) = 1) AS tem_bloqueada
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     JOIN lotes_almoxarifado lt ON lt.id = ir.lote_separacao_id
     WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ${viva.sql}
@@ -2670,8 +2673,14 @@ async function outrasCaixasNoMaterial(db, materialId, requisicaoId, saiuSimulado
         WHERE ocs.material_id = ir.material_id AND ocs.lote_id = ir.lote_separacao_id AND ocs.quantidade > ${Q.QTD_FOLGA}
           AND (ocs.localizacao_id IS NULL OR COALESCE(oclc.bloqueada, 0) = 1))
     ORDER BY lt.codigo, r.numero`, [materialId, ...viva.params]);
+  // Etapa 275 (RN-275.06, C560): na conferencia (a falta ja medida), a guarda de um item DESTA entrega que sai inteira tambem conta, pela
+  // parte, quando o lote dela tem saldo em prateleira BLOQUEADA: ela e consumida pelo dono e nao sobra para o irmao, e o automatico do irmao
+  // ia a prateleira bloqueada — o motor recusava no meio do laco, DEPOIS de baixar o dono (400 com a frase crua e estoque movido). So a
+  // bloqueada: a linha sem endereco o automatico drena e entrega certo (Fase 2, achado 6). O teto do detalhe e da Fila chama sem a opcao.
+  const daPropriaQueSai = (g) => daConferencia && saiuSimulado && saiuSimulado.has(Number(g.id)) && Number(g.tem_bloqueada) === 1
+    && (Number(g.q) || 0) > Q.QTD_FOLGA;
   const contam = rows.filter((g) => (Number(g.rid) === Number(requisicaoId)
-    ? guardaQueConta(g, saiuSimulado, parteQueFicaPorItem) : (Number(g.q) || 0)) > Q.QTD_FOLGA);
+    ? guardaQueConta(g, saiuSimulado, parteQueFicaPorItem) : (Number(g.q) || 0)) > Q.QTD_FOLGA || daPropriaQueSai(g));
   if (!contam.length) return null;
   return { lotes: [...new Set(contam.map((x) => x.codigo))], reqs: [...new Set(contam.map((x) => x.numero))].sort() };
 }
@@ -2700,7 +2709,16 @@ async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPo
   }
   const lotes = await lotesParaOAutomatico(db, materialId, saiuSimulado, parteQueFicaPorItem);
   let cabe = 0;
-  for (const l of lotes) cabe += Math.max(0, num(l.saldo) - (pedidoLote.get(Number(l.lote_id)) || 0));
+  // Etapa 275 (RN-275.06, C560): o saldo do lote em prateleira BLOQUEADA nao cabe no automatico (o motor nao tira de la, RN-239.01) — sem
+  // descontar, o lote cuja guarda propria sai inteira nesta entrega contava as pecas da prateleira bloqueada para o irmao, a conferencia
+  // deixava passar e o motor recusava no meio do laco, depois de baixar o dono. Aqui so se le (a fila do automatico nao muda, Etapa 239).
+  const naBloqueada = new Map((await dbAll(db, `SELECT s.lote_id, SUM(s.quantidade) AS q FROM estoque_saldo_almoxarifado s
+    JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id WHERE s.material_id = ? AND s.lote_id IS NOT NULL AND s.quantidade > 0
+      AND COALESCE(lc.bloqueada, 0) = 1 GROUP BY s.lote_id`, [materialId])).map((r) => [Number(r.lote_id), num(r.q)]));
+  for (const l of lotes) {
+    // so o lote SEM guarda (uma fatia pelo lote): o com guarda ja volta so com o livre das prateleiras usaveis (`linhas`)
+    cabe += Math.max(0, num(l.saldo) - (l.linhas ? 0 : (naBloqueada.get(Number(l.lote_id)) || 0)) - (pedidoLote.get(Number(l.lote_id)) || 0));
+  }
   const sl = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
     WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0`, [materialId]);
   cabe += Math.max(0, num(sl && sl.q) - pedidoSemLote);
@@ -2907,7 +2925,7 @@ async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, te
     if (!naoElegiveis.length) {
       // eslint-disable-next-line no-await-in-loop
       const outra = await outrasCaixasNoMaterial(db, x.item.material_id, x.item.requisicao_id, saiuSimulado,
-        parteQueFicaPorItem);
+        parteQueFicaPorItem, { daConferencia: true });
       if (!outra) continue;
       return { item: x.item, qty: x.qty, falta, outra, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
     }
@@ -2925,7 +2943,7 @@ async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, te
       // B1386: falta sem lote impedido segue como antes — salvo a parte guardada que conta (Etapa 273, acima)
       // eslint-disable-next-line no-await-in-loop
       const outra = await outrasCaixasNoMaterial(db, x.item.material_id, x.item.requisicao_id, saiuSimulado,
-        parteQueFicaPorItem);
+        parteQueFicaPorItem, { daConferencia: true });
       if (!outra) continue;
       return { item: x.item, qty: x.qty, falta, outra, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
     }
