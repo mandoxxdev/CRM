@@ -204,6 +204,27 @@ process.on('exit', (code) => {
     assert.strictEqual((await dbGet(db, 'SELECT status FROM nao_conformidades_almoxarifado WHERE id = ?', [x.ncId])).status, 'CANCELADA');
   });
 
+  // ---------------------------------------------------------------- Fase 5 (achado 1): a segunda NC da mesma inspecao ja devolvida
+  await test('[RN-274.08 segunda NC] reprovacao presa + 4 no L2: a NC A devolve; a NC B (mesma inspecao) -> JA_DEVOLVIDA como antes, nao a recusa nova', async () => {
+    const x = await montar({ liberar: false });
+    const row = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [x.ncId]);
+    delete row.id;
+    row.numero = `${row.numero}-B`;
+    row.tipo = row.tipo === 'QUALIDADE' ? 'QUANTIDADE' : 'QUALIDADE';
+    const cols = Object.keys(row);
+    const ncB = (await dbRun(db, `INSERT INTO nao_conformidades_almoxarifado (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
+      cols.map((c) => row[c]))).lastID;
+    const a = await executarRota(x.ncId);
+    assert.strictEqual(a.status, 200, JSON.stringify(a.body));
+    assert.strictEqual(a.body.execucao.efeito, 'BAIXADA');
+    const antes = await foto(x.m);
+    const b = await executarRota(ncB);
+    assert.strictEqual(b.status, 200, JSON.stringify(b.body));
+    assert.strictEqual(b.body.execucao.efeito, 'JA_DEVOLVIDA');
+    assert.deepStrictEqual(await foto(x.m), antes, 'nada se move');
+    assert.strictEqual((await estadoNc(x.ncId, x.inspId)).insp, 1, 'o carimbo da inspecao fica (o da NC A)');
+  });
+
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou\n`);
   process.exit(failed ? 1 : 0);
