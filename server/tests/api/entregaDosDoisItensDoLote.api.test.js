@@ -241,6 +241,24 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     assert.strictEqual(await negativas(m), 0);
   });
 
+  // ---------------------------------------------------------------- Fase 5 (achado 1): a peca retida que esta na prateleira bloqueada
+  await test('[Fase 5] L0 impedido, L2 3 em A01 + 1 em B01 bloqueada e 1 bloqueada no L2: a requisicao de 3 entrega (a peca retida nao conta duas vezes)', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 1, 'L0');
+    await statusRota(m, 'L0', 'BLOQUEADO');
+    await entrar(m, A01.id, 3, 'L2'); await entrar(m, B01.id, 1, 'L2');
+    await ok(como('ADMIN').post(`${API}/materiais/${m.id}/bloquear`, { quantidade: 1, justificativa: 'avaria 275', lote_id: await loteId(m, 'L2') }));
+    const { R, ids } = await reqDireta([[m.id, 3]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await bloquearLoc(B01, 1);
+    try {
+      assert.deepStrictEqual(await detalhe(R, ids[0]), [3, 3]);
+      await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]));
+      assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L2', 3]]);
+    } finally { await bloquearLoc(B01, 0); }
+    assert.strictEqual(await negativas(m), 0);
+  });
+
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou\n`);
   await close();

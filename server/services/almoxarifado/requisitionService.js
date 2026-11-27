@@ -2712,12 +2712,18 @@ async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPo
   // Etapa 275 (RN-275.06, C560): o saldo do lote em prateleira BLOQUEADA nao cabe no automatico (o motor nao tira de la, RN-239.01) — sem
   // descontar, o lote cuja guarda propria sai inteira nesta entrega contava as pecas da prateleira bloqueada para o irmao, a conferencia
   // deixava passar e o motor recusava no meio do laco, depois de baixar o dono. Aqui so se le (a fila do automatico nao muda, Etapa 239).
-  const naBloqueada = new Map((await dbAll(db, `SELECT s.lote_id, SUM(s.quantidade) AS q FROM estoque_saldo_almoxarifado s
-    JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id WHERE s.material_id = ? AND s.lote_id IS NOT NULL AND s.quantidade > 0
-      AND COALESCE(lc.bloqueada, 0) = 1 GROUP BY s.lote_id`, [materialId])).map((r) => [Number(r.lote_id), num(r.q)]));
+  // Fase 5 (achado 1): o que fica e o MENOR entre o livre do lote (`l.saldo`, ja sem a inspecao e o retido) e o fisico fora da prateleira
+  // bloqueada — subtrair a bloqueada do livre contava duas vezes a peca retida que esta justamente na bloqueada (recusava uma entrega certa).
+  const foraDaBloqueada = new Map((await dbAll(db, `SELECT s.lote_id, SUM(s.quantidade) AS q,
+      SUM(CASE WHEN COALESCE(lc.bloqueada, 0) = 1 THEN s.quantidade ELSE 0 END) AS b
+    FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+    WHERE s.material_id = ? AND s.lote_id IS NOT NULL AND s.quantidade > 0 GROUP BY s.lote_id`, [materialId]))
+    .map((r) => [Number(r.lote_id), num(r.q) - num(r.b)]));
   for (const l of lotes) {
     // so o lote SEM guarda (uma fatia pelo lote): o com guarda ja volta so com o livre das prateleiras usaveis (`linhas`)
-    cabe += Math.max(0, num(l.saldo) - (l.linhas ? 0 : (naBloqueada.get(Number(l.lote_id)) || 0)) - (pedidoLote.get(Number(l.lote_id)) || 0));
+    const k2 = Number(l.lote_id);
+    const usavel = l.linhas || !foraDaBloqueada.has(k2) ? num(l.saldo) : Math.min(num(l.saldo), foraDaBloqueada.get(k2));
+    cabe += Math.max(0, usavel - (pedidoLote.get(k2) || 0));
   }
   const sl = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
     WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0`, [materialId]);
