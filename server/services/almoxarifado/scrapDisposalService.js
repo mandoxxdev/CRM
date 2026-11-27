@@ -56,6 +56,7 @@ const { naTravaDoMaterial } = require('./travaPorMaterial'); // Etapa 218 (Fase 
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
 const sm = require('./scrapDisposalStateMachine');
+const bloqueioPorLote = require('./bloqueioPorLote'); // Etapa 275 (RN-275.01/.03, C559): o bloqueado sem lote no sucateamento do reprovado
 
 function erro(msg, status = 400) {
   const e = new Error(msg);
@@ -363,6 +364,10 @@ async function solicitarDoReprovado(db, user, ncId, payload = {}) {
       + 'e ele fica no livro de movimentacoes como a unica explicacao de por que o material sumiu '
       + 'do patrimonio.');
   }
+  // (20) Etapa 275 (RN-275.03, C559; Fase 2 achado 3: depois do 19, a ordem 1-19 nao muda): a reprovacao ja liberada pelo "Sem lote" com o
+  // bloqueado em lote — a frase antes de alguem assinar. A garantia e a da assinatura (o bloqueio em lote pode nascer entre as duas).
+  const semLote = await recusaDoSemLote(db, material.id, previsto.quantidade, previsto.lote_id, 'SOLICITAR');
+  if (semLote) throw erro(semLote);
 
   try {
     return await inserirSolicitacao(db, user, {
@@ -422,6 +427,36 @@ async function compensarAssinatura(db, user, id, perna, motivo, causa = null) {
   }).catch(() => {});
 }
 
+/**
+ * Etapa 275 (RN-275.01/.03, C559) — a reprovacao mora no bloqueado SEM lote (B1418). Se o Desbloquear "Sem lote" ja a tirou e o que sobra do
+ * bloqueado e de lote (outro lote bloqueado), a precedencia passa (o total cobre) e a baixa `doBloqueado` sucateava pecas LIVRES do lote da
+ * reprovacao e tirava o bloqueado do outro lote — 2 do L1 saiam e o bloqueado caia para 2 com as 4 do L2 ainda bloqueadas no livro. A mesma
+ * conferencia da devolucao (Etapa 274, B1655) e da liberacao (Etapa 249, C501). Devolve a frase da recusa ou null. `porta`: 'SOLICITAR' (S2) ou
+ * 'ASSINAR' (S1). O sem lote e um pool por material: a reprovacao sem lote de OUTRA inspecao cobre a conta (declarado, C (275)).
+ */
+async function recusaDoSemLote(db, materialId, quantidade, loteId, porta) {
+  const porLote = await bloqueioPorLote.bloqueadoPorLote(db, materialId);
+  if (!porLote || !porLote.lotes.length || !(Number(porLote.sem_lote) < Number(quantidade) - Q.QTD_FOLGA)) return null;
+  const mat = await dbGet(db, 'SELECT unidade FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  const un = (mat && mat.unidade) || '';
+  const lista = porLote.lotes.map((l) => `${l.codigo}: ${Q.qtd(l.quantidade)}`).join('; ');
+  let fim = porta === 'ASSINAR'
+    ? 'Bloqueie de novo, sem lote, o que falta e assine outra vez, ou rejeite o sucateamento'
+    : 'Bloqueie de novo, sem lote, o que falta e solicite outra vez, ou cancele a não conformidade';
+  if (loteId) {
+    const doLote = await dbGet(db, `SELECT l.codigo, COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
+      WHERE s.material_id = ? AND s.lote_id = l.id), 0) AS q FROM lotes_almoxarifado l WHERE l.id = ?`, [materialId, loteId]);
+    // Fase 2 (achado 1): o lote ja nao tem a reprovacao (a entrada dele estornada depois da solicitacao) — bloquear de novo nao resolve.
+    if (doLote && Number(doLote.q) < Number(quantidade) - Q.QTD_FOLGA) {
+      fim = `O lote ${doLote.codigo} tem só ${Q.qtd(Number(doLote.q))} ${un}, menos que a reprovação: `
+        + (porta === 'ASSINAR' ? 'rejeite o sucateamento' : 'cancele a não conformidade');
+    }
+  }
+  return `Não é possível sucatear pela não conformidade: só ${Q.qtd(porLote.sem_lote)} ${un} do bloqueado está sem lote`
+    + ` e a reprovação tem ${Q.qtd(quantidade)} ${un} — parte dela pode já ter sido liberada pelo Desbloquear`
+    + ` (o resto do bloqueado está em lote: ${lista}). ${fim}`;
+}
+
 /** Etapa 69 — o motivo da `SUCATA` do reprovado: o que a torna legivel no livro sem cruzar tabela. */
 const MOTIVO_SUCATA_REPROVADO = 'Sucateamento de material reprovado';
 
@@ -477,6 +512,10 @@ async function baixarReprovadoNaTrava(db, user, atual, perna) {
       { causa: 'o material desta inspecao ja saiu do estoque por outro caminho' });
     }
     carimbou = true;
+    // Etapa 275 (RN-275.01/.02): DEPOIS do claim da inspecao (a licao da Fase 5 da 274: a segunda da mesma inspecao leva o 409 de sempre) e
+    // dentro do try — o catch desfaz o carimbo e a assinatura recem-feita (a outra perna fica).
+    const semLote = await recusaDoSemLote(db, atual.material_id, atual.quantidade, atual.lote_id, 'ASSINAR');
+    if (semLote) throw Object.assign(erro(semLote), { causa: 'parte da reprovacao ja foi liberada pelo Desbloquear sem lote' });
 
     const insp = await ncs.getInspecao(db, inspId);
     const origemArea = await origemAreaDeSucata(db, atual.material_id, atual.quantidade, { loteId: atual.lote_id });
