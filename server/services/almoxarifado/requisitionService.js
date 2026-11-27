@@ -3639,6 +3639,43 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     return undefined;
   };
 
+  // Etapa 277 (C561, RN-277.01/.02): a padrao bloqueada, conferida ANTES de qualquer baixa. A parte automatica de material sem controle
+  // de lote e sem serie, sem fatias por endereco (`fatiasSemLoteParaOAutomatico` null), vai ao motor sem origem e sem lote — e o motor
+  // confere a padrao (`resolveLocalizacaoSaida`), mesmo quando a linha que sai e outra. Antes a recusa vinha no meio do laco: o item de
+  // outro material ja tinha saido (fisico 5 -> 3, item entregue). A mesma regra e a mesma frase do motor (`validarLocalizacaoParaMovimento`),
+  // com o nome do material na frente como no catch da `baixar`.
+  // Fase 5 (achado 1, reproduzido): so o PRIMEIRO pedaco automatico do material, e so se nada dele sai antes nesta entrega (nenhum pedaco
+  // com origem — passadas 0/1 — nem outras prateleiras da caixa — '2p'). As fatias dependem das linhas, que uma baixa anterior do mesmo
+  // material muda: lidas antes, davam null onde a baixa de verdade sairia por endereco (recusa nova). Assim a leitura e a da hora da baixa.
+  // Os outros casos (serie, controle de lote, material com origem ou '2p' na entrega) ficam como antes (letra B/D da 277).
+  // Le a padrao antes das fatias: com ela livre, nenhuma leitura a mais (a regua da 207 conta as leituras).
+  const semPreviaDaPadrao = new Set();
+  for (const plano of planos) {
+    if (plano.controleLote || seriesPorItem.has(plano.item.id) || plano.partesPreferidas.length
+      || plano.pedacos.some((p) => p.comOrigem && p.quantidade > Q.QTD_FOLGA)) semPreviaDaPadrao.add(Number(plano.item.material_id));
+  }
+  const padraoConferida = new Set();
+  for (const plano of planos) {
+    const { item } = plano;
+    const mid = Number(item.material_id);
+    if (semPreviaDaPadrao.has(mid) || padraoConferida.has(mid)) continue;
+    const primeiro = plano.pedacos.find((p) => !p.comOrigem && p.quantidade > Q.QTD_FOLGA);
+    if (!primeiro) continue;
+    padraoConferida.add(mid);
+    // eslint-disable-next-line no-await-in-loop
+    const mat = await dbGet(db, `SELECT m.*, COALESCE(lc.bloqueada, 0) AS padrao_bloqueada FROM materiais_almoxarifado m
+      LEFT JOIN localizacoes_almoxarifado lc ON lc.id = m.localizacao_padrao_id WHERE m.id = ?`, [mid]);
+    if (!mat || !Number(mat.padrao_bloqueada)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    if (await fatiasSemLoteParaOAutomatico(db, mid, primeiro.quantidade, saiuDaOrigemPorItem(), parteQueFicaPorItem())) continue;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.validarLocalizacaoParaMovimento(db, mat.localizacao_padrao_id, mat, 'origem');
+    } catch (e) {
+      throw Object.assign(new Error(`${item.material_nome}: ${e.message}`), { status: e.status || 400 });
+    }
+  }
+
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
   try {
