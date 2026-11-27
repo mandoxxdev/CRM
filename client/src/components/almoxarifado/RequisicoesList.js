@@ -379,6 +379,14 @@ const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMater
   return cobre ? valor : '';
 };
 
+// Etapa 267 (C473, RN-267.01/03/04, B1631): a recusa que diz que o saldo da prateleira (ou do lote) mudou — separado para outra
+// requisição ("… já está separado dali para outra requisição …", "… já separadas dele para outras requisições …", "… para outra peça
+// desta requisição") ou o físico que não cobre mais ("O saldo em X (2) não cobre a quantidade (4) …", Fase 2 da 267). Com ela a janela
+// relê o "Sai de" (e, na separação, a sugestão). Recusa por motivo, quantidade ou permissão não casa: nada a reler.
+// Toda frase de saldo do servidor termina em "não cobre a quantidade" (a do separado de outras, a do lote, a física) — uma régua só.
+export const recusaReleOSaiDe = (mensagem) => /não cobre (?:mais )?a quantidade/
+  .test(String(mensagem || ''));
+
 // Etapa 189 (T2; RN-189.02/04 com as emendas M1, M2 e I3 da Fase 2; B1261): o "Sai de" da separação parte do par que a fila
 // sugere (GET /requisicoes/:id/sugestao-coleta) — só no item SEM planejada pendente e SEM separado pendente (M2: a rodada com
 // separado pendente sem planejada grava planejada nula de novo, e a frase prometeria o que não acontece), quando a sugestão cobre
@@ -804,7 +812,8 @@ const RequisicoesList = () => {
       if (!rows) return;
       const sug = sugestaoSeparacao.get(Number(item.id)) || null;
       if (Object.prototype.hasOwnProperty.call(origensSeparacao, item.id)) {
-        decididos[item.id] = { valor: '', pegar_em: null, alerta: null };
+        // Etapa 267 (RN-267.02): a escolha veio do almoxarife antes da sugestão — a releitura na recusa não a refaz.
+        decididos[item.id] = { valor: '', pegar_em: null, alerta: null, doAlmoxarife: true };
         return;
       }
       const p = sug && sug.pegar_em;
@@ -822,6 +831,62 @@ const RequisicoesList = () => {
     if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...prev, ...novas }));
     if (Object.keys(decididos).length) setPreSelecao((prev) => ({ ...prev, ...decididos }));
   }, [showSeparar, detalhe, sugestaoSeparacao, saldosEntrega, origensSeparacao, quantidadesSeparacao, preSelecao]);
+
+  // Etapa 267 (C473, RN-267.01..04, B1631/B1632): na recusa por saldo que mudou, relê o "Sai de" dos materiais da janela aberta (e, na
+  // separação, a sugestão da Fila) sem fechá-la. As escolhas e as quantidades ficam; na separação, o item sem planejada cujo "Sai de" ainda é o
+  // que a pré-seleção decidiu (o almoxarife não mexeu) é decidido de novo com a sugestão nova (RN-189.05: o que ele trocou fica). Sequência
+  // própria (não mexe na da abertura: uma carga ainda em curso não é descartada) e a da abertura conferida no fim: fechou ou reabriu, descarta.
+  // Falha de uma leitura: o que já estava fica.
+  const releituraSeqRef = useRef(0);
+  const estadoSeparacaoRef = useRef({});
+  estadoSeparacaoRef.current = { preSelecao, origensSeparacao };
+  const relerJanelaNaRecusa = async (modal) => {
+    const reqId = detalhe?.id;
+    if (!reqId) return;
+    const seqSaldos = saldosEntregaSeqRef.current;
+    const seqSugestao = sugestaoSeqRef.current;
+    const minha = ++releituraSeqRef.current;
+    const lidos = await Promise.all(Object.keys(saldosEntrega).map(async (materialId) => {
+      try {
+        const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos?requisicao_id=${reqId}`);
+        return [materialId, opcoesOrigem(res?.data)];
+      } catch (err) {
+        return null;
+      }
+    }));
+    let mapa = null;
+    if (modal === 'S') {
+      try {
+        const res = await api.get(`/almoxarifado/requisicoes/${reqId}/sugestao-coleta`);
+        const itens = res?.data?.itens;
+        if (Array.isArray(itens)) {
+          mapa = new Map();
+          itens.forEach((s) => { if (s && s.item_id != null) mapa.set(Number(s.item_id), s); });
+        }
+      } catch (err) {
+        mapa = null;
+      }
+    }
+    if (releituraSeqRef.current !== minha || saldosEntregaSeqRef.current !== seqSaldos) return;
+    const novos = Object.fromEntries(lidos.filter(Boolean));
+    if (Object.keys(novos).length) setSaldosEntrega((prev) => ({ ...prev, ...novos }));
+    if (modal !== 'S' || !mapa || sugestaoSeqRef.current !== seqSugestao) return;
+    const { preSelecao: ps, origensSeparacao: os } = estadoSeparacaoRef.current;
+    const refazer = (detalhe.itens || []).filter((item) => {
+      const decidido = ps[item.id];
+      if (!decidido || decidido.doAlmoxarife || temPlanejada(item)) return false;
+      return (os[item.id] || '') === (decidido.valor || '');
+    }).map((item) => item.id);
+    setSugestaoSeparacao(mapa);
+    if (!refazer.length) return;
+    const tirar = (prev) => {
+      const prox = { ...prev };
+      refazer.forEach((id) => { delete prox[id]; });
+      return prox;
+    };
+    setPreSelecao(tirar);
+    setOrigensSeparacao(tirar);
+  };
 
   // Etapa 61 (RN-04): só no modal de entrega. O detalhe da requisição não traz `controle_serie`,
   // então pergunta ao material (GET /materiais/:id). Falha nessa busca = trata como sem série (não
@@ -1170,6 +1235,9 @@ const RequisicoesList = () => {
         setShowSeparar(false);
         await abrirDetalhe(detalhe.id, { force: true });
         loadRequisicoes();
+      } else if (recusaReleOSaiDe(err.response?.data?.error)) {
+        // Etapa 267 (RN-267.01/02): outra pessoa separou (ou tirou) dali — o "Sai de" e a sugestão se atualizam com a janela aberta.
+        await relerJanelaNaRecusa('S');
       }
     } finally {
       setSaving(false);
@@ -1244,6 +1312,8 @@ const RequisicoesList = () => {
       // Fase 5 (review da Etapa 61): o erro pode ser outra entrega ter levado a série (400/409) —
       // relê as séries do modal para a lista não oferecer de novo a que já saiu.
       recarregarSeriesEntrega();
+      // Etapa 267 (RN-267.03): a recusa por saldo que mudou relê o "Sai de" da janela (a escolha fica).
+      if (recusaReleOSaiDe(err.response?.data?.error)) await relerJanelaNaRecusa('E');
     } finally {
       setSaving(false);
     }
