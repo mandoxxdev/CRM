@@ -116,15 +116,66 @@ Entrega**. Escolhendo uma prateleira com *"sobra 2"* para 4 → a entrega vai ao
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (galho, prova do item 16, servidor)** — `server/tests/api/saiDeComLoteParteSemLote.api.test.js` (RN-268.01..04, rota e serviço).
+- [x] **T1 (galho, prova do item 16, servidor)** — `9c26e962` (6/6; sabotagens: a conferência física sem o lote exato → RN-268.01 cai;
+  a sobra do Sai de pelo endereço inteiro → RN-268.04 cai; a âncora da primeira contou 2 — refeita com âncora única, mesmo resultado) — `server/tests/api/saiDeComLoteParteSemLote.api.test.js` (RN-268.01..04, rota e serviço).
   Controle positivo: sabotar a régua do par exato na conferência física da separação (`checarOrigemItem`, `lote_id IS ?`) — RN-268.01 cai; e a
   chave do lote no `parteGuardadaDeOutrasPorPar` (NULL vira o lote) — RN-268.04 cai.
-- [ ] **T2 (galho, tela do item 17)** — `RequisicoesList.js` + `client/src/components/almoxarifado/RequisicoesEntregaLimiteDaOrigem.test.js`
+- [x] **T2 (galho, tela do item 17)** — `0ac0fd70` (9/9; 8 sabotagens, todas caem: sem limite 9, sem a descida 3, sem o botão 2, sem a
+  própria origem 2, sem o "fica" do irmão 2, sem o lote 1, descida com teto 0 1, sem o aviso do botão 2) — `RequisicoesList.js` + `client/src/components/almoxarifado/RequisicoesEntregaLimiteDaOrigem.test.js`
   (RN-268.10..15). Controle positivo: tirar o limite do `max`/da regra (RN-268.10 cai), tirar a descida na escolha (RN-268.11), tirar o aviso do
   botão (RN-268.12), tirar a exceção da própria origem (RN-268.13), tirar a parcela "fica" do irmão (RN-268.15).
-- [ ] **T3** — Fase 5; documentos (`fechar-etapa`), suítes, estimativa.
+- [x] **T1b (tronco, servidor, nasceu na Fase 2)** — `1a2dfc81` — RN-268.05 (B1638): `loteForaDaGuarda` no `marcaC` da entrega. 4 cenários
+  (10/10 no arquivo); o RN-200.04 (b') de `entregaSaiDeRespeitaSeparado` registrava o caso e passou a esperar a E1 (26/26). Sabotagem: sem a
+  condição → RN-268.05 e RN-268.05 serviço caem, e o RN-200.04 (b').
+- [x] **T3** — Fase 5 (um achado, registrado — C555); documentos (`fechar-etapa`), suítes, estimativa.
 
 T1 e T2 independentes (T1 só prova o servidor; T2 lê campos que já existem).
+
+## Fase 2 (revisor fresco, uma passada, sobre o plano `8315a69f`)
+
+- **(3) importante, reproduzido e absorvido** — a própria peça com origem (A, sem lote) escolhendo (A, L1): a entrega a tratava como a
+  própria origem (Etapa 63) e só conferia o físico — R1 3 por (A, L1) → 200, levando as 2 de R3; R3 depois "não serve mais". O item 16 **não
+  estava todo feito**. → B1638, RN-268.05, `1a2dfc81`. A tela: "a própria origem" é o par **exato** (o servidor agora concorda).
+- **(4) menor, absorvido** — a B1635 dizia "a porta não confere a E1 na própria origem": **errado** acima da parte (B1408) e com a parte zerada.
+  → na própria origem o teto é `max(parte, a conta)`; sem parte, a conta.
+- **(5) menor, absorvido** — `parte_j` é `pendentePlanejado` (min(parte, caixa)), como o servidor.
+- **(1)/(2) menores, absorvidos** — a unidade é a do item (sem unidade, sem sufixo); o título do botão: o da escolha impedida primeiro.
+- **(6), (7), (8) menores, registrados** — o Ajuste que tira o saldo sem lote sob uma separação (D (268) 4); série com a quantidade que desce
+  (o contador *"Escolha exatamente N série(s)"* já avisa); o detalhe relido com a janela aberta volta o número cheio (D (268) 3).
+- T1 e T2 independentes: confirmado.
+
+## Fase 5 (um revisor fresco, sondas `zzf5-268-*`, apagadas, sobre `0ac0fd70` e o servidor ainda sem commit — hoje `1a2dfc81`)
+
+1. **[médio, reproduzido, registrado — C555]** Lote com peça presa (podem sair 5), item *i* sem origem e item *k* com 4 em (ZA, L): a mesma
+   entrega (*i* 3 de ZB/L, *k* 2 de ZC/L) dá **200** com *i* antes de *k* e **400** com *k* antes — a conferência do lote da 218 soma o
+   `jaPedido` só dos itens anteriores. A janela dá 1 para *i* (soma o que fica e o que sai de *k*) — mais apertada que a ordem que passa,
+   igual à que recusa. **Não consertado aqui** (é da 218, ~1 h): a janela fica com a conta segura e a B1636 ganhou a exceção escrita.
+- Tentado e não quebrou: a guarda do próprio item não conta duas vezes; irmão com guarda em (A, sem lote) não pesa em (A, L1); troca e
+  motivo iguais; saldo negativo permitido; irmão no automático, pela planejada acima da parte, com o Sai de na própria origem; `lote_livre`
+  só com peça presa; série (`lote_livre` nulo); a quantidade gravada como número no estado (todo uso passa por `parseFloat`).
+
+## Divergências do plano
+
+- **Item 16** — a Fase 0 dizia "já funciona; sem código". **Estava incompleto** (Fase 2, achado 3): o caso que o C498 descrevia não existe,
+  mas o efeito existia pela própria peça sem lote escolhendo o lote → T1b, `1a2dfc81`.
+- **B1635** — "nenhum limite na própria origem" virou `max(parte, a conta)` (Fase 2, achado 4).
+- **B1636** — "nunca menos que a porta aceita" tem uma exceção (C555, Fase 5): a conferência do lote depende da ordem dos itens.
+- O RN-200.04 (b') (Etapa 200) registrava o C498 pela própria peça e passou a esperar a E1.
+- **CLAUDE.md:** nenhuma linha ficou errada — a conferência nova roda dentro da passada do caso (c), sob as duas travas da entrega.
+
+## Próxima tarefa detalhada
+
+O item **18** da estimativa de 23/11 (`docs/estimativas/2026-11/estimativa_2026-11-23_almoxarifado-semana.md`):
+
+1. **Item 18 — Entrega com o lote ainda em inspeção (C485, B1386; 1h15, motor).** `requisitionService.js`, a passada do automático com lote
+   impedido (~`if (!impedidos.length) continue`): a falta que vem de peça **em inspeção** (não de lote impedido) sai sem lote, negativa. Caminho
+   reversível do C485: tratar a falta vinda de inspeção como a do lote impedido (sai o que cobre, diz o resto). Sonda antes: material com
+   lote, *L1* 4 com 3 em inspeção, sem outro saldo; requisição de 4 separada no automático; entregar 4 → hoje? (medir: 200 com saldo sem lote
+   negativo, ou 400). A régua de inspeção mora em `lotesParaOAutomatico` (`emInspecao`) e no `retidoDoLote.situacaoDosLotes`. Roda sob as duas
+   travas. Atenção: a parte guardada de outra caixa (Etapa 197) fica como está se a sonda mostrar regressão — declarar.
+- **O que já está pronto e não reabre:** o limite da janela de entrega (esta etapa); a peça sem lote com o Sai de num lote (B1638).
+- Candidatos fora da estimativa: **C555** (a conferência do lote somar o pedido de todos os itens, ~1 h); série com só o lote (D (267) 1); a
+  entrega num clique com o lote das séries sobre origem sem lote (D (268) 1).
 
 ## Pontos de atenção
 

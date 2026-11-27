@@ -5,14 +5,19 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 267 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-26 (Etapa 268 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 267 fechada — 2026-11-26.** **Na separação e na entrega, a recusa por saldo atualiza o "Sai de"
+> **O desenvolvimento parou aqui: Etapa 268 fechada — 2026-11-26.** **A peça separada sem lote que escolhe na entrega um lote do mesmo
+> endereço passa pela conferência do separado, e a janela de entrega diz e limita quanto sai da prateleira escolhida** (itens 16 e 17 da
+> estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 268). **Onde parou, exatamente:** a
+> **268 está fechada**; a próxima é o item 18 da estimativa de 23/11 (fim do plano da 268).
+>
+> *(Antes:)* **Etapa 267 fechada — 2026-11-26.** **Na separação e na entrega, a recusa por saldo atualiza o "Sai de"
 > sem fechar a janela, e a entrega com só o lote não leva a peça separada de outra requisição** (itens 14 e 15 da estimativa de 23/11). **Sem
 > consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 267). **Onde parou, exatamente:** a **267 está fechada**; a
 > próxima são os itens 16 e 17 da estimativa de 23/11 (fim do plano da 267).
@@ -7480,6 +7485,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 268 — A peça separada "sem lote" e o "Sai de" com lote, e a janela de entrega que limita a outra prateleira (ENTREGUE — 2026-11-26)
+
+**Em uma frase:** a peça separada de uma prateleira **sem lote** (saldo antigo, de antes do controle por lote) que escolhe na entrega um **lote**
+da mesma prateleira passa a ser conferida como qualquer prateleira escolhida à mão (não leva mais as peças que outra requisição separou dali);
+e a janela de **Entregar**, com o **"Sai de"** numa prateleira diferente da separação, diz quanto pode sair dali, baixa a quantidade para esse
+número e não deixa confirmar acima dele.
+
+| Antes | Agora |
+|---|---|
+| Peça separada de *A* sem lote entregando 3 por *A — lote L1*, com 2 desse lote separados para outra requisição → passava e a outra era recusada depois | Recusada na hora: *"… em A, lote L1 há 4 para esta entrega, mas 2 já está separado dali para outra requisição (…); sobra 2, que não cobre a quantidade (3). …"* |
+| Janela de entrega: escolher *B-02* (*"sobra 4 de 6"*) com 5 e confirmar → recusa | A quantidade vira 4, *"Daqui podem sair até 4 PC."*; acima disso o **Confirmar Entrega** fica apagado |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **administrador**. Material com **Controle por lote**, lote *L1*: 5 em *B-01* e 6 em *B-02*. Requisição *R1* de 5 separada
+   inteira de *B-01 — lote L1*; requisição *R2* de 2 separada de *B-02 — lote L1*.
+2. Abra *R1* → **Entregar escolhendo de onde sai…** → **Confira:** o **"Sai de"** vem em *B-01* com 5 e nenhuma frase nova.
+3. Troque o **"Sai de"** para *"B-02 — lote L1 (sobra 4 de 6; 2 para outras)"* → **Confira:** a quantidade vira **4** e aparece *"Daqui podem
+   sair até 4 PC."*.
+4. Digite 5 → **Confira:** *"Daqui só podem sair 4 PC nesta entrega. Diminua a quantidade ou escolha outro endereço."* e o **Confirmar
+   Entrega** apagado (passe o mouse: *"Diminua a quantidade: o endereço escolhido não tem tudo isso"*). Volte para 4 → confirme → passa; no
+   histórico, saída de 4 de *B-02*.
+5. Volte o **"Sai de"** para *"Qualquer endereço (automático)"* em outra requisição → nenhuma frase nova (o automático não muda).
+6. (A peça sem lote) Material **sem** lote com 3 em *A*; ligue **Controle por lote** no cadastro; Entrada de 4 em *A* com lote *L1*. Separe *R3*
+   (3) escolhendo *"A (3)"* (sem lote) e *R4* (2) escolhendo *"A — lote L1"*. Abra *R3* → **Entregar escolhendo de onde sai…** e troque o **"Sai de"** para
+   *"A — lote L1 (sobra 2 de 4; 2 para outras)"* → **Confira:** a quantidade desce para 2 (*"Daqui podem sair até 2 un."*). Confirme → passa; *R4*
+   num clique → passa. (Pela integração, mandando 3 nesse par, a recusa é *"… há 4 para esta entrega, mas 2 já está separado dali para outra
+   requisição (⟨R4⟩); sobra 2, que não cobre a quantidade (3). …"*.)
+
+**O que esta etapa NÃO cobre:** o número da janela é um teto — com outro item da mesma requisição saindo junto de outro lugar, a entrega ainda
+pode recusar um pouco abaixo dele; a quantidade só desce no gesto de escolher a prateleira; a entrega num clique de peça com série vinda de um
+lote (**D (268)** do documento de novidades).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para você
+conferir à mão.
 
 ## Etapa 267 — O "Sai de" se atualiza depois de uma recusa, e a entrega com só o lote (ENTREGUE — 2026-11-26)
 
