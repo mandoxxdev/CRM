@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-27):** **Etapa 271 fechada** (**a Devolução depois de uma exclusão interrompida conta o que a exclusão
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 272 fechada** (**o estorno do Desbloquear com lote confere se o lote ainda tem as peças, e a
+> entrega de dois itens do mesmo lote com peça presa dá o mesmo resultado em qualquer ordem** — fora da estimativa de 23/11; **C504** e **C555**
+> resolvidos; decisões **B1648** a **B1650**; aviso **C556**; limitação **D (272)**; verificação **F (272)**; sem consulta antes do deploy). **Próxima:** a guarda de
+> outra caixa do **C485** (fim do plano da 272); o item 24 da estimativa de 23/11 ainda depende de resposta.
+> Antes: **Etapa 271 fechada** (**a Devolução depois de uma exclusão interrompida conta o que a exclusão
 > já devolveu** — item 22 da estimativa de 23/11; **C553** resolvido; decisões **B1646** e **B1647**; limitação **D (271)**; verificação **F (271)**; sem
 > consulta antes do deploy). **Próxima:** a estimativa de 23/11 não tem mais item do almoxarifado; os candidatos medidos estão no fim do plano da 271.
 > Antes: **Etapa 270 fechada** (**separar parte de uma prateleira e parte de outra: a separação guarda
@@ -4930,7 +4934,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15765,6 +15769,29 @@ vale com **Sai de** escolhido, com *"Qualquer endereço (automático)"* escolhid
 sai). **Descartado:** recusar quando a outra prateleira não tem mais as peças (seria recusa sem o almoxarife ter feito nada de errado; hoje
 sai). **Reversível.** `af99a506`, `4084f4b2`.
 
+**B1648 (NOVA, da Etapa 272; decisão do agente) — o estorno do Desbloquear com lote é recusado quando o lote não tem mais as peças.**
+**Escolhido:** depois da conferência de sempre do material, o estorno confere o que está preso no lote (caixa de requisição no lote, em inspeção,
+bloqueado no lote — já com o que volta —, reprovado e com terceiro, com os tetos por família da Etapa 264) contra o saldo do lote, e recusa com
+*"Não é possível estornar o desbloqueio: o lote L1 tem 0 UN livres para bloquear de novo e o estorno bloquearia 4 UN nele — o bloqueio ficaria
+apontando para peças que não estão no lote. Para bloquear de novo, use Bloquear Material escolhendo um lote que tenha as peças."* (material
+com série ou sem controle de lote: *"… use Bloquear Material sem indicar o lote."*, porque ali o Bloquear com lote é recusado). **Descartado:**
+(a) bloquear de novo em outro lote ou sem lote, sozinho (o sistema adivinharia qual peça está bloqueada); (b) só conferir o material (o de antes).
+**Reversível** (uma condição no estorno). `d22f41c4`, `3942620c`, `7422dfa5`.
+
+**B1649 (NOVA, da Etapa 272, com a revisão do plano; decisão do agente) — a conferência vale também para material que permite saldo
+negativo.** **Escolhido:** como o Bloquear indicando o lote e o estorno da entrada com peça presa (Etapa 264), que também não pulam esse
+material. **Descartado:** pular, como o Ajuste com lote (a peça bloqueada num lote negativo não existe nem com saldo negativo permitido).
+**Reversível.** `d22f41c4`.
+
+**B1650 (NOVA, da Etapa 272; decisão do agente) — a conferência do lote da entrega ganha uma segunda passada, sem mexer na primeira.**
+**Escolhido:** a passada de sempre continua decidindo quem recebe a recusa nas entregas sem guarda que fica (a **B1447**: o item à mão, não a
+planejada); se ela passa, uma segunda confere cada item contra o que **todos** os outros itens da entrega pedem do lote (a conta da janela,
+**B1636**), começando por quem não tira exatamente a própria caixa (revisão do plano: a recusa não cai em quem só tira a caixa dele). A guarda
+que fica do próprio item continua fora (**B1446**). Nenhuma frase nova: a recusa é a de sempre, com *"N un já pedidas nesta entrega"* contando
+os outros itens. **Descartado:** trocar a conta da primeira passada pelo total (mudaria quem recebe a recusa nas entregas sem guarda e o envelope
+da planejada). **Preço:** a entrega que passava numa das ordens com o lote comprometido demais passa a ser recusada nas duas. **Reversível.**
+`7ab8f156`.
+
 **B1646 (NOVA, da Etapa 271, com a revisão do plano; decisão do agente) — o que a exclusão interrompida devolveu é contado pela ordem das
 entregas, sem gravar de qual entrega veio.** **Escolhido:** a Devolução soma as entradas da exclusão daquela requisição e material e reparte
 pelas entregas na mesma ordem da exclusão (a mais antiga primeiro, cada uma pelo que ainda faltava voltar dela); a entrada da exclusão que
@@ -15809,7 +15836,9 @@ deixa (quando outro item sai junto de outro lugar, a entrega guarda a parte dele
 uma exceção achada na revisão final:** no lote com peça presa, a conferência do lote da entrega depende da ordem dos itens (**C555**) e, numa
 das ordens, aceita um pouco mais do que a janela deixa; a janela fica com a conta da outra ordem, a que não deixa o lote comprometido demais.
 **Descartado:** perguntar ao servidor a cada escolha (uma consulta por clique; duas réguas — o que a **B1579** já tinha descartado). **Reversível.**
-`0ac0fd70`.
+`0ac0fd70`. *(**Revista na Etapa 272:** a exceção do **C555** deixou de existir — a entrega passou a conferir o lote contra o que todos os outros
+itens pedem, a mesma conta da janela (**B1650**). Fica a da própria origem: ali a janela promete a parte inteira, e a entrega pode recusar
+se outro item comprometer o lote.)*
 
 **B1637 (NOVA, da Etapa 268; decisão do agente) — como a janela limita.** **Escolhido:** (1) ao escolher a prateleira, a quantidade acima do
 limite desce para ele — com limite 0 fica como estava (zerar tiraria o item da entrega sem o almoxarife ver); (2) *"Daqui podem sair até N
@@ -20355,7 +20384,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      sobra volta para o desconto do material, junto com o *"Sem lote"* — nunca some).
      *(**O conserto entrou na Etapa 217** (**B1435**): a entrega e a aprovação nunca descontam de um lote mais do que ele tem livre; o
      número por lote na consulta continua o do livro.)* *(O caso (a) **não acontece mais desde a Etapa 262** — o estorno da entrada com o
-     bloqueio do lote de pé é recusado, **C239**; o (b) continua.)*
+     bloqueio do lote de pé é recusado, **C239**; o (b) continua.)* *(O caso (b) **não acontece mais desde a Etapa 272** — o estorno do
+     Desbloquear com lote é recusado quando o lote não tem mais as peças, **B1648**.)*
 
 510. **(NOVA, da Etapa 210) O que entra sem passar por uma tela não sobe para maiúsculo.** Planilha importada, integração e o que outro
      sistema mandar gravam como vieram. **Nenhum erro:** as buscas acham nas duas caixas (B1433). **O que fazer:** nada; se incomodar, subir
@@ -20637,7 +20667,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (3). …"*). Quando passa, o lote fica comprometido além do que pode sair, e a entrega seguinte de *k* pela origem dele cai na conta do lote.
      **Nenhum erro de estoque** (nada sai do que está preso). A janela de entrega usa a conta mais segura (a da recusa) e já mostra *"Daqui
      podem sair até 1 un."* para *i* (**B1636**). **O que fazer:** entregar um item por vez. Conserto: a conferência do lote somar o que todos
-     os itens da entrega pedem do lote, como a do endereço já faz (~1 h).
+     os itens da entrega pedem do lote, como a do endereço já faz (~1 h). *(**Resolvido na Etapa 272** — a entrega dá o mesmo resultado nas duas
+     ordens: recusada no item *i* com *"… só 1 pode sair nesta entrega: 4 un em inspeção; 2 un já separadas …; 2 un já pedidas nesta entrega …"*
+     (**B1650**).)*
+556. **NOVO (da Etapa 272, revisão final; provável desde a Etapa 264, não medido) — o estorno da entrada de um lote pode contar uma reprovação
+     já liberada quando outro lote tem bloqueio.** O estorno da entrada com peça presa (Etapa 264) limita a reprovação do lote ao bloqueado do
+     material menos o bloqueado **deste** lote; com peças bloqueadas em **outro** lote, a reprovação já liberada pelo Desbloquear *"Sem lote"*
+     volta a contar e o estorno pode ser recusado com as peças no lote. O estorno do Desbloquear da Etapa 272 já usa o bloqueado de todos os
+     lotes (reproduzido e consertado lá). **Nenhum erro de estoque** (é uma recusa a mais). **O que fazer:** estornar depois de desbloquear o
+     outro lote, ou registrar a correção pela não conformidade. Conserto: a mesma conta da 272 no estorno da entrada (~30 min, não medido).
+
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -22006,6 +22045,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   há lá; na entrega sai o que houver e o resto no automático (revisão final). (8) Quando a entrega tira de uma outra prateleira só parte do que
   foi separado de lá (alguém tirou a peça antes, por uma Saída avulsa), o resto continua anotado nela até a próxima entrega, que o manda para o
   automático — o detalhe pode mostrar uma prateleira já vazia (revisão final).
+- **(272) O estorno do Desbloquear com lote e a conferência do lote na entrega, o que ficou de fora.** (1) Com o histórico de bloqueios do lote
+  inconsistente (dado antigo que dá bloqueado negativo no lote), o número de *"livres"* da recusa do estorno pode sair maior que o real — só o
+  número da frase; a decisão de recusar é a mesma (revisão do plano). (2) Na própria prateleira de onde o item foi separado, a janela de entrega
+  promete a parte separada inteira (**B1636**); se outro item da mesma entrega comprometer o lote, a entrega recusa o que a janela mostrou.
 - **(271) A Devolução depois de uma exclusão interrompida, o que ficou de fora.** (1) Com **várias entregas** na mesma requisição, a entrada de
   uma devolução **estornada pelo livro depois** da exclusão interrompida desloca a conta: entregas de 2 e 4, devolução de 2 da primeira, a
   exclusão devolve 2 da segunda e para, a entrada da devolução é estornada → a primeira recusa os 2 que estão fora e a segunda aceita 4 (2 já
@@ -22069,7 +22112,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   Desbloquear** com lote bloqueia de novo sem conferir se o lote ainda tem as peças (**C504**, **D (249)** 2): bloquear 4 no *L1*, desbloquear,
   estornar a entrada do *L1* (passa, certo) e estornar o Desbloquear → passa, e o bloqueio volta apontando para o *L1* vazio — o mesmo estado que
   esta etapa fecha nas outras portas (revisão final, reproduzido). **O que fazer:** não estornar um Desbloquear de lote que já saiu; o caminho é
-  o Bloquear com lote (que confere o livre do lote). Conserto: o estorno do Desbloquear conferir o livre do lote (~45 min, motor).
+  o Bloquear com lote (que confere o livre do lote). Conserto: o estorno do Desbloquear conferir o livre do lote (~45 min, motor). *(**Resolvido
+  na Etapa 272** — **B1648**.)*
 - **(263) A foto do fornecedor e os campos retirados, o que ficou de fora.** (1) O arquivo da foto tirada fica na pasta do servidor; a
   troca pelo envio continua apagando a anterior, mas a tirada não é apagada por ninguém (**B94**). (2) **Tirar foto** não confere se outra pessoa
   trocou a foto depois de a ficha abrir (**B1620**). (3) Os textos antigos de Descrição, Aplicação e Especificações Técnicas não se editam mais por
@@ -23758,6 +23802,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(272) Nenhum clique foi dado.** O estorno do Desbloquear foi provado pela rota real e pelo serviço (15 cenários, com a corrida contra a Saída
+  do lote); a entrega, pelo serviço e pela rota (9 cenários). Vale 5 minutos: o roteiro da Etapa 272 no guia (passos 1 a 4, o estorno; o passo 5
+  pede peças em inspeção num lote).
 
 **(271) Nenhum clique foi dado.** A falha no meio da exclusão não tem gesto de tela; foi simulada nos testes automáticos (10 cenários pela
   rota real, com duas corridas) e o rótulo da lista, com a resposta do servidor simulada (1 cenário). Vale 5 minutos: o caminho normal (devolver
@@ -45846,12 +45894,73 @@ devolução era gravada — nada foi gravado. Tente de novo."* (ou a recusa com 
   (**D (271)** 1, **B1646**). Depois de uma falha na exclusão, o caminho continua sendo **excluir de novo** logo.
 - A exclusão não grava de qual entrega cada peça voltou: a conta é pela ordem das entregas (**B1646**).
 
+## Etapa 272 — O estorno do Desbloquear de um lote confere o lote, e a entrega de dois itens do mesmo lote dá o mesmo resultado em qualquer ordem (2026-11-27)
+
+Duas correções do galpão, fora da estimativa da semana. **(1)** Quem desbloqueava peças de um lote e depois estornava esse Desbloquear (para
+"voltar atrás") bloqueava de novo as peças mesmo quando elas já tinham saído do lote: o bloqueio ficava apontando para um lote vazio e as peças
+bloqueadas passavam, na prática, a ser de outro lote (o aviso **C504**). Agora o estorno é recusado e diz quantas peças livres o lote tem e o
+caminho. **(2)** Num lote com peças presas (em inspeção ou bloqueadas), a mesma entrega de dois itens do mesmo material passava ou era recusada
+conforme a ordem em que os itens foram pedidos; quando passava, o lote ficava comprometido além do que podia sair (o aviso **C555**). Agora a
+entrega dá o mesmo resultado nas duas ordens, e é a mesma conta que a janela de entrega já mostrava. Decisões do agente: **B1648** a **B1650**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| L1 4 bloqueado no lote, Desbloquear 4 do L1, estorno da entrada do L1; **estornar o Desbloquear** → passava, e o bloqueio voltava para o L1 vazio | Recusado: *"Não é possível estornar o desbloqueio: o lote L1 tem 0 UN livres para bloquear de novo e o estorno bloquearia 4 UN nele — o bloqueio ficaria apontando para peças que não estão no lote. Para bloquear de novo, use Bloquear Material escolhendo um lote que tenha as peças."* |
+| O mesmo com as 4 peças ainda no L1 | Igual: passa, e o L1 volta a ter 4 bloqueadas |
+| Lote L com 9 (4 em inspeção), item *i* sem caixa e item *k* com 4 separadas de *ZA — lote L*; entregar *i* 3 de *ZB — lote L* e *k* 2 de *ZC — lote L* → passava se *i* foi pedido antes, recusava se *k* veio antes | Recusada nas duas ordens, no item *i*, com a mesma frase |
+| A janela de entrega já dizia *"Daqui podem sair até 1 un."* para *i* nesse caso, e a entrega podia aceitar mais | A entrega aceita o que a janela diz |
+
+### As regras, com o cenário exato
+
+**1. O estorno do Desbloquear com lote confere o lote (RN-272.01/02).** Material com controle por lote, entradas de 4 no *L1* e 4 no *L2*.
+**Materiais → Bloquear**, 4, lote *L1*; **Desbloquear**, 4, lote *L1*. **Movimentações → Histórico**: estorne a entrada do *L1* (passa) e
+depois o **Desbloquear** → *"Não é possível estornar o desbloqueio: o lote L1 tem 0 UN livres para bloquear de novo e o estorno bloquearia 4 UN
+nele — o bloqueio ficaria apontando para peças que não estão no lote. Para bloquear de novo, use Bloquear Material escolhendo um lote que tenha
+as peças."* Nada muda (o Desbloquear continua no histórico, o bloqueado continua 0). Se em vez do estorno da entrada saírem 3 do *L1*: *"o lote
+L1 tem 1 UN livre …"*. Com as 4 peças ainda no *L1*, o estorno passa e o *L1* volta a ter 4 bloqueadas.
+
+**2. A peça separada numa requisição conta (RN-272.03).** Com uma requisição que separou 3 do *L1* (4 no lote), o estorno do Desbloquear de 4
+→ *"o lote L1 tem 1 UN livre …"*. A reprovação da inspeção do lote que já foi liberada pelo *"Sem lote"* não conta.
+
+**3. A ordem das recusas (RN-272.04).** Se o material inteiro não tem livre para bloquear de novo, a mensagem é a de sempre: *"Não é possível
+estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: …"*.
+
+**4. Material com número de série ou sem controle por lote (RN-272.05).** O Desbloquear com lote dele vem da devolução para Quarentena; a mesma
+conferência, terminando em *"Para bloquear de novo, use Bloquear Material sem indicar o lote."* (o Bloquear indicando o lote não vale para ele).
+
+**5. A entrega de dois itens do mesmo lote (RN-272.07/08).** Lote *L*: 4 em *ZA*, 3 em *ZB*, 2 em *ZC*, com 4 em inspeção (podem sair 5).
+Requisição com o item *i* (3, separado no automático) e o item *k* (4, separado de *ZA — lote L*). **Entregar**: *i* 3 com **Sai de** *ZB — lote
+L* e *k* 2 com **Sai de** *ZC — lote L* → *"⟨material⟩: no lote L há 9 un, mas só 1 pode sair nesta entrega: 4 un em inspeção; 2 un já separadas
+dele para outras requisições ou outras peças desta; 2 un já pedidas nesta entrega; não cobre a quantidade (3). Escolha outro lote ou deixe
+"Qualquer endereço (automático)""* — em qualquer ordem dos itens. *i* 1 e *k* 2 → passa nas duas ordens. Por quê: as 2 que *k* deixa separadas
+em *ZA* continuam guardadas, então só sobram 3 para os dois itens.
+
+**6. Um item por vez (RN-272.10).** *k* 2 de *ZC — lote L* sozinho passa; depois *i* 3 → recusado (*"no lote L há 7 un, mas só 1 pode sair …"*);
+*i* 1 → passa.
+
+### O que esta etapa NÃO cobre
+
+- A frase do estorno pode mostrar um número de peças livres maior que o real quando o histórico de bloqueios do lote é antigo e inconsistente
+  (só o número da frase; a decisão de recusar é a mesma) — **D (272)** 1.
+- Na própria prateleira de onde o item foi separado, a janela de entrega continua prometendo a parte separada inteira (**B1636**); a entrega
+  pode recusar se outro item comprometer o lote — **D (272)** 2.
+- O estorno da **entrada** de um lote com peça presa ainda pode contar uma reprovação já liberada quando outro lote tem bloqueio (**C556**, achado na
+  revisão final, não medido).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 272 entregue (2026-11-27):** **o estorno do Desbloquear com lote é recusado quando o lote não tem mais as peças, e a conferência do
+  lote na entrega dá o mesmo resultado em qualquer ordem dos itens** (fora da estimativa de 23/11; **C504** e **C555** resolvidos). Commits
+  `48fe26a8` (estimativa), `338a90c8` (plano), `d22f41c4`, `3942620c` e `7422dfa5` (o estorno), `7ab8f156` (a entrega) e o fechamento. **O que é seu:** as
+  **B1648** a **B1650** (reversíveis); o aviso **C556** (achado na revisão final, não medido); a limitação **(272)** em D e a verificação **(272)** em F. Sem consulta antes do deploy. **Próxima:** a
+  guarda de outra caixa do **C485** (fim do plano da 272).
 
 - **Etapa 271 entregue (2026-11-27):** **a Devolução depois de uma exclusão interrompida conta o que a exclusão já devolveu — na recusa, na
   lista das entregas e na conferência ao gravar** (item 22 da estimativa de 23/11; **C553** resolvido). Commits `d8a9b974` (plano), `ae64f9a5`

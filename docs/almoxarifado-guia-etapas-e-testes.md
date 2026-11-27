@@ -5,14 +5,20 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 271 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-27 (Etapa 272 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 271 fechada — 2026-11-27.** **Depois de uma exclusão de requisição interrompida por um erro
+> **O desenvolvimento parou aqui: Etapa 272 fechada — 2026-11-27.** **O estorno do Desbloquear de um lote confere se o lote ainda tem as
+> peças, e a entrega de dois itens do mesmo lote com peças presas dá o mesmo resultado em qualquer ordem** (fora da estimativa de 23/11; C504 e
+> C555). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 272). **Onde parou, exatamente:** a **272 está
+> fechada**; a próxima é a guarda de outra caixa do C485 (fim do plano da 272); o item 24 da estimativa de 23/11 (série e etiqueta obrigatórios)
+> ainda depende de resposta.
+>
+> *(Antes:)* **Etapa 271 fechada — 2026-11-27.** **Depois de uma exclusão de requisição interrompida por um erro
 > inesperado, a Devolução conta o que a exclusão já devolveu** (item 22 da estimativa de 23/11). **Sem consulta antes do deploy.** **Nenhum
 > clique foi dado** (roteiro na seção da 271). **Onde parou, exatamente:** a **271 está fechada**; a estimativa de 23/11 não tem mais item do
 > almoxarifado — os candidatos medidos estão no fim do plano da 271.
@@ -7500,6 +7506,38 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 272 — O estorno do Desbloquear de um lote e a entrega de dois itens do mesmo lote (ENTREGUE — 2026-11-27)
+
+**Em uma frase:** estornar um **Desbloquear** feito num lote passa a ser recusado quando as peças já não estão mais no lote (antes o bloqueio
+voltava apontando para um lote vazio); e a entrega de dois itens do mesmo material saindo de um lote com peças presas dá o mesmo resultado em
+qualquer ordem dos itens.
+
+| Antes | Agora |
+|---|---|
+| Bloquear 4 do *L1*, Desbloquear 4, estornar a entrada do *L1* e depois o Desbloquear → passava | Recusado: *"Não é possível estornar o desbloqueio: o lote L1 tem 0 UN livres para bloquear de novo e o estorno bloquearia 4 UN nele — o bloqueio ficaria apontando para peças que não estão no lote. Para bloquear de novo, use Bloquear Material escolhendo um lote que tenha as peças."* |
+| A entrega de *i* 3 e *k* 2 do lote *L* (com peças em inspeção) passava numa ordem dos itens e era recusada na outra | Recusada nas duas, no item *i*, com a mesma frase |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **administrador**. Um material **com controle por lote**, com Entradas de 4 no lote *L1* e 4 no lote *L2*.
+2. **Materiais → Bloquear**: 4, lote *L1*. Depois **Desbloquear**: 4, lote *L1*.
+3. **Movimentações → Histórico**: estorne a **Entrada** do *L1* → passa. Estorne o **Desbloquear** → **Confira** a recusa acima, com *"0 UN
+   livres"*; o Desbloquear continua no histórico sem estorno e o material continua com 0 bloqueado.
+4. Faça uma nova Entrada de 4 no *L1* e estorne o **Desbloquear** de novo → **Confira:** passa, e o *L1* volta a ter 4 bloqueadas (o seletor de
+   lote da Saída mostra o *L1* com 4 bloqueadas).
+5. *(A entrega — exige peças em inspeção num lote; mais fácil com uma nota em inspeção.)* Lote *L* com 4 em *ZA*, 3 em *ZB* e 2 em *ZC*, das
+   quais 4 em inspeção. Requisição com dois itens do material: *i* 3 (separe no automático) e *k* 4 (separe de *ZA — lote L*). **Entregar**:
+   *i* 3 com **Sai de** *ZB — lote L* e *k* 2 com **Sai de** *ZC — lote L* → **Confira:** *"… no lote L há 9 un, mas só 1 pode sair nesta entrega:
+   4 un em inspeção; 2 un já separadas dele para outras requisições ou outras peças desta; 2 un já pedidas nesta entrega; não cobre a quantidade
+   (3). …"*. A janela já mostrava *"Daqui podem sair até 1 un."* para *i*. Mude *i* para 1 → passa.
+
+**O que esta etapa NÃO cobre:** o número de *"livres"* da frase do estorno com um histórico de bloqueios antigo e inconsistente (só o número; a
+recusa é a mesma — **D (272)** 1 do documento de novidades); na própria prateleira de onde o item foi separado, a janela promete a parte separada
+inteira e a entrega pode recusar se outro item comprometer o lote (**D (272)** 2).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota e pelo serviço) provam,
+escrito para você conferir à mão.
 
 ## Etapa 271 — A Devolução depois de uma exclusão interrompida (ENTREGUE — 2026-11-27)
 

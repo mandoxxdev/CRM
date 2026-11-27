@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 272 (2026-11-27, `d22f41c4`, `3942620c`, `7422dfa5`): o estorno de um Desbloquear com lote é recusado quando o lote não tem mais as peças
+> (C504, B1648, B1649).** Ver "Etapa 272" no fim.
 > **+ Etapa 269 (2026-11-26, `ee8394e1`): a Entrada da tela Movimentações num lote existente vencido avisa mesmo sem a validade digitada
 > (C457, B1641 — revê a B1282), e o lote antigo com a validade em branco recebe a validade digitada em vez de recusar com a data vazia (C460,
 > B1642).** Ver "Etapa 269" no fim.
@@ -1688,3 +1690,25 @@ Plano: `docs/superpowers/plans/2026-11-26-almoxarifado-etapa269-lote-em-inspecao
 
 Testes: `entradaLoteVencidoAvisa.api.test.js` (8); `MovimentacoesValidadeLote.test.js` (9, +1). Sabotagens: rota sem a opção → 3 caem; motor
 sem o branco → 2; guarda do preencher → 2; auditoria → 1; tela sem o aviso → 1.
+
+## Etapa 272 — o estorno do Desbloquear com lote confere o lote (C504) (2026-11-27)
+
+Plano: `docs/superpowers/plans/2026-11-27-almoxarifado-etapa272-estorno-desbloqueio-e-lote-na-entrega.md` (RN-272.01 a .06; B1648, B1649).
+Fora da estimativa de 23/11 (estimativa própria de 27/11).
+
+- [x] **RN-272.01/02 (C504, B1648)** — o estorno de um Desbloquear com lote é recusado (400) quando o que está preso no lote, já com o que
+  volta, passa do saldo do lote; a literal diz quantas peças livres o lote tem e o caminho; nada gravado (o catch devolve o bloqueado e o
+  claim); o lote intacto passa — `d22f41c4`.
+- [x] **RN-272.03 (Fase 2, achado 2)** — a caixa de requisição no lote conta; reprovação e terceiros com o teto por família da 264 — `3942620c`; Fase 5: o teto da reprovação olha o bloqueado de **todos** os lotes, e inspeção e terceiros ganharam cenário — `7422dfa5`.
+- [x] **RN-272.04** — a recusa do material vem antes (a literal de sempre) — `d22f41c4`.
+- [x] **RN-272.05 (Fase 2, achado 1; B1649)** — material com série ou sem controle de lote: a frase termina em *"use Bloquear Material sem
+  indicar o lote."*; o que permite saldo negativo também confere — `3942620c`.
+- [x] **RN-272.06** — dentro da seção do estorno: Saída do lote × estorno do Desbloquear nunca os dois — `d22f41c4`.
+- [ ] **Fora (declarado, D (272) 1):** o número de *"livres"* da frase com o livro de bloqueios do lote negativo (legado) — só o texto.
+
+**Correção de spec:** a linha da Etapa 209 acima que lista o `DESBLOQUEIO` (C504) como caso em que o lote pode ficar com mais bloqueado que
+saldo **deixou de valer** na 272 para o estorno do Desbloquear (o caso da entrada da devolução já tinha sido fechado na 262).
+
+Testes: `estornoDesbloqueioComLote.api.test.js` (15, rota e serviço, corrida e fluxo). Sabotagens: sem a conferência → 6 caem; sem contar o que
+volta → 6; sem o teto da reprovação → 1; sem a caixa → 1; sem o caminho sem lote → 1; sem inspeção e terceiros → 2. Aviso novo: **C556** (a
+mesma conta do teto no estorno da entrada da 264, não medido).
