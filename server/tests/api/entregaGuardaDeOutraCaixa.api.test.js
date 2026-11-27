@@ -272,6 +272,19 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
       lote_id, quantidade_em_inspecao) VALUES (?, ?, 1, 1, ?, 1)`, [rec, m.id, l1]);
     await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }, { item_id: ids[1], quantidade_atendida: 1 }]));
   });
+  await test('[RN-273.09 Fase 5] guarda da R1 num lote SEM prateleira bloqueada nem linha sem endereco; a falta vem da inspecao antiga do L2 -> 200 como antes (B1640)', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 3, 'L1'); await entrar(m, P01.id, 1, 'L2');
+    const l1 = await loteId(m, 'L1');
+    const a = await reqDireta([[m.id, 3]]);
+    await separar(a.R, [{ item_id: a.ids[0], quantidade_separada: 3, localizacao_origem_id: A01.id, lote_id: l1 }]);
+    const b = await reqDireta([[m.id, 1]]);
+    await separar(b.R, [{ item_id: b.ids[0], quantidade_separada: 1 }]);
+    const rec = (await dbRun(db, "INSERT INTO recebimentos_material_almoxarifado (numero, status) VALUES (?, 'CONFERIDO')", [`REC-E273-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, quantidade_em_inspecao) VALUES (?, ?, 1, 1, ?, 1)`, [rec, m.id, await loteId(m, 'L2')]);
+    await ok(entregar(b.R, [{ item_id: b.ids[0], quantidade_atendida: 1 }]));
+  });
   await test('[RN-273.07 servico] pelo servico (entregarRequisicao): 400 E2', async () => {
     const { m, R2, item, n1 } = await montar();
     await bloquearLoc(B01, 1);

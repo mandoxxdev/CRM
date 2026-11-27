@@ -2658,10 +2658,15 @@ function fraseEntregaLoteImpedido(nomeMaterial, qtyDoItem, unidade, falta, imped
  */
 async function outrasCaixasNoMaterial(db, materialId, requisicaoId, saiuSimulado, parteQueFicaPorItem) {
   const viva = caixaVivaSql('r');
+  // Fase 5 (achado 2): so o lote que TAMBEM tem saldo numa linha que o automatico pula (prateleira bloqueada ou sem endereco) — e o que
+  // faz a falta; a guarda num lote sem essa linha nao explica a falta (a inspecao antiga de outro lote segue como antes, B1640).
   const rows = await dbAll(db, `SELECT ir.id, ir.requisicao_id AS rid, lt.codigo, r.numero, ${PARTE_ORIGEM_SQL} as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     JOIN lotes_almoxarifado lt ON lt.id = ir.lote_separacao_id
     WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ${viva.sql}
+      AND EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado ocs LEFT JOIN localizacoes_almoxarifado oclc ON oclc.id = ocs.localizacao_id
+        WHERE ocs.material_id = ir.material_id AND ocs.lote_id = ir.lote_separacao_id AND ocs.quantidade > ${Q.QTD_FOLGA}
+          AND (ocs.localizacao_id IS NULL OR COALESCE(oclc.bloqueada, 0) = 1))
     ORDER BY lt.codigo, r.numero`, [materialId, ...viva.params]);
   const contam = rows.filter((g) => (Number(g.rid) === Number(requisicaoId)
     ? guardaQueConta(g, saiuSimulado, parteQueFicaPorItem) : (Number(g.q) || 0)) > Q.QTD_FOLGA);
