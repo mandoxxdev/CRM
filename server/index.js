@@ -4479,6 +4479,11 @@ function semCoordenadaGuardada(row) {
 
 app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {
   const { status, search, segmento } = req.query;
+  // `limite` (27/11/2026): a busca do cliente na proposta pede só os primeiros que batem — com ~5 mil clientes a tela baixava todos
+  // para um <select>. Sem `limite` (ou inválido), a resposta é a lista inteira, como sempre. Aplicado DEPOIS do filtro de segmento,
+  // que é feito aqui no JavaScript (cortar antes no SQL deixaria de fora quem bate o segmento).
+  const limiteNum = parseInt(req.query.limite, 10);
+  const limite = Number.isInteger(limiteNum) && limiteNum > 0 ? Math.min(limiteNum, 200) : null;
   let query = 'SELECT * FROM clientes WHERE 1=1';
   const params = [];
 
@@ -4489,9 +4494,16 @@ app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProj
 
   // Etapa 159 (RN-159.02, C385): o termo aparado, nas tres formas (o cadastro grava em maiusculas com acento)
   const busca = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj'], search);
+  // CNPJ só com números (27/11/2026): o cadastro grava formatado ("12.345.678/0001-90") e "12345678" não achava ninguém. Com 3
+  // dígitos ou mais no termo, compara também o CNPJ sem pontuação com os dígitos do termo.
+  const digitosBusca = typeof search === 'string' ? search.replace(/\D/g, '') : '';
+  const porCnpjSemPontuacao = digitosBusca.length >= 3 && /^[\d.\-/\s]+$/.test(search.trim());
   if (busca.sql) {
-    query += ' AND ' + busca.sql;
+    query += porCnpjSemPontuacao
+      ? ` AND (${busca.sql} OR REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj, ''), '.', ''), '/', ''), '-', ''), ' ', '') LIKE ?)`
+      : ' AND ' + busca.sql;
     params.push(...busca.params);
+    if (porCnpjSemPontuacao) params.push(`%${digitosBusca}%`);
   }
 
   query += ' ORDER BY razao_social';
@@ -4507,6 +4519,7 @@ app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProj
     }
     let lista = rows || [];
     if (segmentoAlvo) lista = lista.filter((c) => typeof c.segmento === 'string' && c.segmento.normalize('NFC').trim().toUpperCase() === segmentoAlvo);
+    if (limite) lista = lista.slice(0, limite);
     res.json(lista.map(semCoordenadaGuardada));
   });
 });

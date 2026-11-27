@@ -1,0 +1,20 @@
+/* Campo de cliente da proposta com busca (27/11/2026) */
+.seletor-cliente { position: relative; width: 100%; }
+.seletor-cliente-campo { position: relative; display: flex; align-items: center; }
+.seletor-cliente-campo input { width: 100%; padding-left: 36px !important; padding-right: 34px !important; box-sizing: border-box; }
+.seletor-cliente-lupa { position: absolute; left: 12px; color: #94a3b8; pointer-events: none; }
+.seletor-cliente-limpar {
+  position: absolute; right: 6px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent; color: #64748b; cursor: pointer;
+}
+.seletor-cliente-limpar:hover { background: rgba(100, 116, 139, 0.12); }
+.seletor-cliente-painel {
+  position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; min-width: 100%; width: max-content; max-width: min(560px, 90vw);
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14); overflow: hidden;
+}
+.seletor-cliente-lista { list-style: none; margin: 0; padding: 6px; max-height: 320px; overflow-y: auto; }
+.seletor-cliente-lista li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.seletor-cliente-lista li strong { font-size: 14px; font-weight: 600; color: #0f172a; }
+.seletor-cliente-lista li small { font-size: 12px; color: #64748b; }
+.seletor-cliente-lista li.ativo { background: #e8f1ff; }
+.seletor-cliente-aviso { padding: 10px 14px; font-size: 13px; color: #64748b; }

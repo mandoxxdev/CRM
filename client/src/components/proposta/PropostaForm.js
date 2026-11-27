@@ -26,6 +26,7 @@ import { lerAcessoriosParaEdicao, totalAcessoriosDosItens } from '../../utils/ac
 import { montarPayloadProposta } from './payloadProposta';
 import { hojeLocalISO } from '../../utils/dataLocal';
 import './PropostaForm.css';
+import SeletorCliente from './SeletorCliente';
 
 const TIPOS = [
   { value: 'comercial', label: 'Comercial' },
@@ -143,7 +144,8 @@ export default function PropostaForm() {
   // Etapa 140 (RN-140.12b): o status GRAVADO (o do carregamento) — o seletor só oferece "Desconto aprovado" quando a proposta já está nele.
   const [statusGravado, setStatusGravado] = useState('rascunho');
   const [itens, setItens] = useState([]);
-  const [clientes, setClientes] = useState([]);
+  // O nome do cliente escolhido (o campo de busca mostra; a lista inteira de clientes não é mais carregada — 27/11/2026).
+  const [clienteRotulo, setClienteRotulo] = useState('');
   const [usuarios, setUsuarios] = useState([]);
   const [usuariosReady, setUsuariosReady] = useState(false);
   const [oportunidades, setOportunidades] = useState([]);
@@ -216,14 +218,14 @@ export default function PropostaForm() {
     setUsuarios([]);
     setUsuariosReady(false);
 
+    // Os clientes NÃO vêm mais aqui (27/11/2026): eram todos (~5 mil) para um <select>; o SeletorCliente busca no servidor.
     Promise.all([
-      api.get('/clientes', { params: { status: 'ativo' } }).catch(() => ({ data: [] })),
+      Promise.resolve(null),
       fetchComercialResponsaveis(effectiveUser).catch(() => []),
       api.get('/oportunidades', { params: { status: 'ativa' } }).catch(() => ({ data: [] })),
       api.get('/familias').catch(() => ({ data: [] }))
-    ]).then(([c, u, o, f]) => {
+    ]).then(([, u, o, f]) => {
       if (cancelled) return;
-      setClientes(Array.isArray(c.data) ? c.data : []);
       setUsuarios(Array.isArray(u) ? u : []);
       setUsuariosReady(true);
       setOportunidades(Array.isArray(o.data) ? o.data : []);
@@ -269,6 +271,7 @@ export default function PropostaForm() {
           incoterm: data.incoterm ?? ''
         });
         setStatusGravado(data.status ?? 'rascunho');
+        setClienteRotulo(data.cliente_nome || data.cliente_nome_fantasia || data.razao_social || '');
         setPdfAnexo(data.pdf_proposta_cliente || null);
         setPdfNome(data.pdf_proposta_nome || data.pdf_proposta_cliente || '');
         setItens((data.itens || []).map((i) => {
@@ -398,7 +401,8 @@ export default function PropostaForm() {
     return true;
   };
 
-  const handleClienteChange = (clienteId) => {
+  const handleClienteChange = (clienteId, cliente) => {
+    setClienteRotulo(cliente ? (cliente.razao_social || cliente.nome_fantasia || '') : '');
     setForm((f) => ({ ...f, cliente_id: clienteId }));
     if (!isEdit && clienteId) gerarNumeroProposta(clienteId, form.responsavel_id);
     else if (!isEdit && !clienteId) setForm((f) => ({ ...f, numero_proposta: '' }));
@@ -683,13 +687,8 @@ export default function PropostaForm() {
               <span className="proposta-form-hint">Gerado automaticamente ao selecionar o cliente (padrão do sistema)</span>
             </div>
             <div className="proposta-form-field">
-              <label>Cliente *</label>
-              <select value={form.cliente_id} onChange={(e) => handleClienteChange(e.target.value)} required>
-                <option value="">Selecione...</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.razao_social || c.nome_fantasia || `#${c.id}`}</option>
-                ))}
-              </select>
+              <label htmlFor="proposta-cliente">Cliente *</label>
+              <SeletorCliente valor={form.cliente_id ? String(form.cliente_id) : ''} rotulo={clienteRotulo} onEscolher={handleClienteChange} />
               <span className="proposta-form-hint">UF e segmento vêm do cadastro do cliente (gráficos do dashboard)</span>
             </div>
             <div className="proposta-form-field">
