@@ -268,7 +268,10 @@ function sufixoInspecaoNaEntrega(unidade, saldo, max, maxSemInspecao, lotes) {
   const comLote = (lotes || []).filter((l) => num(l.q) > Q.QTD_FOLGA);
   const semLote = Q.qtd(insp - comLote.reduce((s, l) => s + num(l.q), 0));
   let onde = '';
-  if (comLote.length === 1 && !(semLote > Q.QTD_FOLGA)) onde = ` (lote ${comLote[0].codigo})`;
+  // Fase 5 (achado 2): os itens do recebimento podem somar mais que o material (o registro antigo da B1640) — a lista ja nao diz onde
+  // esta o que segura; sem parentese.
+  if (semLote < -Q.QTD_FOLGA) onde = '';
+  else if (comLote.length === 1 && !(semLote > Q.QTD_FOLGA)) onde = ` (lote ${comLote[0].codigo})`;
   else if (comLote.length) {
     onde = ` (${comLote.length > 1 ? 'lotes' : 'lote'} ${comLote.map((l) => `${l.codigo} ${Q.qtd(num(l.q))}`).join(', ')}`
       + `${semLote > Q.QTD_FOLGA ? `, sem lote ${semLote}` : ''})`;

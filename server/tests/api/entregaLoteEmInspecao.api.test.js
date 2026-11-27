@@ -223,6 +223,8 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     assert.strictEqual(s('un', base, 1, 1, [{ codigo: 'L1', q: 3 }]), '');
     assert.strictEqual(s('un', { ...base, disponivel_material: -1 }, 0, 4, [{ codigo: 'L1', q: 3 }]), '');
     assert.strictEqual(s('', base, 1, 4, [{ codigo: 'L1', q: 3 }]), ' — 3 em inspeção (lote L1) só saem depois de decidida a inspeção');
+    // Fase 5 (achado 2): os lotes somam mais que o material (registro antigo junto) -> sem parentese
+    assert.strictEqual(s('un', base, 1, 4, [{ codigo: 'L1', q: 3 }, { codigo: 'L2', q: 2 }]), ' — 3 un em inspeção só saem depois de decidida a inspeção');
   });
   await test('[RN-269.04] dois itens do mesmo material: o segundo, sem disponivel depois do primeiro, recusa com o sufixo; nada baixado', async () => {
     const m = await material();

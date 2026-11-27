@@ -84,7 +84,8 @@ const dia = (n) => diaLocal.somarDiasISO(diaLocal.hojeLocalISO(), n);
     assert.strictEqual(r.body.aviso_validade, MSG.AVISO_VENCIDO('LV', venc));
   });
   await test('[RN-269.11] sem aviso: vence hoje, validade futura, sem validade, validade em branco, lote novo, sem lote', async () => {
-    for (const v of [dia(0), dia(10), null, '', '  ']) {
+    // (a validade so com espacos fica fora: a saida a trata como vencida e a Entrada nao avisa — D (269), Fase 5 achado 3)
+    for (const v of [dia(0), dia(10), null, '']) {
       // eslint-disable-next-line no-await-in-loop
       const m = await loteCom(v);
       // eslint-disable-next-line no-await-in-loop
