@@ -1,0 +1,9 @@
+*Planejamento — entrega de dois materiais quando a prateleira padrão de um deles está bloqueada*
+_27/11/2026_
+
+*1. A entrega recusa antes de dar baixa em qualquer material*
+Numa requisição com dois materiais em que a prateleira padrão de um deles está bloqueada, a entrega dos dois era recusada com a mensagem "Localização ... está bloqueada", mas as peças do outro material já tinham saído do estoque e o item aparecia como entregue. A entrega passa a conferir isso antes de dar baixa em qualquer item: recusa com a mesma mensagem e o estoque fica como estava.
+Tempo estimado: *45min*
+
+*Total estimado: 45min*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
