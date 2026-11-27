@@ -2897,6 +2897,21 @@ async function initSchemaUmaExecucao(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_substituicoes_req ON substituicoes_origem_requisicao(requisicao_id)`);
+  // Etapa 270 (B1643, RN-270.01): as OUTRAS prateleiras de onde a caixa de um item foi separada (a 1a continua nas colunas
+  // origem_separacao_id/lote_separacao_id/quantidade_origem_separacao do item, a unica que guarda a prateleira). Aditiva: item sem linha
+  // vale como antes. A quantidade gravada so sobe na separacao; quem le limita pela caixa (`partesEfetivas`, B1644).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS partes_separacao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_requisicao_id INTEGER NOT NULL,
+    requisicao_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    localizacao_id INTEGER NOT NULL,
+    lote_id INTEGER,
+    quantidade REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_partes_separacao_item ON partes_separacao_almoxarifado(item_requisicao_id)`);
   // Etapa 98 (B507): a devolucao da caixa a prateleira (append-only, molde da substituicoes_origem_requisicao). Tabela
   // propria e nao rodada negativa em separacoes_requisicao_almoxarifado: os leitores somam as rodadas, e a barreira
   // "quem separou nao confere" passaria a barrar quem devolveu. Nenhum UPDATE/DELETE no codigo.

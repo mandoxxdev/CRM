@@ -77,6 +77,91 @@ function parteOrigemSql(a = 'ir') {
 const PARTE_ORIGEM_SQL = parteOrigemSql('ir');
 
 /**
+ * Etapa 270 (B1644, RN-270.03): as OUTRAS partes da caixa do item (a tabela `partes_separacao_almoxarifado`), limitadas ao que sobra da
+ * caixa depois da parte da origem, na ordem em que foram separadas (a primeira primeiro). Quem tira da caixa sem dizer de onde tira primeiro
+ * o que nao tem prateleira, depois as outras partes da ultima para a primeira, por ultimo a origem (a RN-196.08 estendida). Pura.
+ * -> [{ ...linha, quantidade }] sem as zeradas.
+ */
+function partesEfetivas(item, linhas) {
+  const caixa = Math.max(0, getSeparado(item) - getEntregue(item));
+  let sobra = Q.qtd(Math.max(0, caixa - parteDaOrigem(item)));
+  const out = [];
+  for (const l of [...(linhas || [])].sort((a, b) => Number(a.id) - Number(b.id))) {
+    const q = Q.qtd(Math.max(0, Math.min(num(l.quantidade), sobra)));
+    if (q <= Q.QTD_FOLGA) continue;
+    out.push({ ...l, quantidade: q });
+    sobra = Q.qtd(sobra - q);
+  }
+  return out;
+}
+
+/** Etapa 270: as linhas das outras partes dos itens, com os codigos -> Map(item_id -> linhas, na ordem do id). */
+async function lerPartesDaSeparacao(db, itemIds) {
+  const ids = [...new Set((itemIds || []).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
+  const mapa = new Map();
+  if (!ids.length) return mapa;
+  const rows = await dbAll(db, `SELECT p.id, p.item_requisicao_id, p.localizacao_id, p.lote_id, p.quantidade,
+      lc.codigo as localizacao_codigo, lt.codigo as lote_codigo
+    FROM partes_separacao_almoxarifado p
+    LEFT JOIN localizacoes_almoxarifado lc ON lc.id = p.localizacao_id
+    LEFT JOIN lotes_almoxarifado lt ON lt.id = p.lote_id
+    WHERE p.item_requisicao_id IN (${ids.map(() => '?').join(',')}) ORDER BY p.id`, ids);
+  for (const r of rows) {
+    const k = Number(r.item_requisicao_id);
+    if (!mapa.has(k)) mapa.set(k, []);
+    mapa.get(k).push(r);
+  }
+  return mapa;
+}
+
+/**
+ * Etapa 270 (RN-270.01/02, B1644): grava as outras partes de UM item numa rodada de separacao. As linhas de antes valem pelo limitado na
+ * caixa de antes (`itemRetrato`, antes da rodada); a de quantidade 0 sai. Cada nova soma na linha viva do mesmo par exato (endereco + lote),
+ * senao vira linha nova (no fim da ordem). Dentro das duas travas da separacao.
+ */
+async function gravarPartesNaSeparacao(db, requisicaoId, itemRetrato, linhas, novas) {
+  const ef = new Map(partesEfetivas(itemRetrato, linhas).map((p) => [Number(p.id), p.quantidade]));
+  const atual = linhas.map((l) => {
+    const q = ef.get(Number(l.id)) || 0;
+    return { id: Number(l.id), localizacao_id: Number(l.localizacao_id), lote_id: l.lote_id != null ? Number(l.lote_id) : null,
+      quantidade: q, mudou: Math.abs(q - num(l.quantidade)) > Q.QTD_FOLGA };
+  });
+  for (const n of novas) {
+    const lote = n.loteId != null ? Number(n.loteId) : null;
+    const x = atual.find((a) => a.localizacao_id === Number(n.origemId) && a.lote_id === lote && a.quantidade > Q.QTD_FOLGA);
+    if (x) { x.quantidade = Q.qtd(x.quantidade + n.qty); x.mudou = true; } else {
+      atual.push({ id: null, localizacao_id: Number(n.origemId), lote_id: lote, quantidade: Q.qtd(n.qty), mudou: true });
+    }
+  }
+  for (const a of atual) {
+    if (!a.mudou) continue;
+    if (a.id == null) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `INSERT INTO partes_separacao_almoxarifado (item_requisicao_id, requisicao_id, material_id, localizacao_id, lote_id, quantidade)
+        VALUES (?, ?, ?, ?, ?, ?)`, [itemRetrato.id, requisicaoId, itemRetrato.material_id, a.localizacao_id, a.lote_id, a.quantidade]);
+    } else if (a.quantidade <= Q.QTD_FOLGA) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE id = ?', [a.id]);
+    } else {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `UPDATE partes_separacao_almoxarifado SET quantidade = ?, updated_at = datetime('now') WHERE id = ?`, [a.quantidade, a.id]);
+    }
+  }
+}
+
+/** Etapa 270 (RN-270.04): `partes_separacao` em cada item do detalhe (so as outras partes, limitadas; `[]` sem nenhuma). Aditivo. */
+async function anotarPartesDaSeparacao(db, itens) {
+  const mapa = await lerPartesDaSeparacao(db, (itens || []).map((i) => i.id));
+  for (const i of itens || []) {
+    i.partes_separacao = partesEfetivas(i, mapa.get(Number(i.id)) || []).map((p) => ({
+      localizacao_id: Number(p.localizacao_id), localizacao_codigo: p.localizacao_codigo || null,
+      lote_id: p.lote_id != null ? Number(p.lote_id) : null, lote_codigo: p.lote_codigo || null, quantidade: p.quantidade,
+    }));
+  }
+  return itens;
+}
+
+/**
  * Etapa 198 (RN-198.04, B1331): a regua UNICA de "caixa viva" — requisicao ativa (a exclusao zera `ativo`, C467) e num status que
  * ainda tem caixa (`STATUS_COM_CAIXA`; o cancelamento grava CANCELADO sem zerar `ativo`, e a caixa legada de uma cancelada voltou a
  * prateleira sem movimento). Usada pela Fila/sugestao, pelo automatico da entrega e pela separacao (aceitacao e divergencia). Antes a
@@ -1778,6 +1863,10 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   await validarFormaDaSeparacao(db, itens, itensSeparados);
 
   await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
+  // Etapa 270 (RN-270.01/02, B1644): as outras partes de ANTES da rodada e o retrato do item (o laco abaixo muta o item em memoria) — a
+  // gravacao regrava o valor limitado pela caixa de antes e soma o desta rodada.
+  const partesAntes = await lerPartesDaSeparacao(db, itens.map((i) => i.id));
+  const retratoItem = new Map(itens.map((i) => [Number(i.id), { ...i }]));
 
   // PASSADA 1 — validar TODAS as entradas antes de escrever qualquer coisa (fix-round 1, F1).
   // Antes, o laço gravava item a item e lançava 400 no meio: o item válido ficava gravado SEM
@@ -1964,6 +2053,9 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         quantidade: Q.qtd(mesmoPar ? parteAntes + qty : parteAntes),
       };
     }
+    // Etapa 270 (RN-270.01/02, B1643): com origem guardada, a rodada de OUTRO par com endereco escolhido grava a parte dela na tabela das
+    // outras prateleiras (a origem e a parte dela nao mudam, como na 196). Automatico e so lote (sem endereco) nao gravam: sem prateleira.
+    const outraParte = temOrigem && !mesmoPar && origemId ? { origemId, loteId, qty } : null;
     // Etapa 196 (RN-196.04, B1318): `motivo_substituicao` na separacao e ignorado — sem troca, nao ha onde gravar.
     item.origem_separacao_id = planejada.origemId;
     item.lote_separacao_id = planejada.loteId;
@@ -1972,7 +2064,7 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     // recusada com o estoque limpo (sonda 10 A da Fase 0).
     const novaSeparada = Q.qtd(getSeparado(item) + qty);
     item.quantidade_separada = novaSeparada;
-    validados.push({ item, qty, novaSeparada, origemId, loteId, planejada });
+    validados.push({ item, qty, novaSeparada, origemId, loteId, planejada, outraParte });
   }
 
   // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
@@ -2038,6 +2130,18 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
         ...divergenciaPorItem.get(item.id),
       });
+    }
+    // Etapa 270 (RN-270.01/02): as outras prateleiras desta rodada, por item (o mesmo item pode vir mais de uma vez no envio).
+    const novasPartes = new Map();
+    for (const v of validados) {
+      if (!v.outraParte) continue;
+      const k = Number(v.item.id);
+      if (!novasPartes.has(k)) novasPartes.set(k, []);
+      novasPartes.get(k).push(v.outraParte);
+    }
+    for (const [itemId, novas] of novasPartes) {
+      // eslint-disable-next-line no-await-in-loop
+      await gravarPartesNaSeparacao(db, requisicaoId, retratoItem.get(itemId), partesAntes.get(itemId) || [], novas);
     }
 
     if (tocados.length > 0) {
@@ -3861,6 +3965,11 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
     .catch((e) => {
       console.warn(`[almoxarifado-exclusao] Falha ao limpar a origem separada dos itens da requisição ${requisicaoId}: ${e.message}`);
     });
+  // Etapa 270 (RN-270.06): as outras prateleiras da caixa saem junto (a mesma regra e o mesmo best-effort da origem acima).
+  await dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE requisicao_id = ?', [requisicaoId])
+    .catch((e) => {
+      console.warn(`[almoxarifado-exclusao] Falha ao limpar as outras prateleiras da caixa da requisição ${requisicaoId}: ${e.message}`);
+    });
 
   // Task 6 — a exclusão deixava o hold preso. O /cancelar solta as reservas desde a Etapa 4;
   // o DELETE não soltava, e as duas rotas terminam no mesmo status CANCELADO. Como a expiração
@@ -4111,6 +4220,7 @@ module.exports = {
   pendenteSeparacao,
   parteDaOrigem, // Etapa 196 (T0)
   parteOrigemSql, // Etapa 196 (T0)
+  partesEfetivas, lerPartesDaSeparacao, anotarPartesDaSeparacao, // Etapa 270 (RN-270.03/04)
   parteGuardadaDeOutrasPorPar, // Etapa 201 (T1)
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
