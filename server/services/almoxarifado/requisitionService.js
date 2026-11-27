@@ -1364,7 +1364,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   const ids = reqs.map((r) => r.id);
   const marcas = ids.map(() => '?').join(',');
   const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
-      ma.material_critico, ma.ativo as material_ativo, ma.controle_lote, -- Etapa 197 (T1, RN-197.12): a dica diz o que a entrega faz com o lote
+      ma.material_critico, ma.ativo as material_ativo, ma.controle_lote, ma.controle_serie, -- Etapa 274 (RN-274.05): o teto le a mais so sem serie; Etapa 197 (T1, RN-197.12): a dica diz o que a entrega faz com o lote
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
@@ -1390,7 +1390,9 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   const tetosLote = new Map();
   const lotePresoDaFila = memoLotesComPecaPresa(db);
   for (const i of itens) {
-    if (!(num(i.lote_impedido) > Q.QTD_FOLGA)) continue; // sem lote impedido nao ha teto (nem leitura da origem)
+    // Etapa 274 (RN-274.01/05): sem lote impedido, so o material com controle de lote e sem serie le a mais (o gatilho da E2, dentro de
+    // `tetoDaEntregaPeloLote`); antes a Fila pulava todo item sem lote impedido.
+    if (!(num(i.lote_impedido) > Q.QTD_FOLGA) && !(Number(i.controle_lote) === 1 && Number(i.controle_serie) !== 1)) continue;
     // eslint-disable-next-line no-await-in-loop
     const t = await tetoDaEntregaPeloLote(db, i, await origemDaSeparacaoNaoServe(db, i, lotePresoDaFila));
     if (t !== null) tetosLote.set(i.id, t);
@@ -2713,9 +2715,15 @@ async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPo
  * (B1386: material com controle de lote, sem serie — C486 —, com saldo em lote impedido); fora disso null (o numero de antes). So le.
  */
 async function tetoDaEntregaPeloLote(db, item, origemLida) {
-  if (!(num(item.lote_impedido) > Q.QTD_FOLGA)) return null;
+  const comImpedido = num(item.lote_impedido) > Q.QTD_FOLGA;
   const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
   if (!mat || Number(mat.controle_lote) !== 1 || Number(mat.controle_serie) === 1) return null;
+  // Etapa 274 (RN-274.01..04, D (273) 2): sem lote impedido, o mesmo gatilho da E2 da conferencia (`outrasCaixasNoMaterial`: lote com parte
+  // guardada que o automatico pula — prateleira bloqueada ou linha sem endereco), com o item entregando sozinho (a guarda dele, que sai
+  // inteira no um clique ou solta no automatico, nao conta: `parteQueFica` 0). Antes devolvia null e o detalhe e a Fila mostravam 1 que a
+  // porta recusava com a E2. Sem o gatilho: null, o numero de antes (B1640).
+  if (!comImpedido && !(await outrasCaixasNoMaterial(db, item.material_id, item.requisicao_id, new Map(),
+    new Map([[Number(item.id), 0]])))) return null;
   const caixa = Math.max(0, getSeparado(item) - getEntregue(item));
   const parte = Q.qtd(Math.min(parteDaOrigem(item), caixa));
   const origemPorItem = new Map();
