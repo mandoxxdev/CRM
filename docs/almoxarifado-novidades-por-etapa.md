@@ -11,7 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-27):** **Etapa 274 fechada** (**a tela da requisição e a Fila mostram o que a entrega aceita quando
+> **Onde o desenvolvimento está (2026-11-27):** **Etapa 275 fechada** (**o sucateamento da reprovação é recusado depois do "Sem lote" em vez de
+> sucatear peça livre, e entregar juntos os dois itens do mesmo lote é recusado antes de baixar o primeiro** — fora da estimativa de 23/11;
+> **C559** e **C560** resolvidos; decisões **B1656** e **B1657**; limitação **D (275)**; verificação **F (275)**; sem consulta antes do deploy).
+> **Próxima:** ver o fim do plano da 275 (**C558**); o item 24 da estimativa de 23/11 ainda depende de resposta.
+> Antes: **Etapa 274 fechada** (**a tela da requisição e a Fila mostram o que a entrega aceita quando
 > o lote está separado para outra requisição e o resto em prateleira bloqueada, e a devolução pela não conformidade é recusada depois do "Sem
 > lote" em vez de tirar peça livre** — fora da estimativa de 23/11; **D (273)** 2 e **C557** resolvidos; decisões **B1654** e **B1655**; avisos
 > **C559** e **C560**; limitação **D (274)**; verificação **F (274)**; sem consulta antes do deploy). **Próxima:** ver o fim do plano da 274; o item 24
@@ -4944,7 +4948,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650, B1651 a B1653, B1654 a B1655; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560, B1561 a B1563, B1564 a B1566, B1567 a B1571, B1572 a B1575, B1576 a B1580, B1581 a B1585, B1586 a B1592, B1593 a B1597, B1598 a B1600, B1601 a B1602, B1603 a B1604, B1605 a B1606, B1607 a B1609, B1610 a B1613, B1614 a B1616, B1617 a B1618, B1619 a B1620, B1621 a B1623, B1624 a B1626, B1627 a B1630, B1631 a B1633, B1634 a B1638, B1639 a B1642, B1643 a B1645, B1646 a B1647, B1648 a B1650, B1651 a B1653, B1654 a B1655, B1656 a B1657; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15831,6 +15835,21 @@ devia e o estorno de uma entrada pode passar com reprovação de pé — só com
 **Descartado:** a régua "que menos bloqueia" (contaria como de pé o próprio Desbloquear que o estorno da Etapa 272 está devolvendo, e recusaria
 estornos certos). **Reversível.** `908bccae`.
 
+**B1656 (NOVA, da Etapa 275, com a revisão do plano; decisão do agente) — o sucateamento da reprovação é recusado quando a reprovação já saiu do
+bloqueado pelo Desbloquear "Sem lote" e o resto do bloqueado é de lote.** **Escolhido:** a mesma conferência da devolução (**B1655**) nas duas
+portas do sucateamento: ao **solicitar** (a frase aparece antes de alguém assinar) e na **assinatura que fecha** (a garantia: o bloqueio em lote
+pode nascer entre as duas). Na assinatura, a assinatura recém-feita é desfeita e a do outro balcão fica; a frase manda bloquear de novo, sem
+lote, e assinar outra vez, ou rejeitar o sucateamento; quando o lote já não tem as peças da reprovação, manda rejeitar. **Descartado:** (a) conferir
+só na assinatura — o almoxarife só descobriria depois das duas assinaturas; (b) conferir só na solicitação — o bloqueio em lote feito entre a
+solicitação e a assinatura passaria. **Reversível** (uma conferência em dois lugares). `1edd8acb`.
+
+**B1657 (NOVA, da Etapa 275, com a revisão do plano; decisão do agente) — entregar juntos dois itens do mesmo lote, quando a guarda de um sai
+inteira e a última peça do lote está em prateleira bloqueada, é recusado antes de baixar qualquer item.** **Escolhido:** a conta da entrega deixa de
+contar como disponível a peça do lote em prateleira **bloqueada** (a entrega não tira de lá) e a recusa da Etapa 273 passa a contar a peça separada
+do próprio item que sai nesta entrega; a frase é a da 273, com o número da própria requisição na lista de caixas. **Descartado:** (a) contar também a
+linha sem endereço — o automático tira dela e os dois juntos entregam certo (revisão do plano, medido); (b) desfazer as baixas já feitas quando o
+motor recusa no meio — muda a entrega inteira, e a conferência antes de baixar já é a regra da casa. **Reversível** (duas condições). `4dad97b7`; revisão final: a peça retida que está na prateleira bloqueada não conta duas vezes (sem isso, uma entrega certa de outro lote passava a ser recusada) — `dcbc3908`.
+
 **B1654 (NOVA, da Etapa 274; decisão do agente) — o entregável do detalhe e da Fila passa pela conta da entrega também sem lote impedido,
 pelo mesmo gatilho da recusa da Etapa 273.** **Escolhido:** quando um lote do material tem peças separadas na caixa de uma requisição e o resto
 em prateleira bloqueada ou sem endereço (o caso em que a entrega recusa desde a 273), o detalhe da requisição e a Fila calculam o entregável pela
@@ -20768,6 +20787,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      material; com a reprovação já liberada pelo *"Sem lote"* e outro lote bloqueado, a segunda assinatura do sucateamento tiraria peças livres do
      lote e baixaria o bloqueado do outro lote — o que a Etapa 274 fechou na devolução (**B1655**). **O que fazer:** liberar reprovação sempre pela
      não conformidade (**C516**). Conserto: a mesma conferência do bloqueado sem lote no sucateamento (medir antes).
+     *(**Reproduzido e resolvido na Etapa 275** — `1edd8acb` (**B1656**). Medido: reprovação de 2 no *L1* liberada pelo *"Sem lote"*, 4
+     bloqueadas no *L2*; solicitar e assinar o sucateamento terminava aprovado, sucateava 2 peças **livres** do *L1* e o bloqueado caía de 4 para 2
+     com as 4 do *L2* ainda bloqueadas. Agora a solicitação é recusada com *"Não é possível sucatear pela não conformidade: só 0 UN do bloqueado
+     está sem lote e a reprovação tem 2 UN — parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote: L2: 4).
+     Bloqueie de novo, sem lote, o que falta e solicite outra vez, ou cancele a não conformidade"*, e a assinatura que fecha, com o fim *"… e assine
+     outra vez, ou rejeite o sucateamento"*. Com a entrada do lote estornada, o fim é *"O lote L1 tem só 1 UN, menos que a reprovação: rejeite o
+     sucateamento"*.)*
 
 560. **NOVO (da Etapa 274, revisão do plano; deduzido, não medido; o comportamento é da Etapa 273) — a entrega dos dois itens juntos no caso da
      peça separada da própria requisição.** Na mesma requisição, um item com 3 separadas de *A-01 — lote L1* e outro de 1 sem prateleira, com
@@ -20775,6 +20801,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      vai para a prateleira bloqueada — o motor recusa ou a linha fica negativa (não medido). O detalhe e a Fila mostram 0 para o segundo (Etapa
      274). **O que fazer:** entregar o que o detalhe mostra. Conserto: medir e, se reproduzir, a conferência contar a guarda que sai na mesma
      entrega.
+     *(**Medido e resolvido na Etapa 275** — `4dad97b7` (**B1657**). **Era pior que o descrito:** a entrega respondia com a frase crua *"Localização
+     B-01 está bloqueada"* **depois** de já ter baixado as 3 do primeiro item (a saída ficava no histórico e o item como entregue) — uma recusa que
+     movia estoque; nenhuma linha negativa. Agora a entrega dos dois juntos é recusada antes de baixar qualquer coisa, com a frase da Etapa 273
+     (*"… O resto do lote L1 está separado na caixa de ⟨a própria requisição⟩ ou em prateleira bloqueada ou sem endereço. … ou entregue 1 un a
+     menos."*), e entregar só o primeiro passa.)*
 
 
 ### D. Limitações declaradas— são decisão, não esquecimento
@@ -22149,6 +22180,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   cada peça): recusa a mais, nunca peça presa saindo (revisão do plano). (2) O detalhe da requisição e a Fila só descontam do entregável o lote
   impedido: no caso da prateleira bloqueada com o lote separado para outra requisição, podem mostrar como entregável o que a entrega agora recusa
   (a recusa diz o que fazer; nada sai). *(O item 2 foi resolvido na Etapa 274, **B1654**.)*
+- **(275) O sucateamento depois do "Sem lote" e a entrega dos dois itens, o que ficou de fora.** (1) Depois de entregar só o primeiro item, o
+  segundo (a última peça do lote está na prateleira bloqueada, sem nenhuma peça separada no lote) aparece com **1** para entregar no detalhe e na
+  Fila, e a entrega recusa com *"Localização B-01 está bloqueada"*, sem baixar nada — a regra da prateleira bloqueada da Etapa 239; o número da
+  tela só segue a conta da entrega quando há peça separada no lote (Etapa 274). (2) A conferência do sucateamento, como a da devolução, olha o
+  bloqueado do material inteiro, não o de cada inspeção (o mesmo limite da **D (274)** 1). (3) Entregar juntos com a peça separada e a falta vindo
+  de **outro** lote (inspeção antiga, B1640) não foi medido.
 - **(274) O entregável do detalhe e a devolução pela não conformidade, o que ficou de fora.** (1) A conferência da devolução olha o bloqueado do
   material inteiro, não o de cada inspeção: com duas reprovações (uma liberada pelo *"Sem lote"*, outra ainda presa em outro lote) e outro lote
   bloqueado, a devolução da liberada pode passar se o que sobra sem lote cobre a quantidade dela (o bloqueado não diz de qual reprovação é cada
@@ -23910,6 +23947,10 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(275) Nenhum clique foi dado.** O sucateamento foi provado pelo serviço e pelas rotas da solicitação e da assinatura (9 cenários); a entrega
+  dos dois itens, pela rota (5 cenários; a prateleira bloqueada direto no banco, o mesmo campo que a tela de Localizações grava). Vale 5 minutos: o
+  roteiro da Etapa 275 no guia (passos 1 a 3, o sucateamento; 4 e 5, a entrega).
 
 **(274) Nenhum clique foi dado.** O entregável foi provado pelas rotas reais do detalhe e da Fila, cruzado com a rota da entrega (9 cenários;
   a prateleira bloqueada direto no banco, o mesmo campo que a tela de Localizações grava); a devolução pela não conformidade, pela rota e pelo
@@ -46175,6 +46216,55 @@ nenhum outro lote bloqueado continua registrando sem mover (*"O material já hav
   liberada pode ainda devolver — **D (274)** 1.
 - O **sucateamento** da reprovação não recebeu a mesma conferência (deduzido, não reproduzido) — **C559**.
 - Entregando **os dois** itens da regra 3 juntos, a recusa da 273 não dispara para o segundo (deduzido, não medido) — **C560**.
+
+## Etapa 275 — O sucateamento da reprovação não sucateia mais peça livre depois do "Sem lote", e a entrega dos dois itens do mesmo lote é recusada antes de baixar (2026-11-27)
+
+Duas correções, fora da estimativa da semana. **(1)** Quando a reprovação de uma inspeção já tinha sido liberada pelo **Desbloquear** *"Sem
+lote"* e outro lote do material tinha peças bloqueadas, o sucateamento da reprovação pela não conformidade (solicitar e as duas assinaturas)
+sucateava peças **livres** do lote e baixava o bloqueado que era do outro lote — o mesmo furo que a devolução tinha até a Etapa 274 (o aviso
+**C559**, agora reproduzido). Agora a solicitação e a assinatura que fecha são recusadas antes de mexer em qualquer coisa e dizem o que fazer.
+**(2)** Numa requisição com um item separado de uma prateleira e outro do mesmo lote sem prateleira, com a última peça do lote numa prateleira
+bloqueada, entregar **os dois juntos** dava erro **depois** de já ter tirado do estoque as peças do primeiro (o aviso **C560**, que era pior que o
+descrito). Agora a entrega é recusada antes de baixar qualquer coisa. Decisões do agente: **B1656** e **B1657**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Reprovação de 2 no *L1* liberada pelo *"Sem lote"*, 4 bloqueadas no *L2*; solicitar o sucateamento e assinar as duas pernas → aprovado, 2 peças livres do *L1* sucateadas, bloqueado de 4 para 2 | A solicitação é recusada: *"Não é possível sucatear pela não conformidade: só 0 UN do bloqueado está sem lote e a reprovação tem 2 UN — parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote: L2: 4). Bloqueie de novo, sem lote, o que falta e solicite outra vez, ou cancele a não conformidade"* |
+| O mesmo com a solicitação feita **antes** do *"Sem lote"* e do bloqueio do *L2* → a segunda assinatura sucateava as peças livres | A segunda assinatura é recusada com o fim *"… Bloqueie de novo, sem lote, o que falta e assine outra vez, ou rejeite o sucateamento"*; a assinatura dela é desfeita, a do outro balcão fica |
+| O mesmo com a entrada do *L1* estornada (fica 1) depois da solicitação | Recusada com o fim *"O lote L1 tem só 1 UN, menos que a reprovação: rejeite o sucateamento"* |
+| Reprovação ainda bloqueada (não liberada), 4 bloqueadas no *L2* | Igual: aprovado, as 2 saem do *L1*, o bloqueado fica 4 (as do *L2*) |
+| Item 1 com 3 separadas de *A-01 — L1*, item 2 de 1 sem prateleira, *B-01* (a última peça do *L1*) bloqueada; entregar os dois → *"Localização B-01 está bloqueada"* **e as 3 do item 1 já tinham saído** | Recusada antes de baixar: *"⟨material⟩: não é possível entregar 1 un — faltam 1 un em lote que pode sair. O resto do lote L1 está separado na caixa de ⟨a própria requisição⟩ ou em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou entregue 1 un a menos."* |
+| O mesmo com *B-01* livre, ou com a última peça numa linha sem prateleira | Igual: os dois juntos entregam |
+
+### As regras, com o cenário exato
+
+**1. A solicitação do sucateamento depois do "Sem lote" (RN-275.03).** Material com lote, Entradas de 4 e 1 no *L1* e de 4 no *L2*; inspeção
+reprova 2 do *L1* (a não conformidade abre sozinha); decida **Sucatear**. **Materiais → Desbloquear** 2, *sem lote*; **Bloquear** 4, lote *L2*. Na
+não conformidade, **Solicitar sucateamento** → a recusa da primeira linha da tabela; nenhuma solicitação é criada.
+
+**2. A assinatura que fecha (RN-275.01).** Mesmo material, mas **solicite** o sucateamento com a reprovação ainda bloqueada; depois **Desbloquear**
+2 *sem lote* e **Bloquear** 4 no *L2*. Assine a perna da gestão (passa) e a do almoxarifado → *"Não é possível sucatear pela não conformidade: só 0
+UN do bloqueado está sem lote e a reprovação tem 2 UN — parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote:
+L2: 4). Bloqueie de novo, sem lote, o que falta e assine outra vez, ou rejeite o sucateamento"*. O sucateamento volta a *Solicitado* com a
+assinatura da gestão; nada muda no estoque.
+
+**3. O caminho que a frase indica (RN-275.05).** Depois da recusa: **Bloquear** 2, *sem lote*, e assinar de novo a perna do almoxarifado →
+aprovado; o *L1* fica com 3 e o bloqueado do material volta a 4 (as do *L2*).
+
+**4. A entrega dos dois juntos (RN-275.06).** Material com lote; Entradas de 3 no *L1* em *A-01* e 1 no *L1* em *B-01*. Uma requisição com dois
+itens do material (3 e 1): separe o primeiro de *A-01 — lote L1* e o segundo no automático. **Localizações**: bloqueie *B-01*. **Entregar** os
+dois → a recusa da tabela; nada sai do estoque e nenhum item fica como entregue.
+
+**5. O que passa (RN-275.06 e .08).** Entregar só o primeiro (3) → passa, de *A-01*. Com *B-01* livre, os dois juntos entregam.
+
+### O que esta etapa NÃO cobre
+
+- Depois de entregar só o primeiro item, o segundo aparece com 1 para entregar e a entrega recusa com *"Localização B-01 está bloqueada"* (sem
+  baixar nada) — a regra da prateleira bloqueada de sempre — **D (275)** 1.
+- A conferência do sucateamento olha o bloqueado do material inteiro, não o de cada inspeção — **D (275)** 2.
+- Material **sem** controle por lote mas com saldo em lote ainda pode deixar "sem lote" negativo pela prateleira bloqueada — **C558** (a próxima).
 
 ## Onde estamos e o que vem a seguir
 

@@ -57,11 +57,11 @@ número da própria requisição na lista de caixas.
 
 ## Tasks
 
-- [ ] **T1 (A)** — conferência em `scrapDisposalService` (helper único para as duas portas). Teste `sucateamentoDepoisDoSemLote.api.test.js`.
-- [ ] **T2 (B)** — `outrasCaixasNoMaterial` com opção da conferência (a guarda própria desta entrega conta pela parte). Teste
-  `entregaDosDoisItensDoLote.api.test.js`.
-- [ ] **T3** — Fase 5 (revisor fresco, adversarial, cenário reproduzido).
-- [ ] **T4** — fechamento (`fechar-etapa`, sem 7½ e 8).
+- [x] **T1 (A)** — conferência em `scrapDisposalService` (`recusaDoSemLote`, as duas portas). Teste `sucateamentoDepoisDoSemLote.api.test.js` (9; 7 vermelhos sobre HEAD) — `1edd8acb`. Sabotagens (âncora contada, cópia, md5 de volta): sem a conferência da assinatura → 4; sem a da solicitação → 2. Vizinhos de sucateamento e NC verdes (22 arquivos).
+- [x] **T2 (B)** — `cabeDoAutomaticoPeloLote` sem a peça da prateleira bloqueada no lote sem guarda + `outrasCaixasNoMaterial` com a opção da conferência. Teste
+  `entregaDosDoisItensDoLote.api.test.js` (5 + 1 da Fase 5; 2 vermelhos sobre HEAD) — `4dad97b7`. Sabotagens: sem o desconto → 2; sem a guarda própria → 2. 141 vizinhos verdes.
+- [x] **T3** — Fase 5 — 1 achado reproduzido e consertado, `dcbc3908` (abaixo).
+- [x] **T4** — fechamento (`fechar-etapa`, sem 7½ e 8) — o commit de fechamento. Nenhuma coluna, tabela nem índice novo (primeiro boot igual).
 
 ## Pontos de atenção
 
@@ -70,6 +70,66 @@ número da própria requisição na lista de caixas.
 - A opção nova de `outrasCaixasNoMaterial` só vale na conferência (falta já medida); o gatilho do teto (274) chama sem ela.
 - O sucateamento avulso (sem NC) não passa pela reprovação: fora.
 
-## Fase 2 (revisor fresco, uma passada)
+## Fase 2 (revisor fresco, uma passada, 27/11) — 3 importantes, 5 menores
 
-(preencher)
+1. **[importante → aplicado `1edd8acb`]** A S1 mandava "bloqueie de novo" também quando o lote já não tem a reprovação (entrada estornada depois da
+   solicitação): o fim vira *"O lote L1 tem só 1 UN, menos que a reprovação: rejeite o sucateamento"* (cenário próprio).
+2. **[menor → aplicado]** O erro da S1 leva `causa`: a trilha da compensação dizia "a baixa SUCATA foi recusada pelo motor" (o teste confere a trilha).
+3. **[menor → aplicado]** A S2 entra **depois** do nível 19 (justificativa): a ordem 1-19 do contrato de `solicitarDoReprovado` não muda.
+4. Sem problema: o lugar da S1 (depois do claim, dentro do `try`; a perna que não fecha não confere).
+5. **[menor → D (275) 2]** O sem lote é um pool por material: a reprovação sem lote de outra inspeção cobre a conta.
+6. **[importante → medido, aplicado]** A linha **sem endereço**: o automático a drena e os dois juntos entregam 200 hoje. A opção nova só conta a
+   guarda própria quando o lote tem saldo em prateleira **bloqueada** (cenário RN-275.08 sem endereço).
+7. **[importante → D (275) 3, não medido]** A falta vinda de outro lote (inspeção antiga, B1640) com a guarda própria e prateleira bloqueada no L1
+   passaria a recusar com a E2 citando o L1. Estreitado pelo item 8; o caso restante não foi medido.
+8. **[menor → aplicado em parte]** Estreitar a guarda própria (item em `saiuSimulado`, lote com prateleira bloqueada).
+9. **[menor → B1657]** A E2 cita a própria requisição em "na caixa de": mantido (é verdade — a caixa dela guarda as peças), registrado na B1657.
+
+## Fase 5 (revisor fresco, adversarial, 27/11) — 1 consertado; A não refutado
+
+1. **[média → consertado `dcbc3908`]** O desconto da prateleira bloqueada em `cabeDoAutomaticoPeloLote` se somava ao retido do lote (já fora de
+   `l.saldo`): L0 impedido, L2 3 em A01 + 1 em B01 bloqueada e 1 bloqueada no L2 (bloqueio avulso) → o detalhe caía de 3 para 2 e a entrega de 3,
+   que saía certa antes, recusava. Agora o lote sem guarda vale o **menor** entre o livre e o físico fora da bloqueada. Cenário novo (vermelho com a
+   subtração).
+- Não refutado: o sucateamento (leitura da conferência nas duas portas; a perna que não fecha, a reprovação decimal e a NC manual não sondadas).
+
+## Divergências do plano
+
+- **B (C560) mudou de natureza:** a Fase 0 achou que bastava a E2 contar a guarda própria (`outrasCaixasNoMaterial`). Medido no conserto: a
+  conferência nem via a falta — `cabeDoAutomaticoPeloLote` contava a peça da prateleira bloqueada do lote cuja guarda sai inteira (o lote vira
+  "sem guarda" e o saldo vai cheio). Foram duas mudanças; a primeira versão do desconto contava duas vezes no lote com guarda (um vizinho da 197
+  caiu) e, na Fase 5, a peça retida (consertados).
+- **O C560 estava errado no efeito:** dizia "o motor recusa ou a linha fica negativa"; medido, o motor recusava **depois** de baixar o primeiro item
+  (estoque movido numa resposta 400), sem negativo.
+- **O C559 (deduzido) estava certo**, reproduzido como escrito.
+- **CLAUDE.md:** nenhuma linha ficou errada (nenhuma trava nova; o sucateamento do reprovado já rodava sob a trava do material desde a 218).
+
+## Próxima tarefa detalhada
+
+Escolhida pelas pendências C da feature 05 (o mesmo caminho da entrega, a de maior valor: linha negativa): **C558 — material SEM controle por
+lote com saldo em lote (Entradas que indicaram o lote) ainda pode deixar "sem lote" negativo pela prateleira bloqueada** (~45 min, motor: medir
+antes). Caminho: reproduzir pelas portas (material com *Controle por lote* desligado, Entradas com lote, a guarda de outra caixa e a última peça
+em prateleira bloqueada, entrega no automático); se reproduzir, `conferirAutomaticoPeloLote` deixa de pular o material sem `controle_lote` quando
+ele tem saldo em lote (`porMaterial.controleLote`), com a mesma E2; se não, provar com teste e corrigir o aviso. Pontos de atenção: a régua
+`cabeDoAutomaticoPeloLote` desta etapa (o menor entre o livre e o físico fora da bloqueada, só no lote sem guarda); o teto do detalhe
+(`tetoDaEntregaPeloLote`) também pula material sem `controle_lote`. Alternativas: **D (275) 1** (o detalhe do item sem guarda no lote só na
+prateleira bloqueada) e **D (275) 3** (medir a falta de outro lote).
+
+- **Item 24 da estimativa de 23/11 (série e etiqueta obrigatórios) ainda depende de resposta** — não comece sem ela.
+- **O que já está pronto e não reabre:** o sucateamento depois do "Sem lote" e a entrega dos dois itens juntos, desta etapa.
+
+## Verificação (medida)
+
+- `npm run test:api` (sozinho, `NODE_OPTIONS=--max-old-space-size=4096`, sobre `dcbc3908`, **depois** do último conserto): **689/691 arquivos OK** —
+  os 2 que falham são os já conhecidos de proposta, de outra máquina (`propostaBilingueTemplate`, `propostaPdfExigeLogin`).
+- `npm run test:almoxarifado`: **44 passou, 0 falhou**. `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0** (sobre `dcbc3908`).
+- Jest da tela e build: **não rodados** — o client não mudou nesta etapa.
+- Nenhum clique no navegador (F (275)).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 3 (B: a primeira versão do desconto contava duas vezes no lote com guarda — um vizinho caiu; Fase 2 — o fim
+  "rejeite" e a linha sem endereço; Fase 5 — a peça retida na prateleira bloqueada).
+- Achados: Fase 2 — 3 importantes (2 aplicados, 1 declarado D (275) 3), 5 menores; Fase 5 — 1 reproduzido e consertado, A não refutado.
+- Paralelismo: os dois revisores rodaram enquanto o código e a documentação eram escritos; o `test:api` rodou sozinho depois do conserto da Fase 5.
+- Defeito que escapou: (preencher na etapa seguinte). Da 274: o C560 era pior que o deduzido (recusa depois de baixar).

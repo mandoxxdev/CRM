@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 275 (2026-11-27, `1edd8acb`): o sucateamento da reprovação confere o bloqueado sem lote depois do Desbloquear "Sem lote", na
+> solicitação e na assinatura que fecha (C559, B1656).** Ver "Etapa 275" no fim.
 > **+ Etapa 274 (2026-11-27, `75262048`): a devolução pela não conformidade confere o bloqueado sem lote depois do Desbloquear "Sem lote"
 > (C557, B1655).** Ver "Etapa 274" no fim.
 > **+ Etapa 273 (2026-11-27, `908bccae`): o estorno da entrada de um lote deixa de contar a reprovação já liberada pelo "Sem lote" quando outro
@@ -1755,7 +1757,7 @@ Fora da estimativa de 23/11.
 - [x] **RN-274.09** — o fluxo recusa → Bloquear 2 sem lote → executar → BAIXADA; e cancelar depois da recusa — `75262048`. Revisão final:
   a conferência roda **depois** do claim da inspeção (antes, a segunda NC da mesma inspeção já devolvida levava a recusa em vez do *JA_DEVOLVIDA* e
   nunca fechava) — `30eb19ba`.
-- [ ] **Fora (C559, deduzido na revisão do plano):** o sucateamento da reprovação (`scrapDisposalService`) não recebeu a conferência.
+- [x] **Resolvido na Etapa 275 (C559, reproduzido)** — `1edd8acb`; ver o bloco da 275. Texto original: **Fora (C559, deduzido na revisão do plano):** o sucateamento da reprovação (`scrapDisposalService`) não recebeu a conferência.
 - [ ] **Fora (D (274) 1):** a conferência olha o bloqueado do material inteiro, não o de cada inspeção.
 
 **Correção de spec:** o bloco da Etapa 273 acima diz *"Aviso novo: **C557** (a NC depois do "Sem lote", deduzido)"* — **medido na 274: estava
@@ -1763,3 +1765,24 @@ errado no efeito** (o caso descrito o motor já recusava, sem negativo); o furo 
 
 Testes: `ncDevolucaoDepoisDoSemLote.api.test.js` (8, rota e serviço, fluxo, a segunda NC). Sabotagens: sem o ramo do lote curto → 1 cai; sem desfazer o
 claim da NC → 5; sem desfazer o claim da inspeção → 4. Vizinhos de NC, devolução e sucateamento verdes.
+
+## Etapa 275 — o sucateamento da reprovação depois do "Sem lote" (C559) (2026-11-27)
+
+Plano: `docs/superpowers/plans/2026-11-27-almoxarifado-etapa275-sucateamento-e-entrega-dos-dois-itens.md` (RN-275.01 a .05; B1656).
+Fora da estimativa de 23/11.
+
+- [x] **RN-275.01 (C559, B1656)** — a assinatura que fecha o sucateamento ligado a NC (`baixarReprovadoNaTrava`) recusa antes do motor quando
+  há bloqueado em lote e o sem lote não cobre a reprovação: 400 S1, a assinatura recém-feita desfeita (a outra perna fica), o carimbo da
+  inspeção volta, nada no livro; com o lote sem a reprovação (entrada estornada), o fim *"rejeite o sucateamento"*; a trilha da compensação diz a
+  causa real. **Antes:** APROVADO, 2 peças livres do L1 sucateadas, bloqueado 4 → 2 com as 4 do L2 no livro — `1edd8acb`.
+- [x] **RN-275.02** — dentro da trava, **depois** do claim da inspeção: a segunda NC da mesma inspeção já sucateada leva o 409 de sempre — `1edd8acb`.
+- [x] **RN-275.03** — a solicitação (`solicitarDoReprovado`) confere depois do nível 19 (a ordem 1-19 não muda): 400 S2, nenhuma solicitação — `1edd8acb`.
+- [x] **RN-275.04** — como antes com a reprovação presa (APROVADO) e sem bloqueio em lote (*"já havia saído do bloqueio"*) — `1edd8acb`.
+- [x] **RN-275.05** — o fluxo recusa → Bloquear 2 sem lote → assinar → APROVADO — `1edd8acb`.
+- [ ] **Fora (D (275) 2):** a conferência olha o bloqueado do material inteiro, não o de cada inspeção (o mesmo limite da D (274) 1).
+
+**Correção de spec:** o bloco da Etapa 274 acima diz *"Fora (C559, deduzido na revisão do plano)"* — **reproduzido e resolvido na 275**; o
+deduzido estava certo.
+
+Testes: `sucateamentoDepoisDoSemLote.api.test.js` (9, serviço e rotas). Sabotagens: sem a conferência da assinatura → 4 caem; sem a da
+solicitação → 2. Vizinhos de sucateamento e NC verdes.

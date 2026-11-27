@@ -2524,7 +2524,7 @@ Regras:
 
     > *"Pino: não é possível entregar 1 un — faltam 1 un em lote que pode sair. O resto do lote L1 está separado na caixa de REQ-1 ou em prateleira bloqueada ou sem endereço. Desbloqueie a prateleira ou transfira as peças para uma prateleira livre, ou nada sai deste material."*
 
-    Com vários lotes ou requisições: *"… O resto dos lotes L1, L3 está separado nas caixas de REQ-1, REQ-2 …"*. Quando parte do pedido cabe (outro lote cobre), a frase termina em *"… ou entregue ⟨falta⟩ ⟨un⟩ a menos."*. A guarda de um item desta requisição que sai inteira nesta mesma entrega não conta. O detalhe da requisição e a Fila fazem a mesma conta nesse caso: o entregável mostrado é o que a entrega aceita (no exemplo, 0 para a requisição que não guardou as peças; a dona das peças separadas continua com a sua caixa inteira).
+    Com vários lotes ou requisições: *"… O resto dos lotes L1, L3 está separado nas caixas de REQ-1, REQ-2 …"*. Quando parte do pedido cabe (outro lote cobre), a frase termina em *"… ou entregue ⟨falta⟩ ⟨un⟩ a menos."*. A guarda de um item desta requisição que sai inteira nesta mesma entrega não conta como de outra caixa — salvo quando o lote dela tem peça em prateleira bloqueada: entregando juntos o item que guardou as peças e outro do mesmo lote sem prateleira, com a última peça do lote numa prateleira bloqueada, a entrega é recusada com esta mesma frase (a caixa citada é a da própria requisição), antes de baixar qualquer item. A peça em prateleira bloqueada nunca conta como disponível para a parte automática. O detalhe da requisição e a Fila fazem a mesma conta nesse caso: o entregável mostrado é o que a entrega aceita (no exemplo, 0 para a requisição que não guardou as peças; a dona das peças separadas continua com a sua caixa inteira).
   - Os lotes são lidos na hora de cada baixa: dois itens do mesmo material na mesma entrega dividem os lotes na ordem da requisição. Em material que **permite saldo negativo**, a baixa do lote é contada na posição padrão do material (o total do lote fica certo; a posição de onde o material saiu fisicamente não baixa — acerte pela contagem da posição).
   - Excluir a requisição devolve cada saída ao lote dela (7.6); a devolução citando a saída herda o lote (12.4). Material **sem** Controle por lote, mesmo com saldo em lote, continua saindo sem lote na parte automática (com a parte separada sem lote pulada — abaixo); e a entrega de EPI não escolhe lote.
 - **A parte separada sem lote também é pulada pela regra automática.** Num item **sem** número de série, quando a parte automática sai
@@ -7198,6 +7198,7 @@ recebimento entrou** (completando com os outros, se faltar, como na devolução 
 | O bloqueado é menor que a reprovação | *"O material já havia saído do bloqueio — há ⟨b⟩ ⟨un⟩ bloqueado(s), a reprovação foi de ⟨r⟩"* |
 | O físico é menor que a reprovação | *"Não há saldo físico deste material para sucatear — físico ⟨a⟩ ⟨un⟩, reprovado ⟨r⟩"* |
 | O lote não tem mais a quantidade reprovada | *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo"* |
+| A reprovação já saiu pelo **Desbloquear** *"Sem lote"* e o resto do bloqueado é de lote (outro lote bloqueado) | *"Não é possível sucatear pela não conformidade: só ⟨s⟩ ⟨un⟩ do bloqueado está sem lote e a reprovação tem ⟨q⟩ ⟨un⟩ — parte dela pode já ter sido liberada pelo Desbloquear (o resto do bloqueado está em lote: ⟨L2: 4⟩). Bloqueie de novo, sem lote, o que falta e solicite outra vez, ou cancele a não conformidade"* — a reprovação fica no bloqueado **sem lote**; sem esta conferência o sucateamento tiraria peças livres do lote |
 | Já há um sucateamento esperando assinatura para o documento | *"Já existe um sucateamento solicitado para esta não conformidade (SUC-⟨n⟩) — aprove ou rejeite esse antes"* |
 | Material de cliente sem OS/projeto do cliente | a mensagem da guarda do dono (16.4) — a janela não tem esses campos; só pela API |
 | Justificativa em branco | *"justificativa é obrigatória para sucatear"* |
@@ -7208,7 +7209,11 @@ cancelada — o sucateamento não baixa material de documento cancelado"*; a out
 assinar, recusa com *"A não conformidade foi cancelada — recuse este sucateamento."*), ou o material
 da inspeção saiu por outro caminho (*"O material desta inspeção já foi sucateado — a assinatura foi
 desfeita"*, e as variantes *"já havia sido devolvido ao fornecedor"* e *"já havia sido liberado por
-outra não conformidade"*).
+outra não conformidade"*), ou a reprovação saiu pelo **Desbloquear** *"Sem lote"* com outro lote bloqueado
+(*"Não é possível sucatear pela não conformidade: só ⟨s⟩ ⟨un⟩ do bloqueado está sem lote e a reprovação tem
+⟨q⟩ ⟨un⟩ — … Bloqueie de novo, sem lote, o que falta e assine outra vez, ou rejeite o sucateamento"*; quando o
+lote já não tem as peças da reprovação, o fim é *"O lote ⟨L⟩ tem só ⟨n⟩ ⟨un⟩, menos que a reprovação: rejeite o
+sucateamento"*). Só a assinatura recém-feita é desfeita; a do outro balcão fica.
 
 **A baixa não se desfaz pelo livro.** O estorno dessa sucata é recusado: *"Sucateamento de material
 reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não
