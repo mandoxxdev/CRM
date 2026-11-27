@@ -2,6 +2,9 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 
 /**
+ * FORA DE USO desde 27/11/2026 (o Layout não o desenha mais: o usuário achou o fundo colorido feio — o fundo agora é liso).
+ * Fica o arquivo porque os testes do Layout o simulam pelo caminho.
+ *
  * Fundo animado do aplicativo de celular — as três manchas de cor que ficam por
  * trás do vidro.
  *

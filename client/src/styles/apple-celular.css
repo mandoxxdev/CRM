@@ -56,7 +56,7 @@
   /* ── Números de resumo (Aprovações, Atividades…): DOIS por linha, compactos ─
      Vinham um por linha, cada um num cartão com ícone grande — três números ocupavam a tela inteira. */
   .main-content :has(> .stat-card), .main-content .resumo-cards { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
-  .main-content .resumo-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .resumo-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 14px !important; margin: 0 !important; }
   .main-content .resumo-card svg { width: 17px !important; height: 17px !important; }
   .main-content .resumo-card [class*="icon"] { width: 34px !important; height: 34px !important; min-width: 34px !important; border-radius: 10px !important; }
   .main-content .resumo-card .resumo-content { min-width: 0 !important; }
@@ -64,12 +64,12 @@
   .main-content .resumo-card p { font-size: 11.5px !important; }
   /* Relatórios: os indicadores (kpi-card) também dois por linha, compactos. */
   .main-content .kpis-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
-  .main-content .kpi-card { padding: 12px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .kpi-card { padding: 12px !important; min-height: 0 !important; border-radius: 14px !important; margin: 0 !important; }
   .main-content .kpi-card [class*="icon"] { width: 36px !important; height: 36px !important; min-width: 36px !important; margin-bottom: 6px !important; border-radius: 10px !important; }
   .main-content .kpi-card [class*="icon"] svg { width: 18px !important; height: 18px !important; }
   .main-content .kpi-card .kpi-label { font-size: 10.5px !important; }
   .main-content .kpi-card [class*="value"] { font-size: 22px !important; }
-  .main-content .stat-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 18px !important; margin: 0 !important; }
+  .main-content .stat-card { padding: 12px !important; gap: 10px !important; min-height: 0 !important; border-radius: 14px !important; margin: 0 !important; }
   .main-content .stat-card .stat-icon, .main-content .stat-card [class*="stat-icon"] { width: 34px !important; height: 34px !important; min-width: 34px !important; border-radius: 10px !important; }
   .main-content .stat-card .stat-icon svg, .main-content .stat-card [class*="stat-icon"] svg { width: 17px !important; height: 17px !important; }
   .main-content .stat-card .stat-value { font-size: 22px !important; line-height: 1.1 !important; }
@@ -124,6 +124,12 @@
     border-radius: 980px !important; font-weight: 600 !important;
   }
   .btn-primary svg, .btn-premium svg, .plm-nova svg, .prm-novo svg, .plm-aplicar svg { color: #fff !important; stroke: #fff !important; }
+  /* Fundo liso (27/11/2026, "acho a temática horrível do app, esse fundo meio colorido"): a base do celular era um degradê azulado
+     (app-glass.css, #EFF5FF → #F6FAFF; no escuro, azul-marinho) por trás das manchas. Fica o cinza-claro do sistema (preto no escuro).
+     :not(#_) para passar o html[data-theme="dark"] body do app-glass. */
+  html body:not(#_) { background: var(--gmp-bg) !important; background-image: none !important; }
+  /* Painel: o valor grande não quebra no meio do número ("R$ 17.015." / "772", 27/11/2026) — menor e numa linha só. */
+  .summary-value { font-size: clamp(17px, 5.4vw, 22px) !important; white-space: nowrap !important; overflow-wrap: normal !important; word-break: keep-all !important; letter-spacing: -0.02em !important; }
   /* Proposta (27/11/2026): "Salvar" e "Catálogo de produtos" (.btn-pri) ficavam invisíveis no celular — a regra geral dos botões
      tira o fundo e nada o devolvia (texto branco sobre nada). Mesmo preto do computador. */
   html .layout .main-content .proposta-form button.btn-pri {
@@ -145,40 +151,83 @@
   .plm-chips::-webkit-scrollbar, .prm-chips::-webkit-scrollbar { display: none; }
   .plm-chip, .prm-chip {
     flex: 0 0 auto !important; white-space: nowrap !important;
-    min-height: 36px !important; padding: 0 16px !important; border-radius: 980px !important;
-    background: var(--ag-solido, #fff) !important; border: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.07)) !important;
-    color: var(--ag-texto, #1D1D1F) !important; font-size: 13.5px !important; font-weight: 600 !important; box-shadow: none !important;
+    min-height: 32px !important; padding: 0 14px !important; border-radius: 980px !important;
+    background: rgba(118,118,128,.12) !important; border: 0 !important;
+    color: var(--ag-texto, #1D1D1F) !important; font-size: 13px !important; font-weight: 600 !important; box-shadow: none !important;
   }
   .plm-chip.is-on, .prm-chip.is-on { color: #fff !important; -webkit-text-fill-color: #fff !important; border-color: transparent !important; }
 
-  /* ── Cartões das listas: cada item no SEU cartão, arredondado, com sombra leve ─ */
-  .plm-lista, .clientes-mobile { display: flex !important; flex-direction: column !important; gap: 12px !important;
-    background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+  /* ── Listas no padrão do iPhone (27/11/2026: "os espaçamentos muito grandes… queria algo mais clean e profissional, tipo a
+     Apple") ─ Antes: cada item num cartão próprio de raio 22 com sombra, 12px entre eles, e a linha de um cliente com 129px de altura
+     (avatar 44, nome, descrição e as duas etiquetas uma embaixo da outra, botões de 44). Agora: UM cartão branco de raio 12, as linhas
+     separadas por um fio (como Ajustes e Contatos), avatar 36, etiquetas na mesma linha, ações de 30. */
+  .plm-lista, .clientes-mobile {
+    display: flex !important; flex-direction: column !important; gap: 0 !important; padding: 0 !important;
+    background: var(--ag-solido, #fff) !important; border: 0 !important; border-radius: 12px !important; overflow: hidden !important;
+    box-shadow: 0 0 0 .5px rgba(60,60,67,.12) !important;
+  }
   .plm-card, .cliitem {
-    background: var(--ag-solido, #fff) !important; border: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.06)) !important;
-    border-radius: 22px !important; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 22px rgba(0,0,0,.06) !important;
-    margin: 0 !important; overflow: hidden;
+    background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important;
+    border-bottom: .5px solid rgba(60,60,67,.18) !important;
   }
-  .cliitem { padding: 14px 14px !important; }
-  .cliitem + .cliitem { border-top: 1px solid var(--ag-borda-sutil, rgba(0,0,0,.06)) !important; }
-  .cliitem__ava { border-radius: 14px !important; }
-  .cliitem__name { font-size: 15.5px !important; font-weight: 700 !important; }
-  /* Editar e apagar: discretos (cinza), sem disputar com o nome. */
-  .cliitem__acts { gap: 2px !important; }
-  .clientes-mobile .cliitem .cliitem__act { width: 34px !important; height: 34px !important; border-radius: 12px !important; background: transparent !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
-  .clientes-mobile .cliitem .cliitem__act svg { width: 17px !important; height: 17px !important; color: var(--ag-texto-fraco, #6E6E73) !important; stroke: currentColor !important; }
+  .plm-card:last-child, .cliitem:last-child { border-bottom: 0 !important; }
+  .cliitem + .cliitem { border-top: 0 !important; }
+  .cliitem { padding: 10px 8px 10px 14px !important; align-items: center !important; }
+  .cliitem__hit { gap: 12px !important; align-items: center !important; min-height: 0 !important; }
+  .cliitem__ava { width: 36px !important; height: 36px !important; min-width: 36px !important; border-radius: 9px !important; font-size: 13px !important; }
+  .cliitem__txt { gap: 1px !important; min-width: 0 !important; }
+  .cliitem__name { font-size: 15px !important; font-weight: 600 !important; line-height: 1.25 !important; }
+  .cliitem__desc { font-size: 13px !important; line-height: 1.3 !important; color: var(--ag-texto-fraco, #6E6E73) !important; }
+  .cliitem__meta { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 6px !important; margin-top: 3px !important; }
+  /* Segmento em texto cinza (sem pílula) e o "Ativo" só quando NÃO está ativo: as duas pílulas não cabiam lado a lado e a linha ia a 102px. */
+  .cliitem__seg { font-size: 12px !important; line-height: 1.2 !important; padding: 0 !important; background: transparent !important; border: 0 !important; color: #8E8E93 !important; font-weight: 500 !important; text-transform: none !important; letter-spacing: 0 !important; }
+  .cliitem__stat { font-size: 11px !important; line-height: 1 !important; padding: 2px 6px !important; border-radius: 6px !important; font-weight: 600 !important; }
+  .cliitem__stat.is-ativo { display: none !important; }
+  /* Editar e apagar: discretos (cinza), pequenos, sem disputar com o nome. */
+  .cliitem__acts { gap: 0 !important; }
+  .clientes-mobile .cliitem .cliitem__act { width: 30px !important; height: 30px !important; min-width: 30px !important; border-radius: 8px !important; background: transparent !important; color: #8E8E93 !important; }
+  .clientes-mobile .cliitem .cliitem__act svg { width: 16px !important; height: 16px !important; color: #8E8E93 !important; stroke: currentColor !important; }
   .clientes-mobile .cliitem .cliitem__act.is-danger, .clientes-mobile .cliitem .cliitem__act.is-danger svg { color: #FF3B30 !important; }
-  .clientes-mobile .cliitem .cliitem__act.is-danger { opacity: .75; }
+  .clientes-mobile .cliitem .cliitem__act.is-danger { opacity: .7; }
+  /* Propostas: regras do app-glass mais específicas mantinham o cartão com raio 22 e recuo 18 — e o link de dentro somava mais 14
+     (recuo dobrado, cartão de 249px). :not(#_) passa por elas: a linha da lista, sem cartão, um recuo só. */
+  .plm-lista .plm-card:not(#_) { padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: transparent !important; border: 0 !important; border-bottom: .5px solid rgba(60,60,67,.18) !important; }
+  .plm-lista .plm-card:last-child:not(#_) { border-bottom: 0 !important; }
+  .plm-lista .plm-card .plm-toque:not(#_) { padding: 12px 14px 6px !important; }
+  .plm-lista .plm-card .plm-acts:not(#_) { padding: 0 8px 6px !important; min-height: 0 !important; border-top: 0 !important; }
+  .plm-lista .plm-card .plm-acts:not(#_) > * { min-height: 32px !important; height: 32px !important; font-size: 13px !important; }
+  .plm-lista .plm-card .plm-linha1:not(#_) { margin-bottom: 3px !important; }
+  .plm-lista .plm-card .plm-linha1:not(#_), .plm-lista .plm-card .plm-linha1:not(#_) * { font-size: 12px !important; }
+  .plm-lista .plm-card .plm-titulo:not(#_) { font-size: 15px !important; font-weight: 600 !important; }
+  .plm-lista .plm-card .plm-cliente:not(#_) { font-size: 13px !important; margin-top: 1px !important; }
+  .plm-lista .plm-card .plm-valor:not(#_) { font-size: 17px !important; margin-top: 6px !important; line-height: 1.25 !important; }
+  .plm-lista .plm-card .plm-meta:not(#_) { font-size: 12px !important; margin-top: 2px !important; color: #8E8E93 !important; }
+  /* Busca de Propostas: a caixa é o campo (era um campo cinza dentro de uma caixa branca). */
+  .propostas-list-search:not(#_) { background: rgba(118,118,128,.12) !important; border: 0 !important; box-shadow: none !important; border-radius: 10px !important; min-height: 38px !important; height: 38px !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .propostas-list-search:not(#_) input { background: transparent !important; border: 0 !important; box-shadow: none !important; height: 36px !important; min-height: 36px !important; }
 
-  /* ── Topo de Clientes: "+" e "Exportar" sem apertar o título ─────────────── */
-  .clientes .page-header { flex-wrap: wrap !important; gap: 10px !important; align-items: center !important; }
+  /* ── Topo das páginas: menos espaço, botões menores ─────────────────────────── */
+  .clientes .page-header { flex-wrap: wrap !important; gap: 8px !important; align-items: center !important; margin-bottom: 12px !important; }
   .clientes .page-header .header-actions { display: flex !important; gap: 8px !important; margin-left: auto !important; }
-  .clientes .page-header .btn-secondary { min-height: 36px !important; padding: 0 14px !important; border-radius: 980px !important; font-size: 13px !important; }
+  .main-content > div > [class*="header"]:has(h1) { margin-bottom: 12px !important; padding-top: 4px !important; padding-bottom: 0 !important; }
+  .main-content > div > [class*="header"]:has(h1) .header-actions { margin-top: 8px !important; }
+  .main-content > div > [class*="header"]:has(h1) .header-actions > button,
+  .main-content > div > [class*="header"]:has(h1) .header-actions > a { min-height: 32px !important; height: 32px !important; padding: 0 14px !important; font-size: 13px !important; border-radius: 980px !important; }
 
-  /* ── Busca e selects: pílulas claras ─────────────────────────────────────── */
-  .plm-busca input, .search-box input, .filters .filter-select, .clientes .filter-select {
-    border-radius: 16px !important; min-height: 46px !important;
+  /* ── Busca e selects: o campo cinza do iOS ───────────────────────────────── */
+  .plm-busca input, .search-box input, .filters .filter-select, .clientes .filter-select, .seletor-cliente-campo input {
+    border-radius: 10px !important; min-height: 38px !important; height: 38px !important; font-size: 15px !important;
+    background: rgba(118,118,128,.12) !important; border: 0 !important; box-shadow: none !important;
   }
+  .clientes .filters, .plm-filtros { gap: 8px !important; margin-bottom: 12px !important; }
+  /* A busca de Clientes é uma caixa (.search-box) com o campo dentro: o campo tinha fundo e borda próprios e virava um campo dentro do
+     outro. A caixa é o campo; o input fica transparente. */
+  .search-box { height: 38px !important; min-height: 38px !important; border-radius: 10px !important; border: 0 !important; box-shadow: none !important; background: rgba(118,118,128,.12) !important; }
+  .search-box input { background: transparent !important; border: 0 !important; box-shadow: none !important; height: 36px !important; min-height: 36px !important; }
+  /* O "+" de Novo Cliente: o recuo de 14px espremia o ícone a 8px. Círculo de 32 com o ícone inteiro. */
+  .clientes .page-header .header-actions .btn-premium { width: 32px !important; min-width: 32px !important; padding: 0 !important; justify-content: center !important; }
+  .clientes .page-header .header-actions .btn-premium svg { width: 18px !important; height: 18px !important; min-width: 18px !important; }
+  .clientes .page-header .header-actions .btn-secondary { background: rgba(118,118,128,.12) !important; border: 0 !important; color: var(--ag-texto, #1D1D1F) !important; }
 
   /* ── Produtos: grupos em DUAS colunas (um por linha, cada cartão ocupava a tela) ─ */
   html .grupos-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
@@ -188,8 +237,8 @@
   html .grupo-card .btn-icon-grupo { width: 30px !important; height: 30px !important; min-width: 30px !important; min-height: 30px !important; }
 
   /* ── Início: cartões dos módulos do MESMO tamanho ─────────────────────────── */
-  .orion-grid { grid-auto-rows: 1fr !important; gap: 12px !important; }
-  .orion-tile { height: 100% !important; min-height: 158px !important; border-radius: 22px !important; padding: 16px !important; }
+  .orion-grid { grid-auto-rows: 1fr !important; gap: 10px !important; }
+  .orion-tile { height: 100% !important; min-height: 140px !important; border-radius: 16px !important; padding: 14px !important; }
   .orion-tile__info { display: block !important; }
   .orion-tile__nome { display: inline !important; font-size: 15.5px !important; line-height: 1.25 !important; }
   .orion-tile__tipo-pill { display: inline-block !important; margin-left: 6px !important; vertical-align: 2px !important; white-space: nowrap !important; }
@@ -199,4 +248,25 @@
   }
   /* A engrenagem (atalho de configuração) fica, mas sem pesar: menor e clara. */
   .orion-tile__gear { opacity: .45 !important; transform: scale(.85); }
+
+  /* ── Cartões (painel, resumos, seções): raio 14, sombra de um fio, menos enchimento — sem o "flutuante" ─ */
+  .summary-card, .premium-summary, .stat-card, .resumo-card, .kpi-card, .proposta-form-section, .chart-card, .dashboard-card, .card {
+    border-radius: 14px !important;
+    box-shadow: 0 0 0 .5px rgba(60,60,67,.10), 0 1px 2px rgba(0,0,0,.04) !important;
+  }
+  .summary-card, .premium-summary { padding: 14px !important; margin-bottom: 14px !important; }
+  .summary-content, .premium-summary-content { gap: 10px !important; }
+  .premium-summary-item, .summary-item { padding: 12px !important; border-radius: 12px !important; box-shadow: 0 0 0 .5px rgba(60,60,67,.10) !important; }
+  .summary-icon { width: 30px !important; height: 30px !important; min-width: 30px !important; border-radius: 8px !important; }
+  .summary-icon svg { width: 16px !important; height: 16px !important; }
+  .summary-label { font-size: 11px !important; letter-spacing: .02em !important; }
+  .summary-change { font-size: 11.5px !important; }
+  .summary-header h3 { font-size: 13px !important; letter-spacing: .04em !important; }
+  .summary-header { padding-bottom: 8px !important; margin-bottom: 10px !important; }
+  .proposta-form-section { padding: 14px !important; }
+  .proposta-form-form { gap: 12px !important; }
+
+  /* ── Barra inferior: sem sublinhado nem contorno azul depois do toque (no print, "Dashboard" sublinhado e traços azuis) ─ */
+  .bim-item, .bim-item:hover, .bim-item:focus, .bim-item:active { text-decoration: none !important; }
+  .bim-item:focus:not(:focus-visible) { outline: none !important; box-shadow: none !important; }
 }

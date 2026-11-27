@@ -806,3 +806,12 @@ a:not([class*="btn"]):not([class*="nav-"]):not([class*="-link"]):hover { text-de
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* ───────────────────────────── FUNDO LISO (27/11/2026) ─────────────────────────
+   "Eu acho a temática horrível do app, esse fundo meio colorido." Sai toda mancha de cor do fundo: os dois orbs azul/roxo do
+   computador (.layout::before/::after, Layout.css; .glass-bg-orbs, glassmorphism.css) e, no celular, as três manchas animadas
+   (.agfx, que o Layout nem desenha mais). Fica o cinza-claro liso do sistema (--gmp-bg, #F5F5F7; preto no tema escuro) com os
+   cartões brancos por cima. */
+.layout::before, .layout::after, .glass-bg-orbs, .glass-bg-orbs::before, .glass-bg-orbs::after, .agfx { display: none !important; }
+html, body { background: var(--gmp-bg) !important; background-image: none !important; }

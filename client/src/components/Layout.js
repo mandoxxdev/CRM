@@ -13,7 +13,6 @@ import { menuFrotaDoPerfil } from './frotas/frotaMenu';
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario, moduloDaRota } from '../constants/modulosMeta';
 import BotaoInstalarApp from './BotaoInstalarApp';
 import BarraInferiorMobile from './BarraInferiorMobile';
-import FundoAppMobile from './FundoAppMobile';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -478,9 +477,8 @@ const Layout = () => {
 
   return (
     <div className="layout">
-      {/* Fundo animado do aplicativo. So existe no celular — quem decide e o CSS
-          (.agfx vive dentro do media query), nao JavaScript lendo innerWidth. */}
-      <FundoAppMobile />
+      {/* O fundo animado do celular (FundoAppMobile, as tres manchas de cor) saiu em 27/11/2026: "acho a tematica horrivel do app,
+          esse fundo meio colorido". O fundo agora e liso (apple-theme.css, "Fundo liso"). */}
       <div className="orion-version-badge" aria-hidden="true">Orion {VERSAO_SISTEMA}</div>
       {/* Barra de topo do celular: a marca (logo GMP) sempre visivel, como num app.
           No desktop a marca ja esta na sidebar, entao o CSS esconde esta. */}
