@@ -62,8 +62,9 @@ describe('[RN-189.09, B1265] o fim de textoPegarEm segue a pré-seleção da jan
 // verdade para material SEM controle de lote; com controle, o automático da entrega baixa do lote que vence primeiro (RN-197.01).
 const NENHUM = (q) => `Nenhum endereço tem tudo: pegue ${q} aqui. Se o resto for separado depois de outro endereço, o que sair daqui `
   + 'continua saindo daqui na entrega.';
+// Etapa 270 (RN-270.10): o resto separado de outro endereço sai de lá na entrega — antes "sai no automático".
 const NAO_COBRE = (cod) => `Já separado de ${cod}: o resto não cabe lá. O que já foi separado continua saindo de lá; o resto, separado `
-  + 'de outro endereço, sai no automático na entrega.';
+  + 'de outro endereço, sai de lá na entrega (se ainda estiver lá; senão, no automático).';
 const INDISPONIVEL = (cod) => `Já separado de ${cod}, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou `
   + 'lote bloqueado/vencido). Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — se lá não servir mais, a '
   + 'entrega pede para escolher de onde sai.';

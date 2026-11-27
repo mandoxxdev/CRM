@@ -80,7 +80,8 @@ const sugestao = (...itens) => ({ data: { requisicao_id: 55, itens, ordem_coleta
 
 const SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
 // Etapa 196 (RN-196.12): a frase da 189 dizia "separar o resto de outro endereço troca a origem" — deixou de valer (B1314).
-const PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui; o resto sai no automático na entrega.';
+// Etapa 270 (RN-270.10): o resto separado de outro endereço sai de lá na entrega — antes "sai no automático".
+const PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui e o resto sai de lá na entrega (se ainda estiver lá; senão, no automático).';
 const ALERTA = 'Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual '
   + 'endereço — confira antes de pegar.';
 const naoVeio = (texto) => `Sugestão da fila: ${texto} — não veio escolhida; confira o saldo no 'Sai de' antes de escolher.`;

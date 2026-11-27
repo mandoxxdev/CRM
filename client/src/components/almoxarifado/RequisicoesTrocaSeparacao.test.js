@@ -78,7 +78,9 @@ const SALDOS = [
 ];
 
 // Etapa 196 (RN-196.12): a literal da 65 ("A origem da separação anterior … deixa de valer …") deixou de valer.
-const AVISO_LOTE = 'Já separado de B-02 — lote L-7: 5 PC, que continuam saindo de lá. Esta parte sai no automático na entrega.';
+// Etapa 270 (RN-270.17): escolhido um endereço (A-01), a parte fica anotada e sai de lá na entrega — antes "sai no automático".
+const AVISO_LOTE = 'Já separado de B-02 — lote L-7: 5 PC, que continuam saindo de lá. Esta parte fica anotada como separada de A-01 e sai de lá '
+  + 'na entrega, se ainda estiver lá (senão, no automático).';
 
 let container;
 let root;
@@ -294,7 +296,9 @@ describe('Etapa 65 → 196 (RN-196.12): aviso na separação de outro par, sem m
     expect(aviso()).toBeNull();
     escolher(selectSeparacao(), '2:8');
     expect(aviso()).toBeTruthy();
-    expect(aviso().textContent).toBe('Já separado de B-02: 5 PC, que continuam saindo de lá. Esta parte sai no automático na entrega.');
+    // Etapa 270 (RN-270.17): o escolhido B-02 — lote L-8 e um endereco: a parte fica anotada e sai de la
+    expect(aviso().textContent).toBe('Já separado de B-02: 5 PC, que continuam saindo de lá. Esta parte fica anotada como separada de B-02 — '
+      + 'lote L-8 e sai de lá na entrega, se ainda estiver lá (senão, no automático).');
     escolher(selectSeparacao(), '2:');
     expect(aviso()).toBeNull();
   });

@@ -63,7 +63,8 @@ export const textoAvisoPegarEm = (it) => {
         + (it.pegar_em && it.pegar_em.lote_codigo ? sufixoDoLote(it) : '');
     case 'PLANEJADA_NAO_COBRE':
       return `Já separado de ${codigoDaPlanejada(it)}: o resto não cabe lá. `
-        + 'O que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai no automático na entrega.'
+        // Etapa 270 (RN-270.10, B1645): o resto separado de outro endereço sai de lá na entrega (se ainda estiver lá)
+        + 'O que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai de lá na entrega (se ainda estiver lá; senão, no automático).'
         + (it.lote_separacao_codigo ? sufixoDoLote(it) : '');
     case 'PLANEJADA_INDISPONIVEL':
       // Fase 5 (M-d): a planejada existe mas não serve mais de dica — "o resto não cabe lá" seria mentira.

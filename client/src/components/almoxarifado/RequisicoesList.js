@@ -471,7 +471,57 @@ export const limiteDaOrigemNaEntrega = (item, valor, saldos, itens, quantidades,
 const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
 // Etapa 196 (RN-196.12): separar o resto de outro endereço não troca mais a origem — a parte já separada continua saindo dela.
-const FRASE_PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui; o resto sai no automático na entrega.';
+// Etapa 270 (RN-270.10, B1645): o resto separado de outro endereço sai de lá na entrega (se ainda estiver lá) — não mais no automático.
+const FRASE_PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui e o resto sai de lá na entrega (se ainda estiver lá; senão, no automático).';
+
+// Etapa 270 (RN-270.04/16): as OUTRAS prateleiras de onde a caixa do item foi separada (`partes_separacao` do detalhe; a origem do item é a 1ª).
+const rotuloDoPar = (codigo, lote) => `${codigo}${lote ? ` — lote ${lote}` : ''}`;
+const partesDaSeparacao = (item) => (Array.isArray(item?.partes_separacao) ? item.partes_separacao : [])
+  .filter((p) => Number(p.quantidade) > 1e-9);
+const comUnidade = (q, un) => `${fmtQtd(q)}${un ? ` ${un}` : ''}`;
+const juntarComE = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
+/** RN-270.04: "separado de A-01 (3 UN) · B-02 (2 UN)" — o mesmo par somado; null sem outras partes (a frase de antes, byte a byte). */
+export const textoSeparadoDe = (item) => {
+  const partes = partesDaSeparacao(item);
+  if (!partes.length) return null;
+  const un = item.unidade || item.material_unidade;
+  const lista = [];
+  const soma = (rot, q) => {
+    const x = lista.find((l) => l.rot === rot);
+    if (x) x.q = r6(x.q + q); else lista.push({ rot, q: r6(q) });
+  };
+  if (item.origem_separacao_codigo && temPlanejada(item) && pendentePlanejado(item) > 1e-9) {
+    soma(rotuloDoPar(item.origem_separacao_codigo, item.lote_separacao_codigo), pendentePlanejado(item));
+  }
+  partes.forEach((p) => soma(rotuloDoPar(p.localizacao_codigo, p.lote_codigo), Number(p.quantidade)));
+  return `separado de ${lista.map((l) => `${l.rot} (${comUnidade(l.q, un)})`).join(' · ')}`;
+};
+/**
+ * RN-270.16: a dica da entrega sem "Sai de" escolhido, com outras partes — quanto sai da origem, quanto de cada outra prateleira (na ordem,
+ * até a quantidade) e se sobra para o automático. null sem outras partes (ou quantidade que não chega nelas): a frase de antes.
+ */
+export const textoDicaEntregaComPartes = (item, qtd) => {
+  const partes = partesDaSeparacao(item);
+  if (!partes.length) return null;
+  const un = item.unidade || item.material_unidade;
+  const daOrigem = temPlanejada(item) ? r6(Math.min(Math.max(0, qtd), pendentePlanejado(item))) : 0;
+  let resto = r6(Math.max(0, qtd) - daOrigem);
+  const pedacos = [];
+  for (const p of partes) {
+    if (resto <= 1e-9) break;
+    const q = r6(Math.min(resto, Number(p.quantidade)));
+    pedacos.push(`${comUnidade(q, un)} de ${rotuloDoPar(p.localizacao_codigo, p.lote_codigo)}`);
+    resto = r6(resto - q);
+  }
+  if (!pedacos.length) return null;
+  const fim = resto > 1e-9 ? '; o restante, automático' : '';
+  if (daOrigem > 1e-9) {
+    const origem = rotuloDoPar(item.origem_separacao_codigo, item.lote_separacao_codigo);
+    return `${comUnidade(daOrigem, un)} sai de ${origem} (o que foi separado de lá); ${juntarComE(pedacos)}, se ainda estiverem lá${fim}. `
+      + `Se em ${origem} não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.`;
+  }
+  return `Sai ${juntarComE(pedacos)}, se ainda estiverem lá (o que foi separado de lá)${fim}.`;
+};
 
 // Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
 // GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
@@ -2100,7 +2150,11 @@ const RequisicoesList = () => {
                         <div>Solicitado: <strong>{item.quantidade_solicitada}</strong></div>
                         <div>Separado: <strong>{getSeparado(item)}</strong></div>
                         {/* Etapa 59 (RN-05): de onde foi separado — só enquanto há separado a entregar. */}
-                        {item.origem_separacao_codigo && getSeparado(item) > getEntregue(item) && (
+                        {/* Etapa 270 (RN-270.04): com outras prateleiras, todas numa linha só ("separado de A-01 (3 UN) · B-02 (2 UN)"). */}
+                        {textoSeparadoDe(item) && getSeparado(item) > getEntregue(item) && (
+                          <div data-testid={`separado-de-${item.id}`}>{textoSeparadoDe(item)}</div>
+                        )}
+                        {!textoSeparadoDe(item) && item.origem_separacao_codigo && getSeparado(item) > getEntregue(item) && (
                           <div data-testid={`separado-de-${item.id}`}>
                             separado de <strong>{item.origem_separacao_codigo}</strong>
                             {item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}
@@ -2916,7 +2970,15 @@ const RequisicoesList = () => {
                       return (
                         <div style={{ marginTop: 8 }}>
                           <div id={`separacao-aviso-origem-${item.id}`} className="almox-hint-banner" style={{ fontSize: '0.75rem' }}>
-                            {`Já separado de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}: ${fmtQtd(pendentePlanejado(item))}${un ? ` ${un}` : ''}, que continuam saindo de lá. Esta parte sai no automático na entrega.`}
+                            {`Já separado de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}: ${fmtQtd(pendentePlanejado(item))}${un ? ` ${un}` : ''}, que continuam saindo de lá. `
+                              + (() => {
+                                // Etapa 270 (RN-270.17): escolhido um endereço, a parte fica anotada e sai de lá na entrega (B1645)
+                                const v = origensSeparacao[item.id];
+                                const s = lerValorOrigem(v) ? (saldosEntrega[item.material_id] || []).find((x) => valorOrigem(x) === v) : null;
+                                return s
+                                  ? `Esta parte fica anotada como separada de ${rotuloDoPar(s.localizacao_codigo, s.lote)} e sai de lá na entrega, se ainda estiver lá (senão, no automático).`
+                                  : 'Esta parte sai no automático na entrega.';
+                              })()}
                           </div>
                         </div>
                       );
@@ -3104,7 +3166,15 @@ const RequisicoesList = () => {
                         && !frasePlanejadaImpedida(item, saldosEntrega[item.material_id]) && (
                         <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
                           {/* Etapa 196 (Fase 5, K4): só a PARTE sai de lá, não o separado pendente inteiro. */}
-                          {`${fmtQtd(pendentePlanejado(item))}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''} sai de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''} (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.`}
+                          {/* Etapa 270 (RN-270.16): com outras prateleiras (e sem série — as séries dizem de onde sai), quanto sai de cada uma. */}
+                          {(!seriesEntrega[item.material_id]?.serializado && textoDicaEntregaComPartes(item, qtdEntregar)) || `${fmtQtd(pendentePlanejado(item))}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''} sai de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''} (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.`}
+                        </div>
+                      )}
+                      {/* Etapa 270 (RN-270.16): item sem origem (já entregue) e só com outras prateleiras na caixa — de onde elas saem. */}
+                      {!temPlanejada(item) && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico
+                        && !seriesEntrega[item.material_id]?.serializado && textoDicaEntregaComPartes(item, qtdEntregar) && (
+                        <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                          {textoDicaEntregaComPartes(item, qtdEntregar)}
                         </div>
                       )}
                       {/* Etapa 63 (RN-03): saindo de onde não foi separado, o motivo da troca (opcional). */}

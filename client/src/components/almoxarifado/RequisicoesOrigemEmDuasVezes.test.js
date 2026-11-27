@@ -159,7 +159,9 @@ const enviadoEm = (rota, chave) => {
   return chamada[1][chave][0];
 };
 
-const AVISO_LOTE = 'Já separado de B-02 — lote L-7: 3 PC, que continuam saindo de lá. Esta parte sai no automático na entrega.';
+// Etapa 270 (RN-270.17): escolhido um endereço (A-01), a parte fica anotada e sai de lá na entrega — antes "sai no automático".
+const AVISO_LOTE = 'Já separado de B-02 — lote L-7: 3 PC, que continuam saindo de lá. Esta parte fica anotada como separada de A-01 e sai de lá '
+  + 'na entrega, se ainda estiver lá (senão, no automático).';
 
 describe('Etapa 196 (RN-196.11): a entrega compara com a PARTE da origem', () => {
   test('entrega com parte 3 e caixa 6 abre no automático, sem chave', async () => {
