@@ -203,7 +203,174 @@ process.on('exit', (code) => {
   });
 
   // ── T2 — a entrega sai de cada uma (RN-270.10..15) ──────────────────────────────────────────────────────────────────────────────
-  //@@T2@@
+  await test('[RN-270.03, Fase 2 L1] a parte que saiu da caixa nao volta: A 3 + B 2 + C 2, devolve 2 (C sai), separa 1 no automatico -> so B 2', async () => {
+    const A = await loc('RA'); const B = await loc('RB'); const C = await loc('RC'); const m = await material();
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5); await entrar(m.id, C.id, 5);
+    const r = await req([[m.id, 10]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: C.id }]));
+    await ok(devolver(r.id, [{ item_id: r.ids[0], quantidade: 2 }]));
+    assert.deepStrictEqual(await linhas(r.ids[0]), [[B.id, null, 2]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 1 }]));
+    assert.deepStrictEqual(await partes(r.id, r.ids[0]), [[B.codigo, null, 2]]);
+    // e pela entrega escolhendo outro endereco (D): o automatico consumido nao ressuscita depois
+    const D = await loc('RD'); await entrar(m.id, D.id, 5);
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 4, localizacao_origem_id: D.id }]));
+    assert.deepStrictEqual(await linhas(r.ids[0]), [], 'caixa 2 = a parte de A: B sai');
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2 }]));
+    assert.deepStrictEqual(await partes(r.id, r.ids[0]), []);
+  });
+
+  await test('[RN-270.10] A 3 + B 2, entrega de um clique 5 -> 3 de A (estrito) e 2 de B (nao do padrao P); origem e partes zeram; 0 trocas', async () => {
+    const { A, B, P, m, id, ids } = await cenarioAB();
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual(await saidas(id), [[A.id, null, 3], [B.id, null, 2]]);
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], [2, 3, 10]);
+    assert.deepStrictEqual(await subs(id), []);
+    assert.deepStrictEqual(await origem(ids[0]), { o: null, l: null, q: null, caixa: 0 });
+    assert.deepStrictEqual(await linhas(ids[0]), []);
+  });
+
+  await test('[RN-270.10] pelo SERVICO: a mesma entrega de um clique tira 2 de B', async () => {
+    const { A, B, id, ids } = await cenarioAB();
+    await requisitionService.entregarRequisicao(db, id, [{ item_id: ids[0], quantidade_atendida: 5 }], ADMIN);
+    assert.deepStrictEqual(await saidas(id), [[A.id, null, 3], [B.id, null, 2]]);
+  });
+
+  await test('[RN-270.10, Fase 2 L2] irmao do mesmo material no automatico, de id menor: a parte de B sai antes do automatico dele', async () => {
+    const A = await loc('IA'); const B = await loc('IB'); const C = await loc('IC'); const m = await material();
+    await entrar(m.id, A.id, 3); await entrar(m.id, B.id, 4); await entrar(m.id, C.id, 3);
+    const r = await req([[m.id, 3], [m.id, 5]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[1], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[1], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 3 }, { item_id: r.ids[1], quantidade_atendida: 5 }]));
+    const s = await saidas(r.id);
+    assert.ok(s.some((x) => x[0] === B.id && x[2] === 2), JSON.stringify(s));
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, C.id)], [0, 2, 0]);
+  });
+
+  await test('[RN-270.11] com lote: A/L1 3 + B/L2 2 (o FEFO tiraria L0, que vence antes) -> 3 de (A, L1) e 2 de (B, L2)', async () => {
+    const A = await loc('LA'); const B = await loc('LB'); const P = await loc('LP'); const m = await material({ lote: true });
+    const c0 = `L0-${seq}`; const c1 = `L1-${seq}`; const c2 = `L2-${seq}`;
+    const ent = async (dest, q, lote, val) => {
+      const r = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m.id, tipo: 'ENTRADA', quantidade: q,
+        motivo: 'e270', localizacao_destino_id: dest, lote, data_validade: val });
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    };
+    await ent(P.id, 10, c0, '2031-01-01'); await ent(A.id, 5, c1, '2032-01-01'); await ent(B.id, 5, c2, '2033-01-01');
+    const l1 = await loteId(m.id, c1); const l2 = await loteId(m.id, c2);
+    const r = await req([[m.id, 5]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, lote_id: l2 }]));
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual(await saidas(r.id), [[A.id, l1, 3], [B.id, l2, 2]]);
+    // o lote de B venceu depois da separacao: a parte de B nao sai de la (o motor recusaria) — vai ao automatico (FEFO), 200
+    const r2 = await req([[m.id, 2]]);
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 1, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 1, localizacao_origem_id: B.id, lote_id: l2 }]));
+    await dbRun(db, "UPDATE lotes_almoxarifado SET data_validade = '2020-01-01' WHERE id = ?", [l2]);
+    await ok(entregar(r2.id, [{ item_id: r2.ids[0], quantidade_atendida: 2 }]));
+    const s2 = await saidas(r2.id);
+    assert.deepStrictEqual(s2[0], [A.id, l1, 1]);
+    assert.ok(!s2.some((x) => x[1] === l2), JSON.stringify(s2));
+  });
+
+  await test('[RN-270.12] B sem as pecas livres (R2 separou 3 de B com origem; B tem 3) -> 3 de A e 2 no automatico (do padrao P), 200', async () => {
+    const { A, P, B, m, id, ids } = await cenarioAB({ b: 3 });
+    const r2 = await req([[m.id, 3]]);
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 3, localizacao_origem_id: B.id }]));
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual(await saidas(id), [[A.id, null, 3], [null, null, 2]]);
+    assert.deepStrictEqual([await saldo(m.id, B.id), await saldo(m.id, P.id)], [3, 8]);
+    // R2 entrega o que separou de B
+    await ok(entregar(r2.id, [{ item_id: r2.ids[0], quantidade_atendida: 3 }]));
+    assert.deepStrictEqual(await saidas(r2.id), [[B.id, null, 3]]);
+  });
+
+  await test('[RN-270.12] B com so 1 livre (R2 guarda 2 de 3) -> 1 de B e 1 no automatico; B bloqueado -> tudo no automatico', async () => {
+    const { A, B, m, id, ids } = await cenarioAB({ b: 3 });
+    const r2 = await req([[m.id, 2]]);
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual(await saidas(id), [[A.id, null, 3], [B.id, null, 1], [null, null, 1]]);
+    const x = await cenarioAB();
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [x.B.id]);
+    await ok(entregar(x.id, [{ item_id: x.ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual(await saidas(x.id), [[x.A.id, null, 3], [null, null, 2]]);
+  });
+
+  await test('[RN-270.13] com "Sai de" escolhido (A 5) ou "automatico" escolhido: como hoje, nada de B', async () => {
+    const { A, id, ids } = await cenarioAB();
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5, localizacao_origem_id: A.id }]));
+    assert.deepStrictEqual(await saidas(id), [[A.id, null, 5]]);
+    const x = await cenarioAB();
+    await ok(entregar(x.id, [{ item_id: x.ids[0], quantidade_atendida: 5, origem_automatica: true }]));
+    const s = await saidas(x.id);
+    assert.ok(s.length > 0 && !s.some((v) => v[0] === x.B.id), JSON.stringify(s));
+  });
+
+  await test('[RN-270.14] A 3 + B 2 + C 2: um clique 4 -> 3 de A, 1 de B (partes B 1, C 2); um clique 3 -> 1 de B, 2 de C', async () => {
+    const A = await loc('QA'); const B = await loc('QB'); const C = await loc('QC'); const P = await loc('QP'); const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [P.id, m.id]);
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5); await entrar(m.id, C.id, 5); await entrar(m.id, P.id, 5);
+    const r = await req([[m.id, 7]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: C.id }]));
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 4 }]));
+    assert.deepStrictEqual(await saidas(r.id), [[A.id, null, 3], [B.id, null, 1]]);
+    assert.deepStrictEqual(await partes(r.id, r.ids[0]), [[B.codigo, null, 1], [C.codigo, null, 2]]);
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 3 }]));
+    assert.deepStrictEqual(await saidas(r.id), [[A.id, null, 3], [B.id, null, 1], [B.id, null, 1], [C.id, null, 2]]);
+    assert.deepStrictEqual(await linhas(r.ids[0]), []);
+  });
+
+  await test('[RN-270.15] integracao pela rota: separar A 3 + B 2 -> entregar 5 (o estorno avulso da saida de B e recusado) -> excluir: cada prateleira volta ao de antes', async () => {
+    const { A, B, P, m, id, ids } = await cenarioAB({ pedido: 6 });
+    const antes = [await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)];
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }]));
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], [2, 3, 10]);
+    const saidaB = (await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA' AND localizacao_origem_id = ?`,
+      [id, B.id])).id;
+    const c = await request(app).post(`/api/almoxarifado/movimentacoes/${saidaB}/cancelar`).send({ motivo: 'e270 estorno' });
+    // a saida da entrega nao se estorna avulsa (a porta manda para a exclusao) — o estorno dela e o da exclusao, abaixo
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, 'Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)');
+    const x = await request(app).delete(`/api/almoxarifado/requisicoes/${id}`).send({ justificativa: 'e270' });
+    assert.strictEqual(x.status, 200, JSON.stringify(x.body));
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], antes);
+  });
+
+  await test('[RN-270.15] integracao pela rota: entregar 5 -> devolver 2 da saida de B para Estoque escolhendo B -> excluir: saldos de antes', async () => {
+    const { A, B, P, m, id, ids } = await cenarioAB({ pedido: 6 });
+    const antes = [await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)];
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 5 }]));
+    const saidaB = (await dbGet(db, `SELECT id FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA' AND localizacao_origem_id = ?`,
+      [id, B.id])).id;
+    const d = await request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, quantidade: 2, motivo: 'NAO_UTILIZADO',
+      destino: 'ESTOQUE', movimentacao_saida_id: saidaB, localizacao_id: B.id });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], [2, 5, 10]);
+    const x = await request(app).delete(`/api/almoxarifado/requisicoes/${id}`).send({ justificativa: 'e270' });
+    assert.strictEqual(x.status, 200, JSON.stringify(x.body));
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], antes);
+  });
+
+  await test('[RN-270.15] pelo SERVICO: separar + entregar + excluirRequisicao direto -> saldos de antes', async () => {
+    const A = await loc('XA'); const B = await loc('XB'); const P = await loc('XP'); const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [P.id, m.id]);
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5); await entrar(m.id, P.id, 5);
+    const r = await req([[m.id, 6]]);
+    const antes = [await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)];
+    await requisitionService.separarRequisicao(db, r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }], ADMIN);
+    await requisitionService.separarRequisicao(db, r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }], ADMIN);
+    await requisitionService.entregarRequisicao(db, r.id, [{ item_id: r.ids[0], quantidade_atendida: 5 }], ADMIN);
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], [2, 3, 5]);
+    await requisitionService.excluirRequisicao(db, r.id, ADMIN, 'e270', null);
+    assert.deepStrictEqual([await saldo(m.id, A.id), await saldo(m.id, B.id), await saldo(m.id, P.id)], antes);
+  });
 
   terminou = true;
   await close();

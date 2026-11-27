@@ -95,6 +95,40 @@ function partesEfetivas(item, linhas) {
   return out;
 }
 
+/** Etapa 270: a entrada da entrega sem "Sai de" (sem endereco, sem lote, sem leitura) — a mesma conta do `semEscolha` da conferencia. */
+function semEscolhaNaEntrega(entrada) {
+  if (!entrada) return false;
+  const lido = entrada.codigo_lido_origem;
+  return !entrada.localizacao_origem_id && !entrada.lote_id && (lido === undefined || lido === null || lido === '');
+}
+
+/**
+ * Etapa 270 (RN-270.12, B1645): quanto a entrega pode tirar de uma outra prateleira da caixa (endereco + lote exatos) sem levar o que outra
+ * caixa guarda ali — a mesma regua do automatico: o saldo do par menos a parte guardada das caixas vivas no par (`guardaQueConta`, com o que
+ * esta entrega ja tirou/deixa); com lote, tambem limitado ao livre do lote no automatico (`lotesParaOAutomatico`: elegivel, sem a inspecao e
+ * o retido). Endereco bloqueado ou inativo: 0 (o motor recusaria a origem estrita). So le; dentro das duas travas da entrega.
+ */
+async function livreDaParteNaEntrega(db, materialId, locId, loteId, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  const lc = await dbGet(db, 'SELECT COALESCE(bloqueada, 0) b, COALESCE(ativo, 1) a FROM localizacoes_almoxarifado WHERE id = ?', [locId]);
+  if (!lc || Number(lc.b) || !Number(lc.a)) return 0;
+  const linha = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [materialId, locId, loteId]);
+  const viva = caixaVivaSql('r');
+  const guardas = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ? AND ${viva.sql}`,
+  [materialId, locId, loteId, ...viva.params]);
+  let livre = Number(linha.q) || 0;
+  for (const g of guardas) livre -= guardaQueConta(g, saiuDaOrigemPorItem, parteQueFicaPorItem);
+  if (loteId != null) {
+    const l = (await lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem, { todos: true }))
+      .find((x) => Number(x.lote_id) === Number(loteId));
+    if (!l) return 0;
+    livre = Math.min(livre, Number(l.saldo) || 0);
+  }
+  return Q.qtd(Math.max(0, livre));
+}
+
 /** Etapa 270: as linhas das outras partes dos itens, com os codigos -> Map(item_id -> linhas, na ordem do id). */
 async function lerPartesDaSeparacao(db, itemIds) {
   const ids = [...new Set((itemIds || []).map(Number).filter((x) => Number.isInteger(x) && x > 0))];
@@ -146,6 +180,28 @@ async function gravarPartesNaSeparacao(db, requisicaoId, itemRetrato, linhas, no
       // eslint-disable-next-line no-await-in-loop
       await dbRun(db, `UPDATE partes_separacao_almoxarifado SET quantidade = ?, updated_at = datetime('now') WHERE id = ?`, [a.quantidade, a.id]);
     }
+  }
+}
+
+/**
+ * Etapa 270 (B1644; Fase 2 L1): regrava as outras partes de UM item pelo valor limitado na caixa de AGORA (relida). Quem encolhe a caixa
+ * (a entrega, a devolucao a prateleira) chama depois de gravar: sem isto o numero gravado acima da caixa "ressuscitava" quando uma rodada
+ * automatica fazia a caixa crescer de novo (a parte valia outra vez sem a peca ter vindo de la). Dentro das travas de quem chama.
+ */
+async function regravarPartesLimitadas(db, itemId) {
+  const linhas = (await lerPartesDaSeparacao(db, [itemId])).get(Number(itemId)) || [];
+  if (!linhas.length) return;
+  const item = await dbGet(db, `SELECT id, quantidade_separada, quantidade_entregue, quantidade_atendida, origem_separacao_id,
+      quantidade_origem_separacao FROM itens_requisicao_almoxarifado WHERE id = ?`, [itemId]);
+  if (!item) return;
+  const ef = new Map(partesEfetivas(item, linhas).map((p) => [Number(p.id), p.quantidade]));
+  for (const l of linhas) {
+    const q = ef.get(Number(l.id)) || 0;
+    if (Math.abs(q - num(l.quantidade)) <= Q.QTD_FOLGA) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await (q <= Q.QTD_FOLGA
+      ? dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE id = ?', [l.id])
+      : dbRun(db, `UPDATE partes_separacao_almoxarifado SET quantidade = ?, updated_at = datetime('now') WHERE id = ?`, [q, l.id]));
   }
 }
 
@@ -2846,6 +2902,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // rodada nova), e uma requisição antiga sem conferência volta a EM_SEPARACAO por "Iniciar
   // Separação" para alguém conferir.
   assertConferidaSeObrigatorio(reqRow, itens);
+  // Etapa 270 (RN-270.10..14, B1645): as outras prateleiras da caixa de cada item, limitadas pela caixa de ANTES da entrega (o retrato do
+  // item: o finally regrava o limitado menos o que saiu de cada uma). Dentro das duas travas da entrega.
+  const partesAntesEntrega = await lerPartesDaSeparacao(db, itens.map((i) => i.id));
+  const retratoEntrega = new Map(itens.map((i) => [Number(i.id), { ...i }]));
 
   // Fix-round 1 (F2): material CRÍTICO só sai até o que está na caixa (separado − entregue).
   // `maxEntregar` (Etapa 3) solta o teto do separado depois de uma entrega parcial — para
@@ -3368,6 +3428,13 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       baixadoComOrigem: 0, // Etapa 196 (Fase 2 item 3): o que SAIU de fato pelos pedacos com origem (decrementa a parte no finally)
       // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
       seriesRestantes: seriesDoItem,
+      // Etapa 270 (RN-270.10/13, B1645): as outras prateleiras de onde a parte automatica sai primeiro — so sem "Sai de" escolhido, sem
+      // "Qualquer endereco (automatico)" e sem serie (as series dizem de onde sai). `saiu` decrementa a linha no finally.
+      partesPreferidas: (semEscolhaNaEntrega(entrada) && entrada.origem_automatica !== true && !seriesPorItem.has(item.id))
+        ? partesEfetivas(retratoEntrega.get(Number(item.id)) || item, partesAntesEntrega.get(Number(item.id)) || [])
+          .map((p) => ({ id: Number(p.id), localizacao_id: Number(p.localizacao_id), lote_id: p.lote_id != null ? Number(p.lote_id) : null,
+            restante: p.quantidade, saiu: 0 }))
+        : [],
     });
   }
 
@@ -3473,11 +3540,36 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
   try {
-    for (const passada of [0, 1, 2]) {
+    for (const passada of [0, 1, '2p', 2]) { // Etapa 270: '2p' = as outras prateleiras da caixa, antes do automatico
       for (const plano of planos) {
         const { item } = plano;
-        for (const baixa of plano.pedacos) {
-          if (baixa.passada !== passada) continue;
+        for (const pedaco of plano.pedacos) {
+          // Etapa 270 (RN-270.10..14, B1645; Fase 2 L2/L3): a sub-passada '2p' — DEPOIS das passadas 0/1 e ANTES de qualquer automatico de
+          // todos os itens (senao o claim do automatico de um irmao de id menor esvaziava a prateleira da parte) — tira a parte automatica
+          // de cada outra prateleira da caixa (na ordem em que foi separada), ate o que foi separado de la (o orcamento e do ITEM, dividido
+          // entre os pedacos) e o que esta livre la agora: uma SAIDA por prateleira, com o endereco (origem estrita) e o `reserva_id` do
+          // pedaco. O pedaco fica com o que elas nao cobrem, que a passada 2 baixa pelo automatico de hoje.
+          if (passada === '2p') {
+            if (pedaco.passada !== 2 || pedaco.comOrigem) continue;
+            for (const p of plano.partesPreferidas) {
+              if (pedaco.quantidade <= Q.QTD_FOLGA) break;
+              if (p.restante <= Q.QTD_FOLGA) continue;
+              // eslint-disable-next-line no-await-in-loop
+              const livre = await livreDaParteNaEntrega(db, item.material_id, p.localizacao_id, p.lote_id, saiuDaOrigemPorItem(),
+                parteQueFicaPorItem());
+              const t = Q.qtd(Math.min(pedaco.quantidade, p.restante, livre));
+              if (t <= Q.QTD_FOLGA) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await baixar(plano, pedaco, t, p.lote_id, p.localizacao_id);
+              p.restante = Q.qtd(p.restante - t);
+              p.saiu = Q.qtd(p.saiu + t);
+              pedaco.quantidade = Q.qtd(pedaco.quantidade - t);
+            }
+            continue;
+          }
+          if (pedaco.passada !== passada) continue;
+          if (pedaco.quantidade <= Q.QTD_FOLGA) continue; // Etapa 270: o pedaco que as outras prateleiras cobriram inteiro
+          const baixa = pedaco;
           // Etapa 197 (RN-197.01/02/03/08, B1320-B1324): a parte AUTOMATICA de material com controle de lote (sem serie) sai POR LOTE,
           // na ordem FEFO, uma SAIDA por lote — os lotes lidos AQUI, na hora do pedaco (depois das passadas 0/1 e dos pedacos
           // anteriores, sob a trava que a entrega ja segura). Cada fatia leva o `reserva_id` do pedaco (a soma e a mesma). O que os
@@ -3571,6 +3663,15 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       // movimento — nao `qtdComOrigem`, que com falha no meio derrubaria a parte mais do que saiu); a entrega de outro par so a
       // limita a caixa que sobra (consumiu primeiro a parte sem origem). Relativo, no banco (o SET le a linha ja com o entregue
       // desta entrega). Parte ou caixa zerada: origem, lote e parte zeram juntos.
+      // Etapa 270 (RN-270.14): o que saiu de cada outra prateleira desconta dela — regrava o limitado de antes da entrega menos o que saiu
+      // (a leitura depois limita pela caixa nova, B1644). Zerada, a linha sai. No finally: falhou um pedaco depois, o que saiu conta.
+      for (const p of plano.partesPreferidas) {
+        if (p.saiu <= Q.QTD_FOLGA) continue;
+        // eslint-disable-next-line no-await-in-loop
+        await (p.restante <= Q.QTD_FOLGA
+          ? dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE id = ?', [p.id])
+          : dbRun(db, `UPDATE partes_separacao_almoxarifado SET quantidade = ?, updated_at = datetime('now') WHERE id = ?`, [p.restante, p.id]));
+      }
       if (item.origem_separacao_id) {
         const og = origemGuardada.get(item.id);
         const saiuDaOrigem = og && og.saiDaOrigem ? plano.baixadoComOrigem : 0;
@@ -3585,6 +3686,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
             quantidade_origem_separacao = NULL
           WHERE id = ? AND (quantidade_origem_separacao <= ${Q.QTD_FOLGA} OR ${caixaSql} <= ${Q.QTD_FOLGA})`, [item.id]);
       }
+      // Etapa 270 (B1644; Fase 2 L1): depois da origem, as outras partes regravadas pelo limitado na caixa nova (nao ressuscitam)
+      // eslint-disable-next-line no-await-in-loop
+      if (partesAntesEntrega.has(Number(item.id))) await regravarPartesLimitadas(db, item.id);
     }
   }
   for (const plano of planos) entregas.push({ item_id: plano.item.id, quantidade: plano.qtyEntregar });
@@ -4110,6 +4214,9 @@ async function devolverSemTrava(db, requisicaoId, dados, user) {
         quantidade_origem_separacao = NULL
       WHERE id = ? AND COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0) <= ${Q.QTD_FOLGA}`,
     [e.item.id]);
+    // Etapa 270 (B1644; Fase 2 L1): as outras partes tambem, pela caixa que sobrou (tira primeiro o sem prateleira, depois da ultima)
+    // eslint-disable-next-line no-await-in-loop
+    await regravarPartesLimitadas(db, e.item.id);
   }
   // (6) B504: a PRONTA volta a EM_SEPARACAO (a liberacao atestou uma caixa que mudou). Compare-and-set: so age se
   // ainda PRONTA (no caminho do 409 tambem — Fase 2, I-1).

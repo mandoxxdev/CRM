@@ -113,8 +113,12 @@ process.on('exit', (code) => {
         WHERE i.id = ?`, [item]);
     return { loc: r.loc || null, lote: r.lote || null, q: r.q == null ? null : Number(r.q), caixa: Number(r.caixa) };
   };
-  const apagarOrigem = (item) => dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL,
+  // Etapa 270: "sem a feature" tambem sem as outras prateleiras da caixa (antes da 196 nenhuma das duas existia)
+  const apagarOrigem = async (item) => {
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL,
       quantidade_origem_separacao = NULL WHERE id = ?`, [item]);
+    await dbRun(db, 'DELETE FROM partes_separacao_almoxarifado WHERE item_requisicao_id = ?', [item]);
+  };
 
   // ── Cenario 1: o caso real da 189, ponta a ponta, ate a exclusao ───────────────────────────────────────────────────────────────
   // Material com lote, padrao YP-01. L1 3 em YB-01; requisicao de 6; 1a rodada com o par sugerido; chega L2 3 em YP-01; 2a rodada
@@ -203,9 +207,10 @@ process.on('exit', (code) => {
 
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 5 }]);
     const l = await livro(R, m);
-    // a parte da origem (2) sai estrita de A; o resto (3) no automatico, que tira da padrao B. A devolucao nao entra aqui: a
-    // ENTRADA_DEVOLUCAO nao leva requisicao_id.
-    assert.deepStrictEqual(l, [['SAIDA', 'YA-01', null, 2], ['SAIDA', 'YA-01', null, 2], ['SAIDA', null, null, 3]]);
+    // a parte da origem (2) sai estrita de A; o resto (3) e a parte separada de B (Etapa 270, RN-270.10): sai de B com o endereco (antes
+    // da 270 saia no automatico, sem endereco — da padrao B, o mesmo saldo). A devolucao nao entra aqui: a ENTRADA_DEVOLUCAO nao leva
+    // requisicao_id.
+    assert.deepStrictEqual(l, [['SAIDA', 'YA-01', null, 2], ['SAIDA', 'YA-01', null, 2], ['SAIDA', 'YB-02', null, 3]]);
     assert.deepStrictEqual(await trocas(R), []);
     assert.deepStrictEqual(await origem(ids[0]), { loc: null, lote: null, q: null, caixa: 0 });
     assert.deepStrictEqual(await retrato(m), { linhas: ['YA-01/-=1'], fisico: 1 });
