@@ -234,6 +234,41 @@ describe('Etapa 267: o "Sai de" se atualiza depois de uma recusa (C473)', () => 
     expect(selectEnt().value).toBe('1:7');
   });
 
+  // Fase 5 da 267 (reproduzido): a prateleira escolhida esvaziou e some da lista relida — o select mostrava "automático" e o clique seguinte
+  // mandava a prateleira sumida. Agora a escolha vira o automático que a tela mostra.
+  test('[RN-267.03 Fase 5] entrega: a prateleira escolhida esvaziou -> some da lista e o próximo clique vai no automático', async () => {
+    requisicao = separada();
+    await renderizar();
+    await clicar('Completar Entrega');
+    escolher(selectEnt(), '1:7');
+    saldos = [XB02];
+    api.put.mockImplementationOnce(() => recusar('Chapa 3mm: O saldo em XB-01 (0) não cobre a quantidade (4) — a saída tiraria de outros endereços'));
+    await clicar('✅ Confirmar Entrega');
+    expect(textos(selectEnt()).some((t) => t.startsWith('XB-01'))).toBe(false);
+    expect(selectEnt().value).toBe('');
+    api.put.mockResolvedValueOnce({ data: { parcial: true } });
+    await clicar('✅ Confirmar Entrega');
+    const ultimo = api.put.mock.calls[api.put.mock.calls.length - 1][1].itens_atendidos[0];
+    expect(ultimo.localizacao_origem_id).toBeUndefined();
+    expect(ultimo.quantidade_atendida).toBe(4);
+  });
+
+  test('[RN-267.02 Fase 5] separação: a escolha à mão que esvaziou -> automático, e o PUT vai sem prateleira', async () => {
+    requisicao = aprovada();
+    await renderizar();
+    await clicar('Iniciar Separação');
+    escolher(selectSep(), '2:7');
+    saldos = [XB01()];
+    sugestaoAtual = sugestao(sugItem(1, pegar(PAR.XB01, 4, 6)));
+    api.put.mockImplementationOnce(() => recusar('Chapa 3mm: O saldo em XB-02 (0) não cobre a quantidade (4) — a saída tiraria de outros endereços'));
+    await clicar('Confirmar Separação');
+    expect(selectSep().value).toBe('');
+    api.put.mockResolvedValueOnce({ data: {} });
+    await clicar('Confirmar Separação');
+    const ultimo = api.put.mock.calls[api.put.mock.calls.length - 1][1].itens_separados[0];
+    expect(ultimo).toEqual({ item_id: 1, quantidade_separada: 4 });
+  });
+
   test('[RN-267.03] entrega: recusa de permissão não relê', async () => {
     requisicao = separada();
     await renderizar();

@@ -2306,7 +2306,9 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
  * duas travas da entrega.
  */
 async function fatiasDoSoLote(db, materialId, loteId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem) {
-  const l = (await lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem))
+  // Fase 5 da 267: `todos` — a mesma lista da conferencia. Sem ele o lote com peca presa e a guarda que fica do proprio item saia do filtro
+  // `saldo > folga` (min(livre do lote - presa, usavel) = 0), a funcao devolvia null e o "como hoje" levava a guarda de outra requisicao.
+  const l = (await lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem, { todos: true }))
     .find((x) => Number(x.lote_id) === Number(loteId));
   if (!l || !Array.isArray(l.linhas)) return null;
   const { fatias, resto } = dividirPorLotes([{ ...l, saldo: quantidade }], quantidade);

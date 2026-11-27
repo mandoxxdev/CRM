@@ -283,6 +283,26 @@ process.on('exit', (code) => {
     }
   });
 
+  // Fase 5 da 267 (reproduzido): a conferencia passava (lote 11 - 2 em inspecao - 5 de R1 = 4; prateleira livre XB-03 2) e a baixa, sem o
+  // `todos`, nao achava o lote (min(livre - presa, usavel) = 0) e caia no "como hoje": o motor tirava de XB-01, a guarda de R1.
+  await test('[RN-267.10 Fase 5] peca em inspecao + guarda que fica do proprio item: R2 so L1 2 -> 200 de XB-03, XB-01 (de R1) intacta', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 5, 'L1'); await entrar(m, B02.id, 4, 'L1'); await entrar(m, B03.id, 2, 'L1'); await entrar(m, P01.id, 9, 'L2');
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
+    const L1 = await loteId(m, 'L1');
+    const r1 = await req([[m.id, 5]]); const r2 = await req([[m.id, 6]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 5, L1)]);
+    await sepOk(r2.R, [doPar(r2.ids[0], 4, L1, B02.id)]);
+    await sepOk(r2.R, [auto(r2.ids[0], 2)]);
+    const rec = (await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero) VALUES (?)', [`REC267-${m.id}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+      quantidade_recebida, lote_id, quantidade_em_inspecao) VALUES (?, ?, 2, 2, ?, 2)`, [rec, m.id, L1]);
+    await entOk(r2.R, [soLote(r2.ids[0], 2, L1)]);
+    assert.deepStrictEqual(await saidas(m, r2.R), [[2, B03.id, L1]]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 5, 'a guarda de R1 ficou (a entrega dela depois depende da peca em inspecao — regra da 218)');
+    assert.ok(r1.R);
+  });
+
   // ---------------------------------------------------------------- RN-267.15 (integracao: separacao da tela -> entrega so lote -> um clique)
   const fim = async (m, L1, r1, r2) => {
     assert.deepStrictEqual(await saidas(m, r2.R), [[2, B02.id, L1]]);

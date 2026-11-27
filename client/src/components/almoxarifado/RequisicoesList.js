@@ -870,6 +870,31 @@ const RequisicoesList = () => {
     if (releituraSeqRef.current !== minha || saldosEntregaSeqRef.current !== seqSaldos) return;
     const novos = Object.fromEntries(lidos.filter(Boolean));
     if (Object.keys(novos).length) setSaldosEntrega((prev) => ({ ...prev, ...novos }));
+    // Fase 5 da 267 (reproduzido): a prateleira escolhida que esvaziou some da lista relida (`opcoesOrigem` só traz saldo > 0) — o select
+    // passava a mostrar "Qualquer endereço (automático)" e o clique seguinte mandava a prateleira sumida (recusada de novo). A escolha que
+    // sumiu vira o automático, o mesmo que a tela mostra.
+    const materialDoItem = new Map((detalhe.itens || []).map((i) => [String(i.id), String(i.material_id)]));
+    const sumiu = (itemId, valor) => {
+      const rows = novos[materialDoItem.get(String(itemId))];
+      return !!rows && !!lerValorOrigem(valor) && !rows.some((s) => valorOrigem(s) === valor);
+    };
+    if (modal === 'E') {
+      setOrigensEntrega((prev) => {
+        const ids = Object.keys(prev).filter((id) => sumiu(id, prev[id]?.valor));
+        if (!ids.length) return prev;
+        const prox = { ...prev };
+        ids.forEach((id) => { prox[id] = { valor: '', codigo: '', automatico: true }; });
+        return prox;
+      });
+    } else {
+      setOrigensSeparacao((prev) => {
+        const ids = Object.keys(prev).filter((id) => sumiu(id, prev[id]));
+        if (!ids.length) return prev;
+        const prox = { ...prev };
+        ids.forEach((id) => { prox[id] = ''; });
+        return prox;
+      });
+    }
     if (modal !== 'S' || !mapa || sugestaoSeqRef.current !== seqSugestao) return;
     const { preSelecao: ps, origensSeparacao: os } = estadoSeparacaoRef.current;
     const refazer = (detalhe.itens || []).filter((item) => {
